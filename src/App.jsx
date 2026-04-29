@@ -170,6 +170,72 @@ const PROJECT_FIELDS = [
 
 const PROJECT_DEFAULTS = PROJECT_FIELDS.reduce((acc, [key]) => ({ ...acc, [key]: '' }), {});
 
+const makeVisualStep = (title, desc, images) => ({ title, desc, images });
+
+const GUIDE_VISUALS = {
+  workle: [
+    makeVisualStep('1. Переход по реферальной ссылке', 'Откройте Workle Pro по реферальной ссылке и нажмите регистрацию.', ['/guide/workle/workle-1-1.png', '/guide/workle/workle-1-2.png']),
+    makeVisualStep('2. Заполнение регистрационной формы', 'Введите контактные данные и начните регистрацию профиля.', ['/guide/workle/workle-2-1.png', '/guide/workle/workle-2-2.png', '/guide/workle/workle-2-3.png']),
+    makeVisualStep('3. Подтверждение почты и пароль', 'Подтвердите почту кодом/паролем, затем задайте свой надёжный пароль.', ['/guide/workle/workle-3-1.png', '/guide/workle/workle-3-2.png', '/guide/workle/workle-3-3.png']),
+    makeVisualStep('4. Профиль активирован', 'После активации нажмите "Перейти на Workle Pro" и зайдите в личный кабинет.', ['/guide/workle/workle-4-1.png', '/guide/workle/workle-4-2.png', '/guide/workle/workle-4-3.png']),
+    makeVisualStep('5. Проверка личного кабинета', 'Проверьте, что профиль открыт и регистрация прошла по нужной ссылке.', ['/guide/workle/workle-5-1.png', '/guide/workle/workle-5-2.png', '/guide/workle/workle-5-3.png']),
+    makeVisualStep('6. Регистрация завершена', 'На финальном экране убедитесь, что кабинет Workle Pro доступен.', ['/guide/workle/workle-6-1.png'])
+  ],
+  domain: [
+    makeVisualStep('1. Аккаунт Reg.ru и подтверждение данных', 'Авторизуйтесь/зарегистрируйтесь, откройте настройки и подтвердите данные физического лица, почту и телефон.', ['/guide/domain/domain-1-1.jpg', '/guide/domain/domain-1-2.jpg']),
+    makeVisualStep('2. Поиск и добавление домена', 'Откройте раздел доменов, введите имя домена латиницей и добавьте его в корзину.', ['/guide/domain/domain-2-1.jpg', '/guide/domain/domain-2-2.jpg']),
+    makeVisualStep('3. Оплата без лишних услуг', 'В заказе отключите дополнительные услуги, оставьте только домен и оплатите.', ['/guide/domain/domain-3-1.jpg'])
+  ],
+  getcourse: [
+    makeVisualStep('1. Заявка в партнёрский кабинет', 'Перейдите на страницу школы, укажите имя и почту, затем подтвердите email.', ['/guide/getcourse/getcourse-1-1.png']),
+    makeVisualStep('2. Вход в GetCourse', 'Возьмите логин/пароль из письма, перейдите на страницу входа и авторизуйтесь.', ['/guide/getcourse/getcourse-2-1.png', '/guide/getcourse/getcourse-2-2.png']),
+    makeVisualStep('3. Открыть кабинет партнёра', 'В левом меню нажмите "Мои покупки" с иконкой кошелька.', ['/guide/getcourse/getcourse-3-1.png']),
+    makeVisualStep('4. Раздел рекламных предложений', 'В кабинете партнёра откройте "Рекламные предложения".', ['/guide/getcourse/getcourse-4-1.png', '/guide/getcourse/getcourse-4-2.png']),
+    makeVisualStep('5. Ссылка на оплату 990', 'Найдите предложение "Оплата продукта 990" и скопируйте полный URL с параметрами gcao и gcpc.', ['/guide/getcourse/getcourse-5-1.png'])
+  ],
+  bothelp: [
+    makeVisualStep('1. Регистрация в BotHelp', 'Перейдите на bothelp.io, смените язык при необходимости и нажмите "Регистрация".', ['/guide/bothelp/bothelp-1-1.jpg', '/guide/bothelp/bothelp-1-2.jpg']),
+    makeVisualStep('2. Поддомен и телефон', 'Придумайте поддомен латиницей, укажите телефон и обязательно сохраните входные данные.', ['/guide/bothelp/bothelp-2-1.jpg', '/guide/bothelp/bothelp-2-2.jpg']),
+    makeVisualStep('3. Собственный домен', 'Откройте настройку домена и добавьте DNS-запись у регистратора по инструкции BotHelp.', ['/guide/bothelp/bothelp-3-1.jpg', '/guide/bothelp/bothelp-3-2.jpg']),
+    makeVisualStep('4. Подключение каналов', 'В настройках откройте "Каналы", добавьте Telegram/MAX и вставьте токен нужного бота.', ['/guide/bothelp/bothelp-4-1.jpg', '/guide/bothelp/bothelp-4-2.jpg', '/guide/bothelp/bothelp-4-3.jpg']),
+    makeVisualStep('5. Проверка канала', 'Убедитесь, что канал добавлен и доступен для кнопок мини-лендинга.', ['/guide/bothelp/bothelp-5-1.jpg'])
+  ],
+  telegram: [
+    makeVisualStep('1. Запуск BotFather', 'Откройте @BotFather, нажмите Start и выберите команду создания нового бота.', ['/guide/telegram/telegram-1-1.jpg', '/guide/telegram/telegram-1-2.jpg']),
+    makeVisualStep('2. Имя и username бота', 'Придумайте имя бота и username, который обязательно заканчивается на bot.', ['/guide/telegram/telegram-2-1.jpg', '/guide/telegram/telegram-2-2.jpg']),
+    makeVisualStep('3. Токен и настройки', 'После создания откройте бота в списке, сохраните токен и при необходимости добавьте аватар.', ['/guide/telegram/telegram-3-1.jpg', '/guide/telegram/telegram-3-2.jpg', '/guide/telegram/telegram-3-3.jpg'])
+  ],
+  directRegister: [
+    makeVisualStep('1. Создание Яндекс ID', 'На странице авторизации выберите создание ID для себя, введите новый номер и подтвердите его кодом.', ['/guide/direct-register/direct-register-2-1.png', '/guide/direct-register/direct-register-2-2.jpg', '/guide/direct-register/direct-register-2-3.png', '/guide/direct-register/direct-register-2-4.png']),
+    makeVisualStep('2. Логин, пароль и согласия', 'Придумайте логин/пароль, подтвердите данные и сохраните доступы в надёжном месте.', ['/guide/direct-register/direct-register-3-1.png', '/guide/direct-register/direct-register-3-2.png']),
+    makeVisualStep('3. Регистрация в Яндекс Директ', 'Перейдите в direct.yandex.ru, заполните анкету рекламодателя и подтвердите телефон.', ['/guide/direct-register/direct-register-4-1.jpg', '/guide/direct-register/direct-register-4-2.jpg'])
+  ],
+  rsyaAds: [
+    makeVisualStep('1. Подготовка исходников', 'Откройте лендинги, промпт ДНК клиента и нейросеть, в которой будете работать.', ['/guide/rsya-ads/rsya-ads-2-1.jpg']),
+    makeVisualStep('2. ДНК клиента', 'Скопируйте промпт ДНК клиента целиком и отправьте его в нейросеть.', ['/guide/rsya-ads/rsya-ads-3-1.jpg', '/guide/rsya-ads/rsya-ads-4-1.jpg']),
+    makeVisualStep('3. Передача лендингов и контекста', 'Дайте нейросети предлендинг, продающую историю, оффер и ответы на вопросы по продукту.', ['/guide/rsya-ads/rsya-ads-5-1.jpg', '/guide/rsya-ads/rsya-ads-6-1.jpg']),
+    makeVisualStep('4. Сегменты и проверка анализа', 'Выберите сегменты аудитории, сохраните анализ и проверьте, что ЦА понята правильно.', ['/guide/rsya-ads/rsya-ads-7-1.jpg', '/guide/rsya-ads/rsya-ads-7-2.jpg', '/guide/rsya-ads/rsya-ads-8-1.jpg', '/guide/rsya-ads/rsya-ads-9-1.jpg']),
+    makeVisualStep('5. Генерация объявлений', 'Запустите промпт объявлений, получите заголовки, тексты, быстрые ссылки и проверьте модерационные риски.', ['/guide/rsya-ads/rsya-ads-10-1.jpg', '/guide/rsya-ads/rsya-ads-11-1.jpg']),
+    makeVisualStep('6. Сохранение результата', 'Сохраните 90 заголовков, 5 текстов и 8 быстрых ссылок в рабочий документ.', ['/guide/rsya-ads/rsya-ads-13-1.jpg', '/guide/rsya-ads/rsya-ads-13-2.jpg'])
+  ],
+  rsyaCreatives: [
+    makeVisualStep('1. Подготовьте фото героя', 'Соберите 2-3 качественных фото без чужих логотипов, где лицо видно полностью.', ['/guide/rsya-creatives/rsya-creatives-4-1.jpg']),
+    makeVisualStep('2. Контекст и первый баннер', 'Отправьте в ChatGPT контекстный пролог, загрузите фото и сгенерируйте первый баннер под заголовок.', ['/guide/rsya-creatives/rsya-creatives-7-1.jpg', '/guide/rsya-creatives/rsya-creatives-8-1.jpg']),
+    makeVisualStep('3. Развёрнутый промпт', 'Если нужен контроль композиции, используйте развёрнутый промпт с форматом 1:1 и расположением текста.', ['/guide/rsya-creatives/rsya-creatives-9-1.jpg', '/guide/rsya-creatives/rsya-creatives-10-1.jpg']),
+    makeVisualStep('4. Полировка в Canva', 'Если нейросеть исказила русский текст, загрузите баннер в Canva и наклейте заголовок вручную.', ['/guide/rsya-creatives/rsya-creatives-11-1.jpg', '/guide/rsya-creatives/rsya-creatives-12-1.jpg'])
+  ],
+  rsyaCampaign: [
+    makeVisualStep('1. Создание кампании', 'В Direct Pro нажмите "Добавить кампанию", вставьте ссылку с UTM и задайте название кампании.', ['/guide/rsya-campaign/rsya-campaign-3-1.jpg', '/guide/rsya-campaign/rsya-campaign-4-1.png', '/guide/rsya-campaign/rsya-campaign-4-2.png']),
+    makeVisualStep('2. Показы и стратегия', 'Выберите только РСЯ, стратегию "Максимум конверсий", бюджет и цель.', ['/guide/rsya-campaign/rsya-campaign-5-1.jpg', '/guide/rsya-campaign/rsya-campaign-6-1.jpg', '/guide/rsya-campaign/rsya-campaign-7-1.jpg']),
+    makeVisualStep('3. Отключить лишнюю автоматику', 'Отключите рекомендации, персонализацию, мониторинг сайта и расширенный геотаргетинг.', ['/guide/rsya-campaign/rsya-campaign-8-1.jpg', '/guide/rsya-campaign/rsya-campaign-10-1.png', '/guide/rsya-campaign/rsya-campaign-11-1.png']),
+    makeVisualStep('4. Быстрые ссылки и UTM', 'Добавьте быстрые ссылки, уточнения и UTM-параметры на уровне кампании.', ['/guide/rsya-campaign/rsya-campaign-9-1.jpg']),
+    makeVisualStep('5. Группы объявлений', 'Создайте 3 группы, оставьте автотаргетинг включённым, ключи и интересы не добавляйте.', ['/guide/rsya-campaign/rsya-campaign-12-1.png', '/guide/rsya-campaign/rsya-campaign-13-1.png', '/guide/rsya-campaign/rsya-campaign-13-2.png', '/guide/rsya-campaign/rsya-campaign-14-1.jpg', '/guide/rsya-campaign/rsya-campaign-14-2.jpg']),
+    makeVisualStep('6. Первое объявление', 'Добавьте объявление: заголовок, текст, картинку 1:1, ссылку на предлендинг и нужные элементы.', ['/guide/rsya-campaign/rsya-campaign-15-1.png', '/guide/rsya-campaign/rsya-campaign-15-2.png', '/guide/rsya-campaign/rsya-campaign-16-1.png', '/guide/rsya-campaign/rsya-campaign-16-2.jpg', '/guide/rsya-campaign/rsya-campaign-17-1.jpg', '/guide/rsya-campaign/rsya-campaign-17-2.png']),
+    makeVisualStep('7. Размножение объявлений', 'Сохраняйте первое объявление и создавайте остальные "на основе текущего", меняя заголовок и креатив.', ['/guide/rsya-campaign/rsya-campaign-18-1.png', '/guide/rsya-campaign/rsya-campaign-18-2.jpg', '/guide/rsya-campaign/rsya-campaign-19-1.png', '/guide/rsya-campaign/rsya-campaign-19-2.png', '/guide/rsya-campaign/rsya-campaign-20-1.png', '/guide/rsya-campaign/rsya-campaign-20-2.jpg']),
+    makeVisualStep('8. Готовая структура и запуск', 'Скопируйте группы 2 и 3, проверьте 15 объявлений и отправьте кампанию на модерацию.', ['/guide/rsya-campaign/rsya-campaign-21-1.jpg', '/guide/rsya-campaign/rsya-campaign-22-1.jpg', '/guide/rsya-campaign/rsya-campaign-22-2.jpg', '/guide/rsya-campaign/rsya-campaign-23-1.jpg', '/guide/rsya-campaign/rsya-campaign-25-1.jpg'])
+  ]
+};
+
 const STEP_INSTRUCTIONS = [
   {
     title: 'Регистрация ИП на НПД',
@@ -223,6 +289,7 @@ const STEP_INSTRUCTIONS = [
       'Проверьте, какие действия считаются целевыми и какие данные нельзя передавать в рекламе.',
       'Если в воронке используются партнёрские действия, опишите их только на нужном этапе, без финансовых обещаний в холодной рекламе.'
     ],
+    visualSteps: GUIDE_VISUALS.workle,
     note: 'Workle и партнёрские кабинеты не должны превращаться в обещание заработка в объявлении. В рекламе продвигаем понятный следующий шаг.'
   },
   {
@@ -240,6 +307,7 @@ const STEP_INSTRUCTIONS = [
       'На странице заказа отключите все лишние услуги. Оставляем только сам домен.',
       'Пополните кабинет удобным способом и оплатите домен.'
     ],
+    visualSteps: GUIDE_VISUALS.domain,
     note: 'Домен понадобится для BotHelp, Чатиума/MAX и рекламной связки. Название лучше выбирать простое, латиницей, без сложных символов.'
   },
   {
@@ -257,6 +325,7 @@ const STEP_INSTRUCTIONS = [
       'Скопируйте полный URL из таблицы.',
       'Проверьте, что ссылка содержит параметры gcao и gcpc и ведёт на страницу продукта/оплаты.'
     ],
+    visualSteps: GUIDE_VISUALS.getcourse,
     note: 'Эта ссылка вставляется в оффер. Если человек оплатит по ней, он закрепляется за партнёром.'
   },
   {
@@ -276,6 +345,7 @@ const STEP_INSTRUCTIONS = [
       'После сохранения дождитесь применения DNS.',
       'Помните: редактировать HTML в теге Head и ставить свой favicon BotHelp разрешает только при подключённом собственном домене.'
     ],
+    visualSteps: GUIDE_VISUALS.bothelp,
     note: 'Поддомен BotHelp - это адрес вашего кабинета. Собственный домен нужен для аккуратных ссылок, доверия в рекламе и расширенной вставки кода.'
   },
   {
@@ -294,6 +364,7 @@ const STEP_INSTRUCTIONS = [
       'Если кнопки в мини-лендинге не добавляются, вернитесь в список ботов и активируйте бот через меню с тремя точками.',
       'В мини-лендинге BotHelp кнопка Telegram/MAX появится только для подключённого канала: выберите канал, бота/авторассылку и стартовый шаг.'
     ],
+    visualSteps: GUIDE_VISUALS.telegram,
     note: 'MAX требует больше подготовки: организация, модерация, токен. Без одобрения MAX канал может не подключиться.'
   },
   {
@@ -391,22 +462,81 @@ const STEP_INSTRUCTIONS = [
     note: 'Цена 990Р, структура оффера, отзывы и команда не редактируются. Меняются только 3 личные ссылки.'
   },
   {
-    title: 'Яндекс.Директ и РСЯ',
-    tag: 'РСЯ',
+    title: 'Регистрация Яндекс ID и кабинета Директа',
+    tag: 'Яндекс',
     steps: [
-      'Зарегистрируйте Яндекс ID.',
-      'Откройте Яндекс.Директ.',
-      'Создайте счётчик Яндекс.Метрики на ваш домен.',
-      'Скопируйте номер счётчика и вставьте его в предлендинг BotHelp.',
-      'Создайте цель на подписку/переход в бот.',
-      'Подготовьте креативы, заголовки, описания, быстрые ссылки и уточнения.',
-      'Создайте кампанию "Конверсии и трафик" или РСЯ.',
-      'Укажите ссылку на предлендинг BotHelp.',
-      'В объявлениях ясно называйте объект продвижения: разбор, практикум, инструкция, мини-лендинг, бот, оффер или другой конкретный формат.',
-      'Отправьте кампанию на модерацию.',
-      'После запуска не правьте кампанию каждый день: дайте алгоритму 7-14 дней на обучение.'
+      'Откройте страницу регистрации Яндекс ID.',
+      'Нажмите "Ещё" -> "Создать ID для себя".',
+      'Введите новый номер телефона, который не привязан к другим рекламным кабинетам.',
+      'Подтвердите номер по звонку или СМС.',
+      'Придумайте логин и надёжный пароль.',
+      'Примите согласия и сохраните логин, пароль и телефон в надёжном месте.',
+      'Перейдите на direct.yandex.ru.',
+      'Нажмите "Зарегистрироваться" или "Начать продвижение".',
+      'Выберите страну, валюту, email и подтвердите телефон.',
+      'Проверьте, что личный кабинет Директа открывается.'
     ],
-    note: 'Модерация отклоняет туманные фразы "способ заработка" и "метод дохода". Нужно раскрывать, что именно за метод, и чтобы это совпадало с посадочной страницей.'
+    visualSteps: GUIDE_VISUALS.directRegister,
+    note: 'Для Директа лучше использовать отдельный новый Яндекс ID и новый номер телефона. Логин потом изменить нельзя, поэтому сразу сохраняйте доступы.'
+  },
+  {
+    title: 'Создание рекламных объявлений РСЯ',
+    tag: 'РСЯ объявления',
+    steps: [
+      'Откройте нейросеть: ChatGPT, Claude или Gemini.',
+      'Откройте промпт "ДНК клиента" и скопируйте его целиком.',
+      'Отправьте промпт в нейросеть.',
+      'Подготовьте предлендинг, продающую историю и оффер: лучше открыть страницы или сохранить их как PDF.',
+      'Ответьте нейросети на вопросы о продукте, ЦА, болях, страхах, отличиях и результате клиента.',
+      'Прикрепите PDF-версии лендингов или передайте тексты страниц.',
+      'Выберите сегменты аудитории, с которыми будете стартовать.',
+      'Сохраните анализ ДНК клиента.',
+      'Запустите промпт для создания объявлений.',
+      'Получите 90 заголовков, 5 текстов объявлений и 8 быстрых ссылок.',
+      'Отберите варианты без гарантий результата, быстрых обещаний, банковских образов и туманных формулировок.'
+    ],
+    visualSteps: GUIDE_VISUALS.rsyaAds,
+    note: 'Сначала делаем ДНК клиента и заголовки. Креативы создаются только после заголовков, потому что текст на баннере помогает РСЯ понять аудиторию.'
+  },
+  {
+    title: 'Создание графических креативов РСЯ',
+    tag: 'РСЯ креативы',
+    steps: [
+      'Возьмите структуру рекламного кабинета и 15 выбранных заголовков.',
+      'Подготовьте 2-3 фото героя: лицо видно, хорошее качество, без чужих брендов.',
+      'Откройте новый чат в ChatGPT.',
+      'Прикрепите фото героя и отправьте контекстный пролог по продукту.',
+      'Попросите сделать баннер 1:1 под первый заголовок.',
+      'Если композиция слабая, используйте развёрнутый промпт с правилами: текст не закрывает человека, верх 60% под заголовок, низ 40% под описание.',
+      'Сгенерируйте все 15 баннеров под 15 заголовков.',
+      'Если ChatGPT искажает русский текст, перенесите картинку в Canva и наклейте заголовок вручную.',
+      'Сохраните PNG-файлы с понятными именами: гр1_заг1.png, гр1_заг2.png и так далее.',
+      'Проверьте, что нет гарантий дохода, конкретных сумм, сроков, логотипов банков и чужих брендов.'
+    ],
+    visualSteps: GUIDE_VISUALS.rsyaCreatives,
+    note: 'Главная логика: один заголовок = один креатив. Не делайте абстрактные картинки без связи с текстом объявления.'
+  },
+  {
+    title: 'Настройка кампании в Директе РСЯ',
+    tag: 'РСЯ запуск',
+    steps: [
+      'Откройте Direct Pro и нажмите "Добавить кампанию".',
+      'Вставьте ссылку на предлендинг с UTM-метками.',
+      'Назовите кампанию по гипотезе/сегменту.',
+      'В местах показа оставьте только РСЯ.',
+      'Выберите стратегию "Максимум конверсий" и недельный бюджет.',
+      'Добавьте счётчик Метрики и цель BotHelp или офлайн-цель.',
+      'Отключите лишнюю автоматическую помощь, персонализацию, мониторинг сайта и расширенный геотаргетинг.',
+      'Добавьте быстрые ссылки, уточнения и UTM.',
+      'Создайте 3 группы по 5 объявлений.',
+      'В группе оставьте автотаргетинг включённым, ключи и интересы не добавляйте.',
+      'Соберите первое объявление: заголовок, текст, изображение 1:1, ссылка на предлендинг.',
+      'Создайте остальные объявления "на основе текущего", меняя заголовки и креативы.',
+      'Проверьте структуру 1 кампания -> 3 группы -> 15 объявлений.',
+      'Отправьте на модерацию и после запуска не трогайте кампанию 7-14 дней без причины.'
+    ],
+    visualSteps: GUIDE_VISUALS.rsyaCampaign,
+    note: 'Модерация отклоняет туманные фразы "способ заработка" и "метод дохода". Нужно раскрывать объект продвижения и не обещать быстрый/гарантированный доход.'
   }
 ];
 
@@ -1721,7 +1851,11 @@ ${creativeTone || 'Пользователь не заполнил. Исполь�
                           <div className="grid md:grid-cols-2 gap-3">
                             {section.visualSteps.map((item, idx) => (
                               <div key={idx} className={`${dark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'} border rounded-xl overflow-hidden`}>
-                                <img src={item.image} alt={item.title} className="w-full h-auto block border-b border-slate-200" loading="lazy" />
+                                <div className="grid gap-2 p-2">
+                                  {(item.images || [item.image]).filter(Boolean).map((src, imgIdx) => (
+                                    <img key={src} src={src} alt={`${item.title} ${imgIdx + 1}`} className="w-full h-auto block rounded-lg border border-slate-200" loading="lazy" />
+                                  ))}
+                                </div>
                                 <div className="p-3">
                                   <div className={`font-black text-xs mb-1 ${text}`}>{item.title}</div>
                                   <p className={`text-[11px] leading-relaxed ${textMuted}`}>{item.desc}</p>
