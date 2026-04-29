@@ -174,12 +174,11 @@ const makeVisualStep = (title, desc, images) => ({ title, desc, images });
 
 const GUIDE_VISUALS = {
   workle: [
-    makeVisualStep('1. Переход по реферальной ссылке', 'Откройте Workle Pro по реферальной ссылке и нажмите регистрацию.', ['/guide/workle/workle-1-1.png', '/guide/workle/workle-1-2.png']),
-    makeVisualStep('2. Заполнение регистрационной формы', 'Введите контактные данные и начните регистрацию профиля.', ['/guide/workle/workle-2-1.png', '/guide/workle/workle-2-2.png', '/guide/workle/workle-2-3.png']),
-    makeVisualStep('3. Подтверждение почты и пароль', 'Подтвердите почту кодом/паролем, затем задайте свой надёжный пароль.', ['/guide/workle/workle-3-1.png', '/guide/workle/workle-3-2.png', '/guide/workle/workle-3-3.png']),
-    makeVisualStep('4. Профиль активирован', 'После активации нажмите "Перейти на Workle Pro" и зайдите в личный кабинет.', ['/guide/workle/workle-4-1.png', '/guide/workle/workle-4-2.png', '/guide/workle/workle-4-3.png']),
-    makeVisualStep('5. Проверка личного кабинета', 'Проверьте, что профиль открыт и регистрация прошла по нужной ссылке.', ['/guide/workle/workle-5-1.png', '/guide/workle/workle-5-2.png', '/guide/workle/workle-5-3.png']),
-    makeVisualStep('6. Регистрация завершена', 'На финальном экране убедитесь, что кабинет Workle Pro доступен.', ['/guide/workle/workle-6-1.png'])
+    makeVisualStep('1. Переход по реферальной ссылке', 'Откройте Workle Pro по реферальной ссылке и нажмите регистрацию.', ['/guide/workle/workle-1-1.png']),
+    makeVisualStep('2. Заполнение регистрационной формы', 'Введите контактные данные и начните регистрацию профиля.', ['/guide/workle/workle-2-1.png', '/guide/workle/workle-2-2.png']),
+    makeVisualStep('3. Подтверждение почты и пароль', 'Подтвердите почту кодом/паролем, затем задайте свой надёжный пароль.', ['/guide/workle/workle-3-1.png', '/guide/workle/workle-3-2.png']),
+    makeVisualStep('4. Профиль активирован', 'После активации нажмите "Перейти на Workle Pro" и зайдите в личный кабинет.', ['/guide/workle/workle-4-1.png', '/guide/workle/workle-4-2.png']),
+    makeVisualStep('5. Проверка личного кабинета', 'Проверьте, что профиль открыт и регистрация прошла по нужной ссылке.', ['/guide/workle/workle-5-1.png', '/guide/workle/workle-5-2.png'])
   ],
   domain: [
     makeVisualStep('1. Аккаунт Reg.ru и подтверждение данных', 'Авторизуйтесь/зарегистрируйтесь, откройте настройки и подтвердите данные физического лица, почту и телефон.', ['/guide/domain/domain-1-1.jpg', '/guide/domain/domain-1-2.jpg']),
@@ -230,7 +229,7 @@ const GUIDE_VISUALS = {
     makeVisualStep('3. Отключить лишнюю автоматику', 'Отключите рекомендации, персонализацию, мониторинг сайта и расширенный геотаргетинг.', ['/guide/rsya-campaign/rsya-campaign-8-1.jpg', '/guide/rsya-campaign/rsya-campaign-10-1.png', '/guide/rsya-campaign/rsya-campaign-11-1.png']),
     makeVisualStep('4. Быстрые ссылки и UTM', 'Добавьте быстрые ссылки, уточнения и UTM-параметры на уровне кампании.', ['/guide/rsya-campaign/rsya-campaign-9-1.jpg']),
     makeVisualStep('5. Группы объявлений', 'Создайте 3 группы, оставьте автотаргетинг включённым, ключи и интересы не добавляйте.', ['/guide/rsya-campaign/rsya-campaign-12-1.png', '/guide/rsya-campaign/rsya-campaign-13-1.png', '/guide/rsya-campaign/rsya-campaign-13-2.png', '/guide/rsya-campaign/rsya-campaign-14-1.jpg', '/guide/rsya-campaign/rsya-campaign-14-2.jpg']),
-    makeVisualStep('6. Первое объявление', 'Добавьте объявление: заголовок, текст, картинку 1:1, ссылку на предлендинг и нужные элементы.', ['/guide/rsya-campaign/rsya-campaign-15-1.png', '/guide/rsya-campaign/rsya-campaign-15-2.png', '/guide/rsya-campaign/rsya-campaign-16-1.png', '/guide/rsya-campaign/rsya-campaign-16-2.jpg', '/guide/rsya-campaign/rsya-campaign-17-1.jpg', '/guide/rsya-campaign/rsya-campaign-17-2.png']),
+    makeVisualStep('6. Первое объявление', 'Добавьте объявление: заголовок, текст, картинку 1:1, ссылку на предлендинг и нужные элементы.', ['/guide/rsya-campaign/rsya-campaign-15-2.png', '/guide/rsya-campaign/rsya-campaign-16-1.png', '/guide/rsya-campaign/rsya-campaign-16-2.jpg', '/guide/rsya-campaign/rsya-campaign-17-1.jpg', '/guide/rsya-campaign/rsya-campaign-17-2.png']),
     makeVisualStep('7. Размножение объявлений', 'Сохраняйте первое объявление и создавайте остальные "на основе текущего", меняя заголовок и креатив.', ['/guide/rsya-campaign/rsya-campaign-18-1.png', '/guide/rsya-campaign/rsya-campaign-18-2.jpg', '/guide/rsya-campaign/rsya-campaign-19-1.png', '/guide/rsya-campaign/rsya-campaign-19-2.png', '/guide/rsya-campaign/rsya-campaign-20-1.png', '/guide/rsya-campaign/rsya-campaign-20-2.jpg']),
     makeVisualStep('8. Готовая структура и запуск', 'Скопируйте группы 2 и 3, проверьте 15 объявлений и отправьте кампанию на модерацию.', ['/guide/rsya-campaign/rsya-campaign-21-1.jpg', '/guide/rsya-campaign/rsya-campaign-22-1.jpg', '/guide/rsya-campaign/rsya-campaign-22-2.jpg', '/guide/rsya-campaign/rsya-campaign-23-1.jpg', '/guide/rsya-campaign/rsya-campaign-25-1.jpg'])
   ]
@@ -276,6 +275,8 @@ const STEP_INSTRUCTIONS = [
         image: '/guide/npd/npd-2-2.png'
       }
     ],
+    actionTab: 'docs',
+    actionLabel: 'Перейти к документам',
     note: 'Ключевая фраза на звонке: "Регистрирую ИП на НПД". Этот шаг нужен до публикации документов и запуска рекламы, чтобы в политике и согласиях были корректные реквизиты оператора.'
   },
   {
@@ -290,6 +291,8 @@ const STEP_INSTRUCTIONS = [
       'Если в воронке используются партнёрские действия, опишите их только на нужном этапе, без финансовых обещаний в холодной рекламе.'
     ],
     visualSteps: GUIDE_VISUALS.workle,
+    actionTab: 'how',
+    actionLabel: 'Заполнить рабочую панель',
     note: 'Workle и партнёрские кабинеты не должны превращаться в обещание заработка в объявлении. В рекламе продвигаем понятный следующий шаг.'
   },
   {
@@ -308,6 +311,8 @@ const STEP_INSTRUCTIONS = [
       'Пополните кабинет удобным способом и оплатите домен.'
     ],
     visualSteps: GUIDE_VISUALS.domain,
+    actionTab: 'how',
+    actionLabel: 'Записать домен в рабочую панель',
     note: 'Домен понадобится для BotHelp, Чатиума/MAX и рекламной связки. Название лучше выбирать простое, латиницей, без сложных символов.'
   },
   {
@@ -326,6 +331,8 @@ const STEP_INSTRUCTIONS = [
       'Проверьте, что ссылка содержит параметры gcao и gcpc и ведёт на страницу продукта/оплаты.'
     ],
     visualSteps: GUIDE_VISUALS.getcourse,
+    actionTab: 'offer',
+    actionLabel: 'Вставить ссылку в оффер',
     note: 'Эта ссылка вставляется в оффер. Если человек оплатит по ней, он закрепляется за партнёром.'
   },
   {
@@ -346,6 +353,8 @@ const STEP_INSTRUCTIONS = [
       'Помните: редактировать HTML в теге Head и ставить свой favicon BotHelp разрешает только при подключённом собственном домене.'
     ],
     visualSteps: GUIDE_VISUALS.bothelp,
+    actionTab: 'install',
+    actionLabel: 'Открыть установку BotHelp',
     note: 'Поддомен BotHelp - это адрес вашего кабинета. Собственный домен нужен для аккуратных ссылок, доверия в рекламе и расширенной вставки кода.'
   },
   {
@@ -365,6 +374,8 @@ const STEP_INSTRUCTIONS = [
       'В мини-лендинге BotHelp кнопка Telegram/MAX появится только для подключённого канала: выберите канал, бота/авторассылку и стартовый шаг.'
     ],
     visualSteps: GUIDE_VISUALS.telegram,
+    actionTab: 'install',
+    actionLabel: 'Подключить бота в BotHelp',
     note: 'MAX требует больше подготовки: организация, модерация, токен. Без одобрения MAX канал может не подключиться.'
   },
   {
@@ -382,6 +393,8 @@ const STEP_INSTRUCTIONS = [
       'Вставьте ссылку на продающую историю.',
       'Проверьте, что вся цепочка ведёт человека дальше на оффер.'
     ],
+    actionTab: 'sale',
+    actionLabel: 'Перейти к продающей истории',
     note: 'Схема: человек из предлендинга попадает в бот, бот сразу даёт продающую историю, дальше 30 дней возвращает к покупке.'
   },
   {
@@ -404,6 +417,8 @@ const STEP_INSTRUCTIONS = [
       'Сохраните мини-лендинг.',
       'Скопируйте ссылку справа сверху. Для рекламы и Метрики используйте новую ссылку bhurl.ru или ссылку на собственном домене, если он подключён.'
     ],
+    actionTab: 'pre',
+    actionLabel: 'Собрать предлендинг',
     note: 'BotHelp автоматически создаёт ссылку и статистику мини-лендинга. Кнопки мессенджеров работают только после подключения соответствующих каналов.'
   },
   {
@@ -423,6 +438,8 @@ const STEP_INSTRUCTIONS = [
       'В BotHelp можно добавить до 5 собственных документов соглашений. Для нашей связки используем 3: политика, ПДн, рекламные сообщения.',
       'Выберите формат чекбокса: один общий чекбокс для всех документов, отдельный чекбокс на каждый документ или без чекбокса - по вашей юридической модели.'
     ],
+    actionTab: 'docs',
+    actionLabel: 'Заполнить документы',
     note: 'Если пользовательские соглашения не настроены, BotHelp подставляет стандартные документы. Для РСЯ лучше подключить свои реальные документы.'
   },
   {
@@ -441,6 +458,8 @@ const STEP_INSTRUCTIONS = [
       'Создайте мини-лендинг BotHelp, включите HTML-код и вставьте HTML в Body.',
       'Если страница будет на собственном домене, можно использовать Head для дополнительных технических вставок. Без собственного домена Head недоступен.'
     ],
+    actionTab: 'sale',
+    actionLabel: 'Собрать историю',
     note: 'Текст и структура продающей истории не меняются. Меняются только личные данные, фото и ссылка на оффер.'
   },
   {
@@ -459,6 +478,8 @@ const STEP_INSTRUCTIONS = [
       'Вставьте HTML в Body и сохраните.',
       'Проверьте, что системные кнопки BotHelp не мешают офферу: у оффера свои кнопки GetCourse, Telegram и MAX уже находятся внутри HTML.'
     ],
+    actionTab: 'offer',
+    actionLabel: 'Собрать оффер',
     note: 'Цена 990Р, структура оффера, отзывы и команда не редактируются. Меняются только 3 личные ссылки.'
   },
   {
@@ -477,6 +498,8 @@ const STEP_INSTRUCTIONS = [
       'Проверьте, что личный кабинет Директа открывается.'
     ],
     visualSteps: GUIDE_VISUALS.directRegister,
+    actionTab: 'launch',
+    actionLabel: 'Перейти к запуску РСЯ',
     note: 'Для Директа лучше использовать отдельный новый Яндекс ID и новый номер телефона. Логин потом изменить нельзя, поэтому сразу сохраняйте доступы.'
   },
   {
@@ -496,6 +519,8 @@ const STEP_INSTRUCTIONS = [
       'Отберите варианты без гарантий результата, быстрых обещаний, банковских образов и туманных формулировок.'
     ],
     visualSteps: GUIDE_VISUALS.rsyaAds,
+    actionTab: 'ads',
+    actionLabel: 'Собрать заголовки РСЯ',
     note: 'Сначала делаем ДНК клиента и заголовки. Креативы создаются только после заголовков, потому что текст на баннере помогает РСЯ понять аудиторию.'
   },
   {
@@ -514,6 +539,8 @@ const STEP_INSTRUCTIONS = [
       'Проверьте, что нет гарантий дохода, конкретных сумм, сроков, логотипов банков и чужих брендов.'
     ],
     visualSteps: GUIDE_VISUALS.rsyaCreatives,
+    actionTab: 'creative',
+    actionLabel: 'Создать креативы',
     note: 'Главная логика: один заголовок = один креатив. Не делайте абстрактные картинки без связи с текстом объявления.'
   },
   {
@@ -536,6 +563,8 @@ const STEP_INSTRUCTIONS = [
       'Отправьте на модерацию и после запуска не трогайте кампанию 7-14 дней без причины.'
     ],
     visualSteps: GUIDE_VISUALS.rsyaCampaign,
+    actionTab: 'launch',
+    actionLabel: 'Открыть запуск РСЯ',
     note: 'Модерация отклоняет туманные фразы "способ заработка" и "метод дохода". Нужно раскрывать объект продвижения и не обещать быстрый/гарантированный доход.'
   }
 ];
@@ -1845,20 +1874,31 @@ ${creativeTone || 'Пользователь не заполнил. Исполь�
                       <div className={`${dark ? 'bg-blue-500/10 border-blue-500/30 text-slate-300' : 'bg-blue-50 border-blue-200 text-slate-700'} border rounded-lg p-3 text-xs mt-4`}>
                         <strong>Важно:</strong> {section.note}
                       </div>
+                      {section.actionTab && (
+                        <button
+                          onClick={() => setTab(section.actionTab)}
+                          className="mt-3 px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-black"
+                        >
+                          {section.actionLabel || 'Перейти к нужному разделу'}
+                        </button>
+                      )}
                       {section.visualSteps && (
                         <div className="mt-4 space-y-3">
                           <h4 className={`text-sm font-black ${text}`}>Скриншоты из инструкции</h4>
                           <div className="grid md:grid-cols-2 gap-3">
                             {section.visualSteps.map((item, idx) => (
                               <div key={idx} className={`${dark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'} border rounded-xl overflow-hidden`}>
-                                <div className="grid gap-2 p-2">
-                                  {(item.images || [item.image]).filter(Boolean).map((src, imgIdx) => (
-                                    <img key={src} src={src} alt={`${item.title} ${imgIdx + 1}`} className="w-full h-auto block rounded-lg border border-slate-200" loading="lazy" />
-                                  ))}
-                                </div>
-                                <div className="p-3">
+                                <div className={`p-3 border-b ${dark ? 'border-slate-700 bg-slate-950/50' : 'border-slate-200 bg-slate-50'}`}>
                                   <div className={`font-black text-xs mb-1 ${text}`}>{item.title}</div>
                                   <p className={`text-[11px] leading-relaxed ${textMuted}`}>{item.desc}</p>
+                                </div>
+                                <div className="grid gap-3 p-3">
+                                  {(item.images || [item.image]).filter(Boolean).map((src, imgIdx) => (
+                                    <div key={src} className={`${dark ? 'bg-slate-950 border-slate-700' : 'bg-white border-slate-200'} border rounded-lg p-2`}>
+                                      <div className={`text-[10px] font-black mb-2 ${dark ? 'text-yellow-300' : 'text-blue-600'}`}>Шаг {idx + 1}.{imgIdx + 1}: {item.title}</div>
+                                      <img src={src} alt={`${item.title} ${imgIdx + 1}`} className="max-w-full w-auto max-h-[360px] mx-auto object-contain rounded-md" loading="lazy" />
+                                    </div>
+                                  ))}
                                 </div>
                               </div>
                             ))}
