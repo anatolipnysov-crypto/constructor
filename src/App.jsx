@@ -2572,8 +2572,7 @@ ${creativeTone || 'Пользователь не заполнил. Исполь�
                 <Sparkles className="w-3 h-3" /> Подарок внутри продукта
               </div>
               <h2 className="text-2xl md:text-4xl font-black mb-3">Бонусная библиотека промптов</h2>
-              <p className="text-sm md:text-base text-slate-300 max-w-3xl mb-5">Это дополнительный набор промптов из вашей библиотеки. Названия адаптированы под продукт, но суть и тело промптов оставлены как в исходнике: открывайте, читайте, копируйте и используйте в работе над воронкой.</p>
-              <div className="grid md:grid-cols-3 gap-3">
+              <div className="grid md:grid-cols-2 gap-3">
                 <div className="bg-white/10 rounded-2xl p-4 backdrop-blur">
                   <div className="text-3xl font-black text-yellow-300">{BONUS_PROMPTS.length}</div>
                   <div className="text-xs text-slate-300 font-bold uppercase">промптов в библиотеке</div>
@@ -2581,10 +2580,6 @@ ${creativeTone || 'Пользователь не заполнил. Исполь�
                 <div className="bg-white/10 rounded-2xl p-4 backdrop-blur">
                   <div className="text-3xl font-black text-emerald-300">250 000₽+</div>
                   <div className="text-xs text-slate-300 font-bold uppercase">оценочная ценность</div>
-                </div>
-                <div className="bg-white/10 rounded-2xl p-4 backdrop-blur">
-                  <div className="text-3xl font-black text-blue-300">PDF</div>
-                  <div className="text-xs text-slate-300 font-bold uppercase">источник: Промты 111</div>
                 </div>
               </div>
             </div>
