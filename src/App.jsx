@@ -4,6 +4,7 @@ import saleMaleTemplate from './templates/sale-male.html?raw';
 import saleFemaleTemplate from './templates/sale-female.html?raw';
 import offerTemplate from './templates/offer.html?raw';
 import prelandingTemplate from './templates/prelanding-bothelp.html?raw';
+import bonusPromptsRaw from './data/prompts111.txt?raw';
 
 /* ================== УТИЛИТЫ ================== */
 async function copyToClipboard(text) {
@@ -351,6 +352,143 @@ const SAFE_METHOD_PHRASES = [
   'Как РСЯ ведёт человека в чат-бот и на оффер',
   'Разбор мини-лендингов, бота и оффера практикума'
 ];
+
+function pickPromptText(start, end) {
+  const startIndex = bonusPromptsRaw.indexOf(start);
+  if (startIndex === -1) return '';
+  const endIndex = end ? bonusPromptsRaw.indexOf(end, startIndex + start.length) : -1;
+  const text = bonusPromptsRaw.slice(startIndex, endIndex === -1 ? undefined : endIndex).trim();
+  return text.replace(/\n--- PAGE \d+ ---\n/g, '\n').trim();
+}
+
+const BONUS_PROMPTS = [
+  {
+    title: 'Промпт-инженер PRO',
+    category: 'AI / база',
+    value: '9 900 ₽',
+    description: 'Создаёт сильные, структурированные промпты под любую задачу.',
+    text: pickPromptText('1. Что делает этот промпт?', 'NEW!! Охуенный Маркетолог / контент')
+  },
+  {
+    title: 'Маркетолог полного цикла',
+    category: 'Маркетинг',
+    value: '14 900 ₽',
+    description: 'Анализ ЦА, идеи воронок, продуктов, лид-магнитов и стратегий.',
+    text: pickPromptText('NEW!! Охуенный Маркетолог / контент', 'NEW 🔥  ДНК Клиента 2.0')
+  },
+  {
+    title: 'ДНК клиента 2.0',
+    category: 'ЦА',
+    value: '24 900 ₽',
+    description: 'Глубокая распаковка аудитории, болей, желаний и языка клиента.',
+    text: pickPromptText('NEW 🔥  ДНК Клиента 2.0', 'NEW!! 🔥  Промпт: Архитектор Tripwire-продуктов')
+  },
+  {
+    title: 'Архитектор Tripwire-продуктов',
+    category: 'Продукт',
+    value: '19 900 ₽',
+    description: 'Помогает придумать недорогой входной продукт для воронки.',
+    text: pickPromptText('NEW!! 🔥  Промпт: Архитектор Tripwire-продуктов', 'NEW!! 🧬  ДНК Клиента')
+  },
+  {
+    title: 'ДНК клиента: усиленный анализ',
+    category: 'ЦА',
+    value: '24 900 ₽',
+    description: 'Расширенный анализ сегментов, триггеров, страхов и возражений.',
+    text: pickPromptText('NEW!! 🧬  ДНК Клиента (усиленный промпт для Анализа ЦА)', 'NEW!! 📝  Промпт: распаковщик экспертности')
+  },
+  {
+    title: 'Распаковка экспертности',
+    category: 'Упаковка',
+    value: '12 900 ₽',
+    description: 'Достаёт из эксперта опыт, сильные стороны и уникальность.',
+    text: pickPromptText('NEW!! 📝  Промпт: распаковщик экспертности', 'NEW!!   Reels-завод')
+  },
+  {
+    title: 'Reels-завод',
+    category: 'Контент',
+    value: '9 900 ₽',
+    description: 'Идеи и сценарии коротких видео для прогрева и охвата.',
+    text: pickPromptText('NEW!!   Reels-завод', 'NEW!! Маркетолог-сторителлер')
+  },
+  {
+    title: 'Маркетолог-сторителлер',
+    category: 'Сторителлинг',
+    value: '12 900 ₽',
+    description: 'Строит истории, которые ведут к продукту через эмоцию.',
+    text: pickPromptText('NEW!! Маркетолог-сторителлер', 'NEW!! Транскрипт и анализ видео')
+  },
+  {
+    title: 'Анализ видео YouTube',
+    category: 'Контент',
+    value: '7 900 ₽',
+    description: 'Разбирает видео, вытаскивает структуру, смыслы и идеи.',
+    text: pickPromptText('NEW!! Транскрипт и анализ видео с Youtube', 'NEW!!: Связка: Идеи для инфопродуктов')
+  },
+  {
+    title: 'Идеи для инфопродуктов',
+    category: 'Продукт',
+    value: '14 900 ₽',
+    description: 'Связка промптов для поиска идей платных и бесплатных продуктов.',
+    text: pickPromptText('NEW!!: Связка: Идеи для инфопродуктов', 'NEW !! Создание офферов')
+  },
+  {
+    title: 'Создание офферов',
+    category: 'Оффер',
+    value: '14 900 ₽',
+    description: 'Помогает сформулировать ценность, выгоды и упаковку предложения.',
+    text: pickPromptText('NEW !! Создание офферов', 'Специалист по прогревам в Stories')
+  },
+  {
+    title: 'Прогревы в Stories',
+    category: 'Прогрев',
+    value: '12 900 ₽',
+    description: 'Сценарии сторис-прогревов, которые подводят к продукту.',
+    text: pickPromptText('Специалист по прогревам в Stories', 'NEW!! Маркетинговые модели текстов')
+  },
+  {
+    title: 'Маркетинговые модели текстов',
+    category: 'Копирайтинг',
+    value: '9 900 ₽',
+    description: 'Набор моделей для продающих текстов и контентных связок.',
+    text: pickPromptText('NEW!! Маркетинговые модели текстов', 'Продающий вебинар')
+  },
+  {
+    title: 'Сценарий продающего вебинара',
+    category: 'Вебинар',
+    value: '19 900 ₽',
+    description: 'Помогает собрать структуру вебинара, который ведёт к продаже.',
+    text: pickPromptText('Продающий вебинар', 'Продуктовая линейка')
+  },
+  {
+    title: 'Продуктовая линейка',
+    category: 'Продукт',
+    value: '14 900 ₽',
+    description: 'Собирает лестницу продуктов и логику переходов между ними.',
+    text: pickPromptText('Продуктовая линейка', 'Цепляющие посты для соцсетей')
+  },
+  {
+    title: 'Цепляющие посты',
+    category: 'Контент',
+    value: '7 900 ₽',
+    description: 'Идеи и структуры постов, которые хочется читать и сохранять.',
+    text: pickPromptText('Цепляющие посты для соцсетей', 'Эмоциональная история')
+  },
+  {
+    title: 'Эмоциональная история',
+    category: 'Сторителлинг',
+    value: '9 900 ₽',
+    description: 'Помогает написать историю с эмоцией, конфликтом и выводом.',
+    text: pickPromptText('Эмоциональная история', 'NEW!! Структура образовательного курса')
+  },
+  {
+    title: 'Структура образовательного курса',
+    category: 'Обучение',
+    value: '12 900 ₽',
+    description: 'Собирает программу курса, уроки и логику результата.',
+    text: pickPromptText('NEW!! Структура образовательного курса', 'Еще промпты для исследования ЦА')
+  }
+].filter(prompt => prompt.text);
 
 const CREATIVE_GUIDE = [
   {
@@ -1375,6 +1513,7 @@ ${creativeTone}
           <Tab active={tab === 'sale'} onClick={() => setTab('sale')} icon={User} dark={dark}>Продающая история</Tab>
           <Tab active={tab === 'offer'} onClick={() => setTab('offer')} icon={Target} dark={dark}>Оффер</Tab>
           <Tab active={tab === 'docs'} onClick={() => setTab('docs')} icon={FileText} dark={dark}>Документы</Tab>
+          <Tab active={tab === 'bonus'} onClick={() => setTab('bonus')} icon={Sparkles} dark={dark}>Бонусы</Tab>
           <Tab active={tab === 'install'} onClick={() => setTab('install')} icon={Rocket} dark={dark}>Установка BotHelp</Tab>
           <Tab active={tab === 'launch'} onClick={() => setTab('launch')} icon={TrendingUp} dark={dark}>Запуск РСЯ</Tab>
         </div>
@@ -2078,6 +2217,87 @@ ${creativeTone}
                 </details>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* === БОНУСЫ === */}
+        {tab === 'bonus' && (
+          <div className="space-y-4">
+            <div className="bg-gradient-to-br from-violet-700 via-slate-900 to-blue-900 rounded-3xl p-6 md:p-8 text-white shadow-2xl">
+              <div className="inline-flex items-center gap-2 bg-yellow-400 text-slate-900 px-3 py-1 rounded-full text-xs font-black uppercase mb-3">
+                <Sparkles className="w-3 h-3" /> Подарок внутри продукта
+              </div>
+              <h2 className="text-2xl md:text-4xl font-black mb-3">Бонусная библиотека промптов</h2>
+              <p className="text-sm md:text-base text-slate-300 max-w-3xl mb-5">Это дополнительный набор промптов из вашей библиотеки. Названия адаптированы под продукт, но суть и тело промптов оставлены как в исходнике: открывайте, читайте, копируйте и используйте в работе над воронкой.</p>
+              <div className="grid md:grid-cols-3 gap-3">
+                <div className="bg-white/10 rounded-2xl p-4 backdrop-blur">
+                  <div className="text-3xl font-black text-yellow-300">{BONUS_PROMPTS.length}</div>
+                  <div className="text-xs text-slate-300 font-bold uppercase">промптов в библиотеке</div>
+                </div>
+                <div className="bg-white/10 rounded-2xl p-4 backdrop-blur">
+                  <div className="text-3xl font-black text-emerald-300">250 000₽+</div>
+                  <div className="text-xs text-slate-300 font-bold uppercase">оценочная ценность</div>
+                </div>
+                <div className="bg-white/10 rounded-2xl p-4 backdrop-blur">
+                  <div className="text-3xl font-black text-blue-300">PDF</div>
+                  <div className="text-xs text-slate-300 font-bold uppercase">источник: Промты 111</div>
+                </div>
+              </div>
+            </div>
+
+            <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
+              <h3 className={`text-xl font-black mb-3 ${text}`}>Как пользоваться библиотекой</h3>
+              <div className="grid md:grid-cols-4 gap-3">
+                {[
+                  ['1. Открой', 'Нажми на карточку нужного промпта.'],
+                  ['2. Прочитай', 'Проверь, подходит ли он под текущую задачу.'],
+                  ['3. Скопируй', 'Кнопка копирует тело промпта без изменений.'],
+                  ['4. Примени', 'Подставь свои данные, лендинг, ЦА или продукт.']
+                ].map((item, i) => (
+                  <div key={i} className={`${dark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} border rounded-xl p-4`}>
+                    <div className={`font-black text-sm mb-1 ${text}`}>{item[0]}</div>
+                    <p className={`text-xs ${textMuted}`}>{item[1]}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid gap-3">
+              {BONUS_PROMPTS.map((prompt, i) => (
+                <details key={i} className={`${card} border rounded-2xl shadow-sm overflow-hidden group`}>
+                  <summary className="cursor-pointer list-none p-4 md:p-5">
+                    <div className="flex flex-col md:flex-row md:items-center gap-3 justify-between">
+                      <div className="flex items-start gap-3">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black flex-shrink-0 ${dark ? 'bg-yellow-400 text-slate-900' : 'bg-slate-900 text-white'}`}>{i + 1}</div>
+                        <div>
+                          <div className={`font-black text-base md:text-lg ${text}`}>{prompt.title}</div>
+                          <p className={`text-xs ${textMuted} mt-1`}>{prompt.description}</p>
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            <span className={`text-[10px] px-2 py-1 rounded-full font-black ${dark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>{prompt.category}</span>
+                            <span className="text-[10px] px-2 py-1 rounded-full font-black bg-emerald-500/15 text-emerald-500">ценность: {prompt.value}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className={`flex items-center gap-2 text-xs font-black ${dark ? 'text-yellow-300' : 'text-blue-600'}`}>
+                        Открыть промпт <ChevronDown className="w-4 h-4 transition-transform group-open:rotate-180" />
+                      </div>
+                    </div>
+                  </summary>
+                  <div className={`border-t ${dark ? 'border-slate-800 bg-slate-950/40' : 'border-slate-100 bg-slate-50'} p-4 md:p-5`}>
+                    <div className="grid md:grid-cols-[1fr_220px] gap-3 items-start">
+                      <pre className={`text-[11px] leading-relaxed whitespace-pre-wrap max-h-[520px] overflow-y-auto rounded-xl p-4 border ${dark ? 'bg-slate-950 border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-700'}`}>{prompt.text}</pre>
+                      <div className="space-y-2">
+                        <CopyBtn text={prompt.text} label="Скопировать промпт" dark={dark} />
+                        <DownloadBtn filename={`${String(i + 1).padStart(2, '0')}-${prompt.title.toLowerCase().replace(/[^a-zа-яё0-9]+/gi, '-')}.txt`} content={prompt.text} label="Скачать .txt" />
+                        <div className={`${dark ? 'bg-slate-900 text-slate-400' : 'bg-white text-slate-500'} rounded-xl p-3 text-xs border ${dark ? 'border-slate-800' : 'border-slate-200'}`}>
+                          Название адаптировано, тело промпта сохранено из исходной библиотеки.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </details>
+              ))}
+            </div>
           </div>
         )}
 
