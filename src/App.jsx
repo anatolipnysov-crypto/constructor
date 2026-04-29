@@ -135,15 +135,15 @@ const RESOURCE_LINKS = [
 ];
 
 const ROADMAP_STEPS = [
-  { title: 'Заполнить рабочие данные', desc: 'Соберите в одной панели Telegram, MAX, GetCourse, домен, ссылки лендингов, документы и Метрику.', tab: 'how' },
-  { title: 'Регистрация ИП на НПД', desc: 'Оформите правовую базу по инструкции, чтобы корректно принимать оплату и работать с документами.', tab: 'how' },
-  { title: 'Домен и сервисы', desc: 'Зарегистрируйте домен, Workle/партнёрские кабинеты и подготовьте доступы для связки.', tab: 'how' },
+  { title: 'Заполнить рабочие данные', desc: 'Соберите в одной панели Telegram, MAX, GetCourse, домен, ссылки лендингов, документы и Метрику.', tab: 'how', scrollTo: 'project-panel' },
+  { title: 'Регистрация ИП на НПД', desc: 'Оформите правовую базу по инструкции, чтобы корректно принимать оплату и работать с документами.', tab: 'how', guideIndex: 0 },
+  { title: 'Домен и сервисы', desc: 'Зарегистрируйте домен, Workle/партнёрские кабинеты и подготовьте доступы для связки.', tab: 'how', guideIndex: 2 },
   { title: 'BotHelp и боты', desc: 'Создайте кабинет BotHelp, Telegram-бота, MAX-бота и импортируйте шаблоны цепочек.', tab: 'install' },
   { title: 'Документы для предлендинга', desc: 'Соберите три юридические страницы и сохраните ссылки: политика, ПДн, рекламное согласие.', tab: 'docs' },
   { title: 'Предлендинг РСЯ', desc: 'Соберите первый мини-лендинг через Инструменты роста, подключите кнопки каналов, Метрику и пользовательские соглашения.', tab: 'pre' },
   { title: 'Продающая история', desc: 'Подставьте личные данные, фото и ссылку на оффер, затем вставьте HTML в BotHelp.', tab: 'sale' },
   { title: 'Оффер практикума', desc: 'Подставьте GetCourse, Telegram и MAX. Цена и структура оффера остаются без изменений.', tab: 'offer' },
-  { title: 'Метрика и цели', desc: 'Сохраните номер счётчика, идентификатор цели подписки и API-токен для офлайн-конверсий.', tab: 'how' },
+  { title: 'Метрика и цели', desc: 'Сохраните номер счётчика, идентификатор цели подписки и API-токен для офлайн-конверсий.', tab: 'how', scrollTo: 'metrics-guide' },
   { title: 'Заголовки РСЯ', desc: 'Сначала сделайте ДНК клиента, затем заголовки, тексты, быстрые ссылки и структуру групп.', tab: 'ads' },
   { title: 'Креативы под заголовки', desc: 'Каждый баннер собирается под один выбранный заголовок и проверяется по правилам модерации.', tab: 'creative' },
   { title: 'Запуск рекламы', desc: 'Создайте кампанию РСЯ, укажите предлендинг, отправьте на модерацию и проверьте всю цепочку.', tab: 'launch' }
@@ -1464,6 +1464,8 @@ function LivePreview({ tpl, style, palette, dark }) {
 export default function Constructor() {
   const [dark, setDark] = useState(false);
   const [tab, setTab] = useState('how');
+  const [openGuideIndex, setOpenGuideIndex] = useState(null);
+  const [pendingScroll, setPendingScroll] = useState(null);
   const [projectData, setProjectData] = useState(loadSavedProject);
   
   const [tpl, setTpl] = useState(null);
@@ -1511,6 +1513,32 @@ export default function Constructor() {
   useEffect(() => {
     localStorage.setItem('constructorProjectData', JSON.stringify(projectData));
   }, [projectData]);
+
+  useEffect(() => {
+    if (!pendingScroll) return;
+    const timer = window.setTimeout(() => {
+      document.getElementById(pendingScroll)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setPendingScroll(null);
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [pendingScroll, tab, openGuideIndex]);
+
+  const openRoadmapStep = (step) => {
+    if (step.tab !== 'how') {
+      setTab(step.tab);
+      setPendingScroll(null);
+      return;
+    }
+
+    setTab('how');
+    if (typeof step.guideIndex === 'number') {
+      setOpenGuideIndex(step.guideIndex);
+      setPendingScroll(`guide-section-${step.guideIndex}`);
+      return;
+    }
+
+    setPendingScroll(step.scrollTo || 'project-panel');
+  };
 
   const setProjectValue = (key, value) => setProjectData(prev => ({ ...prev, [key]: value }));
 
@@ -1825,13 +1853,13 @@ ${creativeTone || 'Пользователь не заполнил. Исполь�
                       <div className={`font-black text-sm ${text}`}>{s.title}</div>
                       <div className={`text-xs ${textMuted} mt-0.5`}>{s.desc}</div>
                     </div>
-                    <button onClick={() => setTab(s.tab)} className={`px-3 py-2 rounded-lg text-[11px] font-black flex-shrink-0 ${dark ? 'bg-slate-900 text-yellow-400 hover:bg-slate-700' : 'bg-white text-blue-600 hover:bg-blue-50 border border-slate-200'}`}>Открыть</button>
+                    <button onClick={() => openRoadmapStep(s)} className={`px-3 py-2 rounded-lg text-[11px] font-black flex-shrink-0 ${dark ? 'bg-slate-900 text-yellow-400 hover:bg-slate-700' : 'bg-white text-blue-600 hover:bg-blue-50 border border-slate-200'}`}>Открыть</button>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
+            <div id="project-panel" className={`${card} scroll-mt-6 rounded-3xl p-6 shadow-sm border`}>
               <h3 className={`text-xl font-black mb-2 flex items-center gap-2 ${text}`}><Target className="w-5 h-5 text-emerald-600" /> Рабочая панель проекта</h3>
               <p className={`text-xs ${textMuted} mb-4`}>Заполните эти поля по мере сборки. Данные сохраняются в браузере и помогают не терять ссылки между шагами.</p>
               <div className="grid md:grid-cols-2 gap-3">
@@ -1854,7 +1882,16 @@ ${creativeTone || 'Пользователь не заполнил. Исполь�
               <p className={`text-xs ${textMuted} mb-4`}>Открывайте блоки по порядку и выполняйте каждый пункт. Это маршрут сборки проекта от домена до запуска РСЯ.</p>
               <div className="space-y-2">
                 {STEP_INSTRUCTIONS.map((section, i) => (
-                  <details key={i} className={`${dark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} border rounded-xl overflow-hidden`}>
+                  <details
+                    key={i}
+                    id={`guide-section-${i}`}
+                    open={openGuideIndex === i}
+                    onToggle={(event) => {
+                      if (event.currentTarget.open) setOpenGuideIndex(i);
+                      if (!event.currentTarget.open && openGuideIndex === i) setOpenGuideIndex(null);
+                    }}
+                    className={`${dark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} scroll-mt-6 border rounded-xl overflow-hidden`}
+                  >
                     <summary className={`cursor-pointer p-4 font-black text-sm flex items-center justify-between gap-3 ${text}`}>
                       <span className="flex items-center gap-2">
                         <span className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center text-xs">{i + 1}</span>
@@ -1946,7 +1983,7 @@ ${creativeTone || 'Пользователь не заполнил. Исполь�
               </div>
             </div>
 
-            <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
+            <div id="metrics-guide" className={`${card} scroll-mt-6 rounded-3xl p-6 shadow-sm border`}>
               <h3 className={`text-xl font-black mb-3 flex items-center gap-2 ${text}`}><TrendingUp className="w-5 h-5 text-blue-600" /> Метрика, цели и офлайн-конверсии</h3>
               <div className="space-y-2">
                 {[
