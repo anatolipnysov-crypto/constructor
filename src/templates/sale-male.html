@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Знакомый скриншот? — Павел Андрюшенков</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-blue: #0d8eff;
+            --dark-blue: #006adc;
+            --text-black: #0f172a;
+            --text-gray: #334155;
+            --text-light-gray: #64748b;
+            --bg-light: #f8fafc;
+            --bg-gray: #f1f5f9;
+            --bg-blue-soft: #eef7ff;
+            --white: #ffffff;
+            --red-accent: #ef4444;
+            --green-accent: #22c55e;
+            --soft-blue: #eff6ff;
+            --soft-purple: #f5f3ff;
+            --soft-green: #f0fdf4;
+            --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 10px 25px -5px rgba(0, 0, 0, 0.08);
+            --shadow-blue: 0 20px 40px -10px rgba(13, 142, 255, 0.3);
+            --shadow-hover: 0 35px 70px -15px rgba(13, 142, 255, 0.5);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            line-height: 1.6;
+            color: var(--text-black);
+            background-color: var(--white);
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            font-size: 1.15rem;
+        }
+        section { width: 100%; position: relative; overflow: hidden; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 2; }
+        .text-container { max-width: 850px; margin: 0 auto; }
+        .section-padding { padding: 120px 0; }
+        .bg-gradient-blue { background: linear-gradient(135deg, var(--primary-blue) 0%, var(--dark-blue) 100%); color: white; }
+        .bg-soft-blue { background-color: var(--bg-blue-soft); }
+        .bg-gray { background-color: var(--bg-gray); }
+        .decorative-blob { position: absolute; filter: blur(80px); opacity: 0.25; z-index: 0; border-radius: 50%; }
+        h1, h2, h3, h4 { line-height: 1.2; letter-spacing: -0.02em; }
+        p { margin-bottom: 20px; }
+        .text-accent { font-weight: 800; color: var(--primary-blue); }
+        .text-red { color: var(--red-accent); }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 32px;
+            padding: 24px;
+            box-shadow: var(--shadow-soft);
+        }
+        .notebook-block {
+            background: #fff;
+            background-image: linear-gradient(#e2e8f0 1px, transparent 0), linear-gradient(90deg, #e2e8f0 1px, transparent 0);
+            background-size: 24px 24px, 24px 24px;
+            border: 3px solid var(--primary-blue);
+            border-radius: 24px;
+            padding: 40px;
+            position: relative;
+            box-shadow: 12px 12px 0px var(--bg-blue-soft);
+            margin: 40px 0;
+            font-style: italic;
+            font-weight: 600;
+            color: var(--text-gray);
+            transform: rotate(-1deg);
+            transition: transform 0.3s;
+        }
+        .notebook-block:hover { transform: rotate(0deg); }
+        .thought-bubble {
+            background: var(--white);
+            padding: 40px;
+            border-radius: 40px;
+            position: relative;
+            display: inline-block;
+            margin: 32px auto;
+            border: 4px solid var(--primary-blue);
+            box-shadow: var(--shadow-blue);
+            text-align: center;
+        }
+        .thought-bubble::after {
+            content: '';
+            position: absolute;
+            bottom: -20px;
+            left: 50%;
+            width: 40px;
+            height: 40px;
+            background: var(--white);
+            border-bottom: 4px solid var(--primary-blue);
+            border-right: 4px solid var(--primary-blue);
+            transform: translateX(-50%) rotate(45deg);
+        }
+        .questions-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin: 40px 0; }
+        .q-card { padding: 30px; border-radius: 20px; border: 1px solid #e2e8f0; }
+        .q-card.blue { background: var(--soft-blue); border-color: #bfdbfe; }
+        .q-card.purple { background: var(--soft-purple); border-color: #e9d5ff; }
+        .q-card.green { background: var(--soft-green); border-color: #bbf7d0; }
+        .q-icon { font-size: 2.5rem; display: block; margin-bottom: 15px; }
+        .q-title { font-weight: 800; font-size: 1.2rem; margin-bottom: 10px; color: var(--text-black); }
+        .scenario-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 32px; margin: 40px 0; }
+        .scenario-card {
+            background: var(--white);
+            padding: 40px;
+            border-radius: 32px;
+            box-shadow: var(--shadow-soft);
+            border: 2px solid transparent;
+            transition: all 0.4s;
+        }
+        .scenario-card:hover { border-color: var(--primary-blue); transform: translateY(-8px); box-shadow: var(--shadow-blue); }
+        .scenario-card .icon { font-size: 3rem; margin-bottom: 20px; display: inline-block; filter: drop-shadow(0 4px 8px rgba(13, 142, 255, 0.2)); }
+        .dashed-box {
+            background: var(--white);
+            border: 3px dashed #cbd5e1;
+            border-radius: 32px;
+            padding: 50px;
+            margin: 40px 0;
+            box-shadow: inset 0 0 30px rgba(0,0,0,0.02);
+            transition: border-color 0.3s;
+        }
+        .dashed-box:hover { border-color: var(--primary-blue); }
+        .blue-checklist-container {
+            background: linear-gradient(135deg, var(--primary-blue) 0%, var(--dark-blue) 100%);
+            border-radius: 40px;
+            padding: 60px;
+            color: white;
+            margin: 60px 0;
+            box-shadow: var(--shadow-blue);
+        }
+        .check-item { display: flex; align-items: flex-start; gap: 20px; margin-bottom: 24px; font-size: 1.25rem; font-weight: 500; }
+        .check-icon {
+            background: var(--green-accent);
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-size: 18px;
+            margin-top: 4px;
+            box-shadow: 0 4px 10px rgba(34, 197, 94, 0.4);
+        }
+        .blue-inset-box {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 30px 40px;
+            border-radius: 24px;
+            margin-top: 40px;
+            font-weight: 600;
+            font-size: 1.2rem;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.1);
+        }
+        .video-wrapper {
+            background: #1a1a1a;
+            border-radius: 32px;
+            padding: 20px 20px 40px 20px;
+            box-shadow: 0 40px 80px -20px rgba(0,0,0,0.4);
+            position: relative;
+            border: 2px solid #333;
+            margin: 40px auto;
+            max-width: 600px;
+        }
+        .video-wrapper::after {
+            content: '';
+            position: absolute;
+            bottom: 18px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 6px;
+            background: #333;
+            border-radius: 10px;
+        }
+        .video-wrapper video { width: 100%; border-radius: 16px; display: block; background: #000; }
+        .video-compact {
+            background: #111;
+            padding: 12px;
+            border-radius: 20px;
+            max-width: 600px;
+            margin: 30px auto;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+            border: 3px solid #333;
+        }
+        .video-compact video { width: 100%; border-radius: 12px; display: block; background: #000; }
+        .phone-video-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-top: 30px; justify-items: center; }
+        .phone-frame { background: #000; padding: 10px; border-radius: 36px; box-shadow: 0 15px 35px rgba(0,0,0,0.2); border: 4px solid #475569; max-width: 260px; width: 100%; }
+        .phone-frame video { width: 100%; border-radius: 26px; display: block; background: #000; }
+        .btn-main {
+            background: var(--primary-blue);
+            color: var(--white);
+            padding: 28px 64px;
+            border-radius: 100px;
+            font-size: 1.5rem;
+            font-weight: 900;
+            text-decoration: none;
+            display: inline-block;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            box-shadow: var(--shadow-blue);
+            transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+            border: none;
+            cursor: pointer;
+        }
+        .btn-main:hover { transform: translateY(-8px) scale(1.03); box-shadow: var(--shadow-hover); background: var(--dark-blue); }
+        .mobile-img { display: none; }
+        @media (max-width: 900px) {
+            .hero-split { grid-template-columns: 1fr !important; gap: 40px !important; }
+            .desktop-img { display: none; }
+            .mobile-img { display: block; margin: 30px 0; }
+            .author-flex { flex-direction: column; }
+            .scenario-grid { grid-template-columns: 1fr; }
+            .blue-checklist-container { padding: 40px 24px; }
+            .dashed-box { padding: 30px 20px; }
+            .section-padding { padding: 80px 0; }
+        }
+    </style>
+<style> .container.wh-mini-landing-container, .wh-mini-landing-container, .wh-landing-content, .wh-landing-buttons, .wh-mini-landing-policy, #privacy-policy-error-message, .wh-landing-powered-by { display: none !important; height: 0 !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important; border: none !important; box-shadow: none !important; } </style>
+</head>
+<body>
+    <section class="section-padding bg-gradient-blue" style="padding-top: 80px; padding-bottom: 100px;">
+        <div class="decorative-blob" style="background: #4facfe; top: -10%; left: -10%; width: 50vw; height: 50vw;"></div>
+        <div class="container">
+            <div class="hero-split" style="display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 60px; align-items: center;">
+                <div>
+                    <h1 style="font-size: clamp(3rem, 6vw, 4.5rem); font-weight: 900; margin-bottom: 30px; text-shadow: 0 4px 12px rgba(0,0,0,0.1);">Знакомый скриншот? 🫣</h1>
+                    <div class="glass-panel mobile-img">
+                        <img src="https://storage2.bothelp.io/connection/9c/9c6b/9c6b1f6d440125f6ec90e02655e20631/Risunok1.jpg" alt="Платежи" style="width: 100%; border-radius: 20px; display: block; box-shadow: 0 20px 40px rgba(0,0,0,0.2);">
+                    </div>
+                    <div style="font-size: 1.25rem; font-weight: 500; color: rgba(255,255,255,0.95);">
+                        <p>Ну как же достали все эти платежи!</p>
+                        <p>Каждый день кому то платишь.</p>
+                        <p>Каждый день считаешь деньги.</p>
+                        <p>Пытаешься вырваться из этого болота.</p>
+                        <p>Уже появилось ощущение, что так ничего и не получится...</p>
+                        <p style="font-weight: 900; font-size: 1.5rem; margin-top: 40px; background: rgba(255,255,255,0.15); padding: 24px; border-radius: 20px; backdrop-filter: blur(10px);">Если вы в похожей ситуации, то я вам 100% ГАРАНТИРУЮ - вы НАШЛИ, то что искали.</p>
+                    </div>
+                </div>
+                <div class="desktop-img">
+                    <div class="glass-panel">
+                        <img src="https://storage2.bothelp.io/connection/9c/9c6b/9c6b1f6d440125f6ec90e02655e20631/Risunok1.jpg" alt="Платежи" style="width: 100%; border-radius: 20px; display: block; box-shadow: 0 20px 40px rgba(0,0,0,0.2);">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    <section class="section-padding bg-white" style="padding: 80px 0;">
+        <div class="container text-container text-center">
+            <p style="font-size: 1.4rem; font-weight: 500;">Это не желтушный заголовок.</p>
+            <p style="font-size: 1.4rem; font-weight: 500;">Уделите 8 минут - вы увидите кардинально другой метод и даже хайповый ИИ тут не причём.</p>
+            <div style="text-align: center;">
+                <div class="thought-bubble">
+                    <span style="font-size: 2rem; font-weight: 900; color: var(--primary-blue);">Всего 8 минут - и вы всё поймёте.</span>
+                </div>
+            </div>
+        </div>
+    </section>
+    <section class="section-padding bg-gray">
+        <div class="decorative-blob" style="background: #e2e8f0; top: 20%; right: -10%; width: 40vw; height: 40vw;"></div>
+        <div class="container">
+            <div class="author-flex" style="display: flex; gap: 80px; align-items: center;">
+                <div style="flex-shrink: 0; position: relative; padding: 16px; border: 4px solid var(--primary-blue); border-radius: 48px; max-width: 420px; margin: 0 auto;">
+                    <img src="https://storage2.bothelp.io/pashan6/f3/f3ea/f3eaf53f619618eb977e1bdee57a0208/photo_5425044698948113664_m.jpg" alt="Павел Андрюшенков" style="width: 100%; border-radius: 32px; display: block; position: relative; z-index: 1; box-shadow: var(--shadow-soft);">
+                    <div style="position: absolute; bottom: -30px; left: 50%; transform: translateX(-50%); background: var(--primary-blue); color: white; padding: 15px 30px; border-radius: 30px; font-weight: 900; font-size: 1.3rem; z-index: 2; box-shadow: var(--shadow-blue); width: max-content; max-width: 95%; text-align: center;">
+                        Для вас просто Паша ;) ✌️
+                    </div>
+                </div>
+                <div>
+                    <h2 style="font-size: clamp(2.5rem, 5vw, 3.5rem); font-weight: 900; margin-bottom: 30px;">Меня зовут Павел Андрюшенков, мне 60 лет</h2>
+                    <div style="color: var(--text-gray); font-size: 1.25rem;">
+                        <p>Я не эксперт, у меня нет бизнеса и я даже не фрилансер.<br>Хотя всем этим я пытался стать с 2017 года.</p>
+                        <p>Я не тупой.<br>Не ленивый.</p>
+                        <p>Я покупал курсы и тренинги - ответственно учился и всё применял.<br><strong style="color: var(--text-black); font-size: 1.5rem;">НО результат полный НОЛЬ. Вообще НИЧЕГО.</strong></p>
+                        <p>Да, теперь я умею собирать чат-ботов, разбираюсь в таргетинге, на ты с нейросетями и ещё кучу всего другого, но мой доход от этого НЕ вырос.</p>
+                        <div class="notebook-block">
+                            "Не работай на дядю, 300к чистыми, запрыгивай в последний вагон, возможность исчезает через 12 часов, записи вебинара не будет..." - вот ключевые слова, описывающие 9 лет моей жизни.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div style="text-align: center; margin-top: 100px;">
+                <img src="https://storage2.bothelp.io/connection/86/8661/866129eae0899229f9af9d7da7d47d1a/Gemini_Generated_Image_qnw271qnw271qnw2.png" alt="Мем" style="max-width: 600px; width: 100%; border-radius: 24px; border: 10px solid white; box-shadow: var(--shadow-soft); transform: rotate(-2deg);">
+            </div>
+            <div class="text-container" style="margin-top: 80px; text-align: center;">
+                <p style="font-size: 1.6rem; font-weight: 700;">Я никогда не мечтал жить на Бали или в Дубае. 🌴❌</p>
+                <p style="font-size: 1.6rem; font-weight: 700; color: var(--primary-blue);">Меня всегда манила жизнь в простой смертной России - свой дом, лес, рыбалка, на море раз в год. 🌲🎣</p>
+                <p style="color: var(--text-light-gray); margin-top: 40px; font-size: 1.3rem;">"Блин, ведь это такое простое желание, ну ПОЧЕМУ у меня не получается??!!.<br>Ну ведь есть люди, которые так живут, почему они, а не я..." - у меня чуть кукуха не поехала от этих мыслей.</p>
+                <h2 style="font-size: 3.5rem; font-weight: 900; margin-top: 60px; color: var(--green-accent);">И всё таки у меня получилось.</h2>
+            </div>
+        </div>
+    </section>
+    <section class="section-padding bg-white">
+        <div class="container text-container text-center">
+            <h2 style="font-size: clamp(2rem, 4vw, 3rem); font-weight: 900; text-align: center; margin-bottom: 40px;">Вот мой доход за прошлую НЕДЕЛЮ.</h2>
+            <div class="video-compact">
+                <video controls preload="metadata">
+                    <source src="https://file-storage.bothelp.io/connection/12/1207/12074a5f379a6ae71db42e95106f58b2/%D0%94%D0%BE%D1%85%D0%BE%D0%B4%20%D0%B7%D0%B0%20%D0%BD%D0%B5%D0%B4%D0%B5%D0%BB%D1%8E.mp4#t=0.001" type="video/mp4">
+                </video>
+            </div>
+            <div style="text-align: center; font-size: 1.15rem;">
+                <p>Оказывается это такое счастье - каждое утро просыпаться с слегка придурковатой улыбкой.</p>
+                <p>Но давайте перейдём к КОНКРЕТИКЕ.</p>
+                <p>Как и обещал: сейчас вы увидите как РЕАЛЬНО получить результат.</p>
+                <p>Без очередного курса. Без тренда, в который надо успеть.</p>
+                <p style="font-weight: 800; font-size: 1.3rem;">Вот язык даю на отсечение. Я серьёзно.</p>
+            </div>
+        </div>
+    </section>
+    <section class="section-padding bg-gray" style="position: relative; overflow: hidden;">
+        <div style="position: absolute; top: -20%; left: -10%; width: 50vw; height: 50vw; background: radial-gradient(circle, rgba(13,142,255,0.1) 0%, transparent 70%); border-radius: 50%; z-index: 0;"></div>
+        <div style="position: absolute; bottom: -20%; right: -10%; width: 60vw; height: 60vw; background: radial-gradient(circle, rgba(239,68,68,0.05) 0%, transparent 70%); border-radius: 50%; z-index: 0;"></div>
+        <div class="container text-container" style="position: relative; z-index: 1;">
+            <h2 style="font-size: clamp(2rem, 5vw, 3rem); font-weight: 900; text-align: center; margin-bottom: 60px; line-height: 1.2; text-transform: uppercase; color: var(--text-black);">
+                Каждый мой "онлайн заработок" разворачивался по одному и тому же сценарию:
+            </h2>
+            <div style="display: flex; flex-direction: column; gap: 20px;">
+                <div class="scenario-card" style="border-left: 6px solid #3b82f6;"><div style="display: flex; align-items: center; gap: 20px;"><span style="font-size: 3.5rem; filter: drop-shadow(0 0 10px rgba(59,130,246,0.3));">🤯</span><p style="margin: 0; font-weight: 600; font-size: 1.25rem;">А. У меня случается очередной невроз по поводу хотения того самого образа жизни, свободы и всего такого.</p></div></div>
+                <div class="scenario-card" style="border-left: 6px solid #a855f7;"><div style="display: flex; align-items: center; gap: 20px;"><span style="font-size: 3.5rem; filter: drop-shadow(0 0 10px rgba(168,85,247,0.3));">🕵️‍♂️</span><p style="margin: 0; font-weight: 600; font-size: 1.25rem;">Б. Я нахожу "нишу" по принципу "лишь бы деньги заработать".</p></div></div>
+                <div class="scenario-card" style="border-left: 6px solid #f59e0b;"><div style="display: flex; align-items: center; gap: 20px;"><span style="font-size: 3.5rem; filter: drop-shadow(0 0 10px rgba(245,158,11,0.3));">💳</span><p style="margin: 0; font-weight: 600; font-size: 1.25rem;">В. Покупаю "на этот раз точно сработает курс", но внутри чувствую, что в реальности не хочу этим заниматься, но НАДО.</p></div></div>
+                <div class="scenario-card" style="border-left: 6px solid #ef4444; background: linear-gradient(90deg, #ffffff 0%, #fef2f2 100%);"><div style="display: flex; align-items: center; gap: 20px;"><span style="font-size: 3.5rem; filter: drop-shadow(0 0 10px rgba(239,68,68,0.3));">📉</span><p style="margin: 0; font-weight: 600; font-size: 1.25rem; color: var(--red-accent);">Г. Ничего не выходит и на пару месяцев наступает апатия.</p></div></div>
+            </div>
+            <div style="text-align: center; margin-top: 100px;">
+                <h3 style="font-size: clamp(2.5rem, 6vw, 4rem); font-weight: 900; color: var(--text-black); text-transform: uppercase; line-height: 1.1; margin-bottom: 40px;">Ну ведь узнаёте себя? 👀</h3>
+                <div style="background: #ffffff; border: 2px dashed #ef4444; border-radius: 24px; padding: 40px; text-align: left; position: relative; box-shadow: 0 10px 30px rgba(239, 68, 68, 0.1);">
+                    <div style="position: absolute; top: -15px; left: 30px; background: #ef4444; color: white; padding: 5px 15px; font-weight: 900; font-size: 1rem; text-transform: uppercase; border-radius: 8px; letter-spacing: 1px;">Провал</div>
+                    <p style="font-size: 1.3rem; margin-bottom: 20px; color: var(--text-black);">Последний мой такой забег был с нейро-описаниями для reels.<br>Типа за 30 минут клепаешь ролики и они приводят тысячи подписчиков.</p>
+                    <p style="color: var(--red-accent); font-weight: 800; font-size: 1.4rem; margin: 0; text-transform: uppercase; line-height: 1.4;">А вот хрен там: 100 000Р на обучение, 2 месяца воображал себя инста-блогером и сделал 22 подписчика. Вот и весь результат очередного "на этот раз точно сработает курс".</p>
+                </div>
+            </div>
+            <div style="margin-top: 80px; font-size: 1.4rem; color: var(--text-gray); text-align: center; display: flex; flex-direction: column; gap: 30px;">
+                <p>Закономерно, что со всеми этими «тестами» я в итоге окончательно выдохся.</p>
+                <p style="color: var(--text-black); font-weight: 700; transform: scale(1.05);">Решил забить на все эти попытки "жить лучшую жизнь".</p>
+                <p style="font-style: italic;">В жопу этого "журавля в небе", будем сидеть с "воробьём в руках".</p>
+                <p>Вот я и вернулся к своей серой, ничем не примечательной жизни.</p>
+                <p style="opacity: 0.7; font-size: 1.2rem;">Ну как вернулся, я так то из неё никуда не выходил, только разве что в мечтах перед сном.</p>
+                <div style="background: #ffffff; padding: 40px; border-radius: 20px; margin: 40px 0; box-shadow: 0 20px 40px rgba(0,0,0,0.08); border-left: 8px solid #ef4444; text-align: left;">
+                    <p style="color: var(--text-black); font-weight: 900; font-size: 1.6rem; margin: 0; line-height: 1.3; text-transform: uppercase;">На меня накатило полное отчаяние, потому что я понял - как бы я не старался, я всё равно не смогу перейти на другую ступеньку.</p>
+                </div>
+                <p style="color: var(--red-accent); font-weight: 800; font-size: 1.5rem; letter-spacing: 1px; text-transform: uppercase; margin-top: -10px;">Осталась только обида на мир, на людей, на себя...</p>
+                <p>Серо, лениво, уныло я лазил по каналам в Телеге.</p>
+            </div>
+            <div class="container" style="max-width: 1000px; margin: 60px auto;"><div style="background: var(--white); padding: 20px; border-radius: 32px; box-shadow: var(--shadow-sm);"><img src="https://storage2.bothelp.io/connection/48/482b/482b6bd2ae1f45f0e7851e130b39330a/Snimok_ekrana_2026-04-18_152625.png" alt="Скриншот канала" style="width: 100%; border-radius: 20px;"></div></div>
+            <div class="text-container">
+                <p>В одном из каналов увидел, что набирают желающих на эксперимент.</p>
+                <p>Типа какой то новый метод получения дохода протестировать.</p>
+                <p>"Нууу, очередная лажа..." подумал я, но заявку зачем то оставил.</p>
+                <div style="margin: 50px 0;"><span style="font-weight: 900; font-size: 2.5rem; color: transparent; background: linear-gradient(90deg, var(--primary-blue), #a855f7); -webkit-background-clip: text; background-clip: text; text-transform: uppercase; letter-spacing: -1px; filter: drop-shadow(0 4px 10px rgba(13,142,255,0.3)); display: inline-block; transform: scale(1.1);">Каким то чудом меня выбрали. ✨</span></div>
+                <p>В тот же вечер со мной связались и через час я уже сидел с ребятами на созвоне (по мимо меня взяли ещё 4-х человек).</p>
+            </div>
+            <div class="container" style="max-width: 1000px; margin-top: 60px;"><div style="background: var(--white); padding: 20px; border-radius: 32px; box-shadow: var(--shadow-sm);"><img src="https://storage2.bothelp.io/connection/e3/e37c/e37c083d1b35305f9bc22f6171fed792/Snimok_ekrana_2026-04-18_152856.png" alt="Zoom" style="width: 100%; border-radius: 20px;"></div></div>
+        </div>
+    </section>
+    <section class="section-padding bg-white">
+        <div class="container text-container">
+            <h2 class="text-blue" style="font-size: 2.2rem; font-weight: 900;">Разрыв шаблона №1 💥</h2>
+            <p>Нам поставили цель - заработать не менее 10 000Р за 10 дней.</p>
+            <p>Но как бл@ха-муха?!</p>
+            <p>Я за 9 лет не заработал, а тут за 10 дней...</p>
+            <p>"Ну давайте, учите своему методу" - была первая мысль.</p>
+            <br>
+            <p>Дальше просто процитирую что нам сказали:</p>
+            <div style="background: var(--bg-gray); padding: 30px; border-radius: 20px; margin: 20px 0;">
+                <p>...это НЕ получится сделать просто изучив какой-то навык/метод.</p>
+                <p>Здесь нужно кое-что другое. КАРДИНАЛЬНО другое.</p>
+                <p>Если использовать обычный подход, то будет всё тоже самое.</p>
+                <p>Меняется тема, курс, эксперт, но суть остаётся та же.</p>
+                <p>Сами себя спросите - если дальше придерживаться такой тактики - какой вас ждёт результат?</p>
+                <p class="text-bold text-red" style="margin-top: 15px;">Вот именно - ТОТ ЖЕ.<br>Т.е. никакой.</p>
+                <p class="text-bold" style="margin-top: 15px;">Поэтому нужен настоящий game changer (переломный момент).</p>
+            </div>
+            <p>Метод, который перевернёт все правила игры, звучит так:</p>
+            <div style="background: var(--primary-blue); color: white; padding: 30px; border-radius: 20px; text-align: center; margin: 30px 0; box-shadow: var(--shadow-md);">
+                <p style="font-size: 1.6rem; font-weight: 900; margin: 0;">Вы можете нанять кого-то, чтобы он зарабатывал деньги за Вас.</p>
+            </div>
+            <p>ЧЕЕГГОО?!?!? Нанимать людей?</p>
+            <p>Ну вот в директора я ещё не играл.</p>
+            <p>В слух я, конечно, это не сказал, просто подумал.</p>
+            <p>Продолжаю цитату:</p>
+            <p>Речь не о том, чтобы писать вакансии, проводить собеседования, готовить инструкции....</p>
+            <p>Нет. Всё проще.</p>
+            <br>
+            <p class="text-bold" style="font-size: 1.2rem;">Чтобы создать настоящий стабильный доход, нужно ответить на 3 вопроса:</p>
+            <div class="questions-grid">
+                <div class="q-card blue"><span class="q-icon">📦</span><div class="q-title">ЧТО продаём?</div><div style="font-size: 0.95rem; color: var(--text-gray);">это поиск спроса, анализ конкурентов и т.д.</div></div>
+                <div class="q-card purple"><span class="q-icon">⚙️</span><div class="q-title">КАК продаём?</div><div style="font-size: 0.95rem; color: var(--text-gray);">это воронки продаж, оффер, прозвоны и т.д.</div></div>
+                <div class="q-card green"><span class="q-icon">🎯</span><div class="q-title">ГДЕ брать тех...</div><div style="font-size: 0.95rem; color: var(--text-gray);">это поиск клиентов, лендинги, запуск рекламы и т.д.</div></div>
+            </div>
+            <p style="text-align: center; margin-top: 40px;">Чувствуете как стало душно, а внутри что-то упало? 🫠</p>
+            <p style="text-align: center;">Это мотивация упала, потому что вы НЕ хотите этим заниматься (ну вот честно СЕБЕ признайтесь).</p>
+        </div>
+    </section>
+    <section class="section-padding bg-gray">
+        <div class="container text-container">
+            <h2 style="font-size: 2rem; font-weight: 800; margin-bottom: 30px;">А вот чего действительно хочется:</h2>
+            <div style="font-size: 1.15rem; line-height: 1.8;">
+                <p>- сидеть у костра в отличной компании;</p>
+                <p>- полететь в ночь на море;</p>
+                <p>- в пасмурный день закутаться в плед и 8 часов подряд смотреть сериал;</p>
+                <p>- залипнуть на заправке, попивая кофе и наблюдать как суетятся люди;</p>
+                <p>- придумать себе приключение и отправится в него с близкими;</p>
+                <p>- и ещё 1 000 000+ ВОЗМОЖНОСТЕЙ которые дарят РАДОСТЬ.</p>
+                <br>
+                <p>Это нормальные желания, нормального человека.</p>
+                <p>Так, ну а кто же работать будет?</p>
+                <br>
+                <p style="font-weight: 800;">Ещё раз:</p>
+                <p style="font-weight: 800;">- Вы можете нанять кого-то, чтобы он зарабатывал деньги за вас.</p>
+                <br>
+                <p style="font-weight: 700;">Итак, в этом эксперименте вы:</p>
+                <p>❌ не будете изучать новый навык;</p>
+                <p>❌ не будете собирать воронки;</p>
+                <p>❌ не будете писать контент;</p>
+                <p>❌ не будете вести соц. сети;</p>
+                <p>❌ не будете запускать рекламу;</p>
+                <p>❌ и делать остальные не интересные дела.</p>
+                <br>
+                <p>"Ааа, понятно, всё сделает ИИ..." - это уже кто-то вслух сказал.</p>
+                <p>Нет.</p>
+                <p>Суть эксперимента - НЕ обучать вас очередному способу заработка, а построить для вас механизм, которым вы будете управлять как оператор управляет станком с ЧПУ.</p>
+                <br>
+                <p style="font-weight: 900; font-size: 1.4rem; text-align: center; color: var(--primary-blue);">Вот тут со мной случился ПЕРЕЛОМНЫЙ МОМЕНТ и полный разрыв шаблона.</p>
+            </div>
+        </div>
+    </section>
+    <section class="section-padding bg-white">
+        <div class="container text-container">
+            <h2 class="text-blue" style="font-size: 2.2rem; font-weight: 900;">Разрыв шаблона №2 🧩</h2>
+            <p>Продолжу в формате цитаты:</p>
+            <p>"Второй ключевой момент! Вам нужно понять что вообще такое ДОХОД.</p>
+            <p>Доход - это когда один человек платит другому.</p>
+            <p>Тут случается главная проблема, звучит так: "НЕ ПОКУПАЮТ".</p>
+            <p>Потому что люди ОООЧЕНЬ не охотно расстаются с деньгами.</p>
+            <p class="text-bold text-red">! Это и есть причина отсутствия результата у тех, кто пытается перейти из найма в работу на себя..."</p>
+            <br>
+            <p class="text-bold" style="font-size: 1.3rem;">И тут меня осенило!</p>
+            <p>Точно, ведь чему бы я не учился, всё ломалось на этапе, когда мне должны были заплатить. Всё отлично, пока дело не доходило до оплаты.</p>
+            <br>
+            <p>Продолжаем:</p>
+            <p>Поэтому мы соберем вам механизм и сделаем так, чтобы доступ к продукту был НЕ за деньги.</p>
+            <div class="blue-checklist-container">
+                <p style="font-size: 1.4rem; font-weight: 800; margin-bottom: 30px;">Вот что мы сделаем:</p>
+                <div class="check-item"><div class="check-icon">✓</div><div>соберём вам полноценную воронку продаж: с контентом, с сайтами, с техничкой.</div></div>
+                <div class="check-item"><div class="check-icon">✓</div><div>подготовим продукт и упакуем его</div></div>
+                <div class="info-panel">💳 НО! человек может получить доступ к продукту БЕСПЛАТНО. Для этого ему нужно будет выполнить простое действие - оформить дебетовую карту (НЕ кредитную). В итоге человек с полезной вещью и с доступом к продукту.</div>
+            </div>
+            <p>Важно! Опцию оплаты оставляем, для тех кому проще оплатить.</p>
+            <p>Кто не понял как появляется доход поясню - оформление дебетовой карты происходит по партнёрской ссылке, т.е. мне платит банк.</p>
+            <br>
+            <p class="text-bold">Просто почувствуйте на сколько это необычный подход.</p>
+            <p class="text-bold">Это как прийти в Пятёрочку, набрать продуктов, а вместо оплаты вам предлагают оформить карту лояльности.</p>
+        </div>
+    </section>
+    <section class="section-padding bg-gray">
+        <div class="container text-container text-center">
+            <h2 style="font-size: clamp(2rem, 5vw, 3rem); font-weight: 900; margin-bottom: 20px; text-align: center;">В итоге за первые 10 дней эксперимента я заработал 21 250 рублей.</h2>
+            <p style="font-size: 1.4rem; font-weight: 600; text-align: center; margin-bottom: 40px; color: var(--green-accent);">Это были первые РЕАЛЬНЫЕ деньги за 9 лет!!! Ещё раз - за 9 лет!</p>
+            <p style="font-size: 1.25rem; font-weight: 600;">ВСЕ кто был со мной в эксперименте тоже получили результат.</p>
+            <p style="font-size: 1.25rem; margin-bottom: 40px;"><span style="font-size: 2rem; vertical-align: middle;">👇</span> См. видео-отчёты с эксперимента (простите за мой русский - я был в просто в а**е):</p>
+            <div class="phone-video-grid">
+                <div class="phone-frame"><video controls preload="metadata"><source src="https://file-storage.bothelp.io/connection/fe/fe75/fe75882e6476f6e6ea81c6cdaf3f58c7/%D0%92%D0%BB%D0%B0%D0%B4%D0%B8%D0%BC%D0%B8%D1%80-%D0%BE%D1%82%D1%87%D1%91%D1%82.mp4#t=0.001"></video></div>
+                <div class="phone-frame"><video controls preload="metadata"><source src="https://file-storage.bothelp.io/connection/90/9028/90285d8010f1779573dd10289ffda006/%D0%A1%D0%B2%D0%B5%D1%82%D0%BB%D0%B0%D0%BD%D0%B0-%D0%BE%D1%82%D1%87%D1%91%D1%82.mp4#t=0.001"></video></div>
+                <div class="phone-frame"><video controls preload="metadata"><source src="https://file-storage.bothelp.io/connection/23/238b/238b9186e33694608c34af54c335165b/%D0%9C%D0%B8%D1%85%D0%B0%D0%B8%D0%BB-%D0%BE%D1%82%D1%87%D1%91%D1%82.mp4#t=0.001"></video></div>
+            </div>
+            <div style="font-size: 1.15rem; text-align: left; background: white; padding: 40px; border-radius: 24px; margin-top: 40px; box-shadow: var(--shadow-sm);">
+                <p style="font-weight: 800;">В ИТОГЕ:</p>
+                <p>- я не проходил обучение на очередном курсе</p>
+                <p>- я ничего не собирал своими руками. Всю эту воронку (тексты, чат-боты, лендиги, рекламу и т.д.) сделали те парни.</p>
+                <p>- я не заморачиваюсь с продуктами и продажами.</p>
+                <br>
+                <p style="font-weight: 700; color: var(--primary-blue);">МОЯ ЗАДАЧА ПРОСТАЯ - я как оператор у станка контролирую что всё работает и отвечаю на заявки, которые приходят с этой воронки, помогаю оформить карту.</p>
+            </div>
+        </div>
+    </section>
+    <section class="section-padding bg-white">
+        <div class="container text-container text-center">
+            <div style="font-size: 1.15rem; text-align: left;">
+                <p>Но если вы подумали что это всё, то нет. Это только верхушка.</p>
+                <p>На дебетовых картах много не заработать.</p>
+                <br>
+            </div>
+            <div style="text-align: center; margin: 50px 0;">
+                <p class="text-bold text-red" style="font-size: 1.8rem; margin-bottom: 15px;">!Основной мой доход, лежит дальше!</p>
+                <p style="font-weight: 500;">Это партнёрские отчисления с ВАШИХ доходов.</p>
+                <p style="font-weight: 500;">Поэтому моя задача - рассказать про этот метод как можно большему количеству людей.</p>
+                <p class="text-bold text-green" style="font-size: 1.4rem; margin-top: 15px;">И каждый день (КАЖДЫЙ!) мне приходят деньги. 📈</p>
+            </div>
+            <div style="text-align: center; background: white; padding: 40px; border-radius: 24px; border: 1px solid #e2e8f0; margin-bottom: 40px; box-shadow: var(--shadow-sm);">
+                <p style="font-size: 1.3rem; font-weight: 700; margin-bottom: 20px;">Я не смогу словами описать своё теперешнее состояние, это надо самому прочувствовать:</p>
+                <div class="video-compact" style="margin-top: 0; max-width: 700px;">
+                    <video controls preload="metadata"><source src="https://file-storage.bothelp.io/connection/2b/2bb8/2bb8efb236ee1189affb9969d8f809fb/%D0%B5%D0%B6%D0%B5%D0%B4%D0%BD%D0%B5%D0%B2%D0%BD%D1%8B%D0%B9%20%D0%B4%D0%BE%D1%85%D0%BE%D0%B4.mp4#t=0.001" type="video/mp4"></video>
+                </div>
+            </div>
+            <div style="font-size: 1.15rem; text-align: left;">
+                <p style="text-align: center;">Перестаньте себя насиловать очередным "точно сработает курс", не надо в который раз пытаться натягивать на себя роль маркетолога, таргетолога, разработчика и т.д.</p>
+                <p style="text-align: center;">Сколько вам ещё нужно купить курсов/тренингов и прочих обучалок, чтобы понять что такая тактика НЕ работает.</p>
+                <br>
+                <p style="text-align: center; font-weight: 700;">Понятно, что сейчас мало что понятно.</p>
+                <p style="text-align: center; font-weight: 700;">Знаете как говорят "лучше один раз увидеть..."</p>
+                <p style="text-align: center; font-weight: 900; font-size: 1.5rem; margin-top: 20px; color: var(--primary-blue);">Так вот - ЛУЧШЕ 1 РАЗ ПОПРОБОВАТЬ!</p>
+            </div>
+        </div>
+    </section>
+    <section class="section-padding bg-gray">
+        <div class="container text-container">
+            <div style="font-size: 1.15rem; text-align: center;">
+                <p>Если вы устали долбится в невидимую стену.</p>
+                <p>Если время идёт, а вы никак не приближаетесь к своей цели.</p>
+                <p>Если внутри только тревога, стресс и ощущение тупика</p>
+                <h2 style="font-size: 2.2rem; font-weight: 900; margin: 40px 0;">То вам реальный ВЫХОД:</h2>
+                <p>Сходите на 2-х часовой онлайн-практикум с ребятами, которые мне всё это сделали.</p>
+                <p style="font-weight: 700; color: var(--red-accent);">Это НЕ обучение.</p>
+                <p>Это ПРАКТИКА, где вы за 2 часа получите первый доход по этому методу.</p>
+                <p style="font-weight: 700;">Не баллы, не бонусы, а реальные деньги.</p>
+                <br>
+                <p>Ребят, товарищи, амиго!</p>
+                <p>Вот серьёзно, я как человек который впал в отчаяние и перепробовал почти всё - от всей ДУШИ советую вам попасть на этот практикум.</p>
+                <br>
+                <p style="font-weight: 800;">Как и написано в начале - вы 100% нашли что искали.</p>
+                <p style="font-weight: 800;">Если вы хотите понять как в действительности делается результат - идите на практикум.</p>
+                <h3 style="font-size: 1.8rem; font-weight: 900; margin: 50px 0 30px;">КАК ПОПАСТЬ НА ПРАКТИКУМ.</h3>
+                <a href="https://onl-ine.ru/4" class="btn-main">ЗАПИСАТЬСЯ НА ПРАКТИКУМ</a>
+            </div>
+        </div>
+    </section>
+    <footer style="padding: 60px 0; text-align: center; background: var(--white); border-top: 1px solid #e2e8f0;">
+        <p style="color: var(--text-gray); font-size: 1rem;">© 2026 Павел Андрюшенков. Все права защищены.</p>
+    </footer>
+</body>
+</html>

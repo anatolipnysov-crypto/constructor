@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+.container.wh-mini-landing-container,
+.wh-mini-landing-container,
+.wh-landing-content,
+.wh-landing-buttons,
+.wh-mini-landing-policy,
+#privacy-policy-error-message,
+.wh-landing-powered-by {
+  display: none !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+</style>
+  <title>Практикум: Метод 2026</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --tf-yellow: #ffdd2d;
+      --tf-yellow-hover: #fcc521;
+      --tf-dark: #222222;
+      --tf-dark-hover: #000000;
+      --tf-bg: #f4f5f7;
+      --tf-card-bg: #ffffff;
+      --text-main: #111111;
+      --text-muted: #6b7280;
+      --text-light: #ffffff;
+      --tf-border: #e2e8f0;
+      --color-tg: #2AABEE;
+      --color-tg-hover: #229ED9;
+      --shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.03);
+      --shadow-card: 0 12px 32px rgba(0, 0, 0, 0.06);
+      --shadow-hover: 0 20px 40px rgba(0, 0, 0, 0.1);
+      --shadow-yellow: 0 12px 24px rgba(255, 221, 45, 0.4);
+      --card-radius: 28px;
+      --btn-radius: 20px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background-color: var(--tf-bg);
+      font-family: 'Manrope', system-ui, sans-serif;
+      color: var(--text-main);
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { text-decoration: none; color: #2563eb; transition: color 0.2s; }
+    a:hover { color: #1d4ed8; }
+    img { max-width: 100%; display: block; border-radius: 16px; }
+    .offer-wrap { max-width: 860px; margin: 0 auto; padding: 50px 20px; }
+    .offer-hero {
+      background: var(--tf-yellow);
+      padding: 60px 50px;
+      border-radius: var(--card-radius);
+      margin-bottom: 24px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: var(--shadow-card);
+    }
+    .offer-badge {
+      display: inline-block;
+      padding: 8px 24px;
+      border-radius: 100px;
+      background: var(--tf-dark);
+      color: var(--tf-yellow);
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .offer-hero h1 {
+      font-size: clamp(34px, 5vw, 52px);
+      line-height: 1.05;
+      margin: 0 0 20px 0;
+      font-weight: 400;
+      color: var(--tf-dark);
+      letter-spacing: -0.03em;
+    }
+    .offer-hero h1 strong { font-weight: 900; }
+    .offer-subtitle {
+      font-size: 24px;
+      font-weight: 700;
+      color: rgba(34, 34, 34, 0.85);
+      margin: 0 0 40px 0;
+      letter-spacing: -0.01em;
+    }
+    .offer-pills { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 0; }
+    .offer-pill {
+      padding: 12px 24px;
+      border-radius: 100px;
+      background: rgba(255, 255, 255, 0.5);
+      border: 1px solid rgba(0, 0, 0, 0.05);
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--tf-dark);
+      backdrop-filter: blur(10px);
+    }
+    .offer-alert-card {
+      background: var(--tf-dark);
+      color: var(--text-light);
+      padding: 48px;
+      border-radius: var(--card-radius);
+      margin-bottom: 40px;
+      text-align: center;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+    }
+    .offer-alert-card p {
+      font-size: clamp(24px, 4vw, 32px);
+      font-weight: 600;
+      margin: 0;
+      line-height: 1.3;
+      letter-spacing: -0.01em;
+    }
+    .offer-alert-card p strong { color: var(--tf-yellow); font-weight: 900; }
+    .tf-card {
+      background: var(--tf-card-bg);
+      border-radius: var(--card-radius);
+      padding: 56px;
+      margin-bottom: 24px;
+      box-shadow: var(--shadow-card);
+      border: 1px solid rgba(0,0,0,0.02);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .tf-card:hover { box-shadow: var(--shadow-hover); }
+    .tf-title {
+      font-size: 34px;
+      line-height: 1.15;
+      font-weight: 900;
+      margin: 0 0 32px 0;
+      color: var(--text-main);
+      letter-spacing: -0.02em;
+    }
+    .tf-kicker {
+      font-size: 14px;
+      font-weight: 800;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+      letter-spacing: 0.1em;
+    }
+    .tf-text {
+      font-size: 19px;
+      margin: 0 0 20px 0;
+      color: var(--text-muted);
+      line-height: 1.6;
+      font-weight: 500;
+    }
+    .text-center { text-align: center; }
+    .tf-list { list-style: none; padding: 0; margin: 0; }
+    .tf-list-item {
+      padding: 24px 0;
+      border-bottom: 1px solid var(--tf-border);
+      font-size: 19px;
+      font-weight: 600;
+      color: var(--text-main);
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+    }
+    .tf-list-item:last-child { border-bottom: none; padding-bottom: 0; }
+    .tf-list-item:first-child { padding-top: 0; }
+    .icon-cross::before { content: '✕'; color: #ef4444; font-weight: 900; font-size: 18px; background: #fee2e2; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 10px; flex-shrink: 0; }
+    .icon-star::before { content: '✦'; color: var(--tf-dark); font-weight: 900; font-size: 18px; background: var(--tf-yellow); width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 10px; flex-shrink: 0; }
+    .icon-arrow::before { content: '→'; color: var(--text-light); font-weight: 900; font-size: 18px; background: var(--tf-dark); width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 10px; flex-shrink: 0; }
+    .icon-check::before { content: '✓'; color: #10b981; font-weight: 900; font-size: 18px; background: #d1fae5; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 10px; flex-shrink: 0; }
+    .tf-punch {
+      background: #fffbeb;
+      border-radius: 20px;
+      padding: 32px;
+      margin-top: 40px;
+      border-left: 6px solid #f59e0b;
+    }
+    .tf-punch p { margin: 0 0 12px 0; font-size: 19px; font-weight: 700; color: var(--tf-dark); }
+    .tf-punch p:last-child { margin-bottom: 0; }
+    .tf-lead {
+      background: var(--tf-bg);
+      border-radius: 24px;
+      padding: 36px;
+      margin-bottom: 48px;
+    }
+    .tf-lead p { margin: 0 0 12px 0; font-size: 22px; font-weight: 800; color: var(--tf-dark); line-height: 1.4; }
+    .tf-lead p:last-child { margin-bottom: 0; color: #2563eb; }
+    .tf-money-block {
+      background: var(--tf-yellow);
+      border-radius: 24px;
+      padding: 36px;
+      text-align: center;
+      margin-top: 48px;
+      box-shadow: var(--shadow-yellow);
+    }
+    .tf-money-block div { font-size: 26px; font-weight: 900; color: var(--tf-dark); margin: 8px 0; line-height: 1.2; text-transform: uppercase; letter-spacing: 0.02em; }
+    .review-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .review-card {
+      background: var(--tf-bg);
+      border-radius: 20px;
+      padding: 24px;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-main);
+      border: 1px solid transparent;
+      transition: all 0.3s ease;
+    }
+    .review-card:hover { background: #ffffff; border-color: var(--tf-border); box-shadow: var(--shadow-sm); transform: translateY(-2px); }
+    .host-card {
+      display: flex;
+      gap: 40px;
+      align-items: center;
+      background: var(--tf-bg);
+      border-radius: 28px;
+      padding: 40px;
+      margin-bottom: 48px;
+    }
+    .host-copy { flex: 1; }
+    .host-name { font-size: 32px; font-weight: 900; margin-bottom: 16px; color: var(--text-main); }
+    .host-line { font-size: 17px; color: var(--text-main); margin-bottom: 12px; font-weight: 500; }
+    .host-line strong { font-weight: 800; background: white; padding: 4px 10px; border-radius: 8px; border: 1px solid var(--tf-border); }
+    .host-link { color: #2563eb; font-weight: 700; text-decoration: none; border-bottom: 2px solid rgba(37, 99, 235, 0.2); transition: border-color 0.2s; }
+    .host-link:hover { border-color: #2563eb; }
+    .host-photo-box { flex: 0 0 200px; height: 250px; border-radius: 20px; overflow: hidden; background: #fff; box-shadow: var(--shadow-sm); }
+    .host-photo { width: 100%; height: 100%; object-fit: cover; }
+    .team-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-top: 32px; }
+    .team-card { text-align: center; }
+    .team-img { width: 100%; aspect-ratio: 1/1; object-fit: cover; border-radius: 20px; margin-bottom: 16px; background: var(--tf-bg); box-shadow: var(--shadow-sm); }
+    .team-name { font-size: 17px; font-weight: 800; margin-bottom: 4px; color: var(--text-main); }
+    .team-role { font-size: 14px; color: var(--text-muted); font-weight: 600; }
+    .price-box { border: 3px solid var(--tf-border); border-radius: 28px; padding: 48px; text-align: center; margin: 48px 0; background: #fafafa; }
+    .price-caption { font-size: 18px; font-weight: 700; color: var(--text-muted); margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .price-value { font-size: 72px; line-height: 1; font-weight: 900; color: var(--tf-dark); margin-bottom: 0; letter-spacing: -0.03em; }
+    .tf-btn {
+      display: block;
+      text-align: center;
+      border-radius: var(--btn-radius);
+      padding: 24px 32px;
+      font-size: 19px;
+      font-weight: 800;
+      margin-bottom: 20px;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      border: none;
+      text-decoration: none;
+      cursor: pointer;
+      width: 100%;
+      letter-spacing: 0.02em;
+    }
+    .btn-yellow { background: var(--tf-yellow); color: var(--tf-dark) !important; box-shadow: var(--shadow-yellow); }
+    .btn-yellow:hover { background: var(--tf-yellow-hover); transform: translateY(-4px); box-shadow: 0 16px 32px rgba(255, 221, 45, 0.6); }
+    .text-outline-box {
+      display: block;
+      text-align: center;
+      border-radius: var(--btn-radius);
+      padding: 24px 32px;
+      font-size: 19px;
+      font-weight: 800;
+      margin-bottom: 20px;
+      border: 1px solid var(--tf-dark);
+      color: var(--tf-dark);
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+      background: var(--white);
+    }
+    .btn-tg { background: var(--color-tg); color: var(--text-light) !important; box-shadow: 0 8px 20px rgba(42, 171, 238, 0.3); }
+    .btn-tg:hover { background: var(--color-tg-hover); transform: translateY(-4px); box-shadow: 0 12px 24px rgba(42, 171, 238, 0.4); }
+    .btn-max { background: var(--tf-dark); color: var(--text-light) !important; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2); }
+    .btn-max:hover { background: var(--tf-dark-hover); transform: translateY(-4px); box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3); }
+    .offer-limit { text-align: center; font-size: 16px; font-weight: 800; color: var(--text-muted); margin-top: 16px; opacity: 0.8; }
+    .doubt-box { background: var(--tf-bg); border-radius: 24px; padding: 48px; margin-bottom: 48px; }
+    .doubt-box p { margin: 0 0 16px 0; font-size: 22px; font-weight: 800; color: var(--text-main); }
+    .doubt-box p:last-child { margin-bottom: 0; font-weight: 600; color: var(--text-muted); }
+    .faq-item { padding: 32px 0; border-bottom: 1px solid var(--tf-border); }
+    .faq-item:first-of-type { border-top: 1px solid var(--tf-border); }
+    .faq-q { font-size: 20px; font-weight: 800; color: var(--text-main); margin: 0 0 16px 0; display: flex; align-items: flex-start; gap: 16px; }
+    .faq-a { font-size: 17px; color: var(--text-muted); margin: 0 0 0 40px; line-height: 1.6; font-weight: 500; }
+    .inline-link { color: #2563eb; font-weight: 700; border-bottom: 1px solid rgba(37, 99, 235, 0.3); transition: border-color 0.2s; }
+    .inline-link:hover { border-color: #2563eb; }
+    .contact-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 40px; }
+    .tf-final {
+      background: var(--tf-dark);
+      color: white;
+      border-radius: var(--card-radius);
+      padding: 80px 60px;
+      text-align: center;
+      margin-top: 40px;
+      box-shadow: 0 24px 48px rgba(0,0,0,0.3);
+    }
+    .tf-final p { margin: 0 0 16px 0; font-size: 22px; font-weight: 600; color: rgba(255,255,255,0.8); }
+    .tf-final p:last-child { margin-bottom: 0; }
+    .tf-final .end { font-size: 36px; font-weight: 900; color: var(--tf-yellow); margin-top: 40px; letter-spacing: -0.01em; }
+    @media (max-width: 768px) {
+      .offer-wrap { padding: 20px 16px; }
+      .offer-hero { padding: 40px 24px; }
+      .offer-alert-card { padding: 40px 24px; }
+      .offer-alert-card p { font-size: 22px; }
+      .tf-card { padding: 40px 24px; }
+      .host-card { flex-direction: column; align-items: center; text-align: center; gap: 24px; padding: 32px 24px; }
+      .host-photo-box { flex: none; height: 260px; width: 100%; max-width: 300px; }
+      .team-grid { grid-template-columns: repeat(2, 1fr); }
+      .review-grid { grid-template-columns: 1fr; }
+      .contact-grid { grid-template-columns: 1fr; }
+      .price-value { font-size: 52px; }
+      .tf-btn { font-size: 17px; padding: 20px 24px; }
+      .text-outline-box { font-size: 17px; padding: 20px 24px; }
+      .tf-final { padding: 50px 24px; }
+    }
+  </style>
+</head>
+<body>
+<div class="offer-wrap">
+  <div class="offer-hero">
+    <div class="offer-badge">Практикум</div>
+    <h1>Кардинально другой метод получения дохода <strong>в 2026 году.</strong></h1>
+    <div class="offer-subtitle">Как выйти на доход от 250 000Р</div>
+    <div class="offer-pills">
+      <div class="offer-pill">Без покупки курсов</div>
+      <div class="offer-pill">Без продаж</div>
+      <div class="offer-pill">Без создания продуктов</div>
+      <div class="offer-pill">Без соц. сетей</div>
+      <div class="offer-pill">И даже без ИИ</div>
+    </div>
+  </div>
+  <div class="offer-alert-card">
+    <p>За 2 часа прямо на практикуме вы заработаете <strong>первые 5000Р</strong> без вложений.</p>
+  </div>
+  <div class="tf-card">
+    <h2 class="tf-title">Кому нужно быть на практикуме "уже вчера":</h2>
+    <ul class="tf-list">
+      <li class="tf-list-item icon-cross">Постоянная нехватка денег.</li>
+      <li class="tf-list-item icon-cross">Долги и кредиты на которые уходит пол зарплаты</li>
+      <li class="tf-list-item icon-cross">Ежедневная тревога за будущее.</li>
+      <li class="tf-list-item icon-cross">Ответственность за семью (хочешь дать больше но не можешь).</li>
+      <li class="tf-list-item icon-cross">Ненависть к найму и ощущение каторги.</li>
+      <li class="tf-list-item icon-cross">Десятки курсов за спиной, а результата нет.</li>
+    </ul>
+    <div class="tf-punch">
+      <p>Вы реально думаете что все эти проблемы можно решить каким-нибудь онлайн курсом? Серьёзно?!</p>
+      <p>Сколько вам нужно ещё пройти обучалок чтобы понять что так это НЕ РАБОТАЕТ.</p>
+    </div>
+  </div>
+  <div class="tf-card">
+    <div class="tf-lead">
+      <p>Вам обязательно нужно попасть на этот практикум чтобы увидеть...</p>
+      <p>...метод создания дохода от 250 000Р, который кардинально отличается от всего что вы пробовали ранее.</p>
+    </div>
+    <h2 class="tf-title">Вот что даёт этот МЕТОД:</h2>
+    <ul class="tf-list">
+      <li class="tf-list-item icon-star">деньги перестанут быть источником стресса - больше не будете считать каждую копейку.</li>
+      <li class="tf-list-item icon-star">закроете кредиты и выйдете из финансовой ямы - наконец почувствуете "я больше никому не должен".</li>
+      <li class="tf-list-item icon-star">вернётся спокойствие за завтрашний день - поймаете ощущение "я свободен".</li>
+      <li class="tf-list-item icon-star">выйдете из гонки за лучшее будущее и начнёте жить им.</li>
+    </ul>
+    <p class="tf-text" style="font-weight:800; margin-top:40px; color: var(--text-main); font-size: 22px;">Это не пустые обещания, потому что прямо во время практикума вы УЖЕ заработаете первые 5000Р.</p>
+    <div class="tf-money-block">
+      <div>НЕ баллы.</div>
+      <div>НЕ бонусы.</div>
+      <div>А РЕАЛЬНЫЕ деньги.</div>
+    </div>
+  </div>
+  <div class="tf-card">
+    <h2 class="tf-title">Посмотрите отзывы с практикума (оценка 4.9):</h2>
+    <div class="review-grid">
+      <div class="review-card">огонь 🔥, это лучшее что я видел, благодарю 🙏</div>
+      <div class="review-card">блин, серьёзно?! 😳 так можно было?:)) не знала, что так просто можно было заработать, СПАСИБОООО!!!! 💸✨</div>
+      <div class="review-card">Это самая эффективная встреча на которой я был! 💪 Первый раз в жизни получил реальный результат так быстро, жму руку 🤝</div>
+      <div class="review-card">спасибо за эфир 🙌, всё я с вами 🚀</div>
+      <div class="review-card">честно, зашёл просто послушать… а вышел уже с пониманием, что делать дальше 😅 спасибо!</div>
+      <div class="review-card">я в шоке 🤯 столько пользы за один эфир, вы вообще как это делаете</div>
+      <div class="review-card">вот это разнос 🔥🔥 теперь многое стало на свои места, благодарю!</div>
+      <div class="review-card">не ожидал, что будет настолько по делу, без воды вообще 👍</div>
+      <div class="review-card">спасибо большое! 💛 объяснили так, что даже я разобралась наконец-то</div>
+      <div class="review-card">сначала скептически относился, но теперь беру свои слова назад 😄 реально круто</div>
+      <div class="review-card">это было сильно 💪 прям чувствуется опыт, буду пересматривать</div>
+      <div class="review-card">я обычно молчу, но тут не могу не написать — это было очень ценно 🙏</div>
+      <div class="review-card">у меня как будто щёлкнуло в голове 💡 спасибо вам за это</div>
+      <div class="review-card">блин, почему я раньше этого не знал 😅 столько времени потерял</div>
+    </div>
+  </div>
+  <div class="tf-card">
+    <h2 class="tf-title">Вот план практикума:</h2>
+    <ul class="tf-list">
+      <li class="tf-list-item icon-arrow">Знакомство.</li>
+      <li class="tf-list-item icon-arrow">Определяем цель.</li>
+      <li class="tf-list-item icon-arrow">Главная причина "почему у вас НЕ получается".</li>
+      <li class="tf-list-item icon-arrow">Почему курсы никогда не дадут результат.</li>
+      <li class="tf-list-item icon-arrow">Как решить эту проблему.</li>
+      <li class="tf-list-item icon-arrow">Разбираем наш МЕТОД и зарабатываем первый доход.</li>
+      <li class="tf-list-item icon-arrow">Как этот разовый результат перевести в регулярный.</li>
+    </ul>
+    <p class="tf-text text-center" style="font-weight:800; margin-top:40px; color: var(--text-main); font-size: 22px;">С практикума вы уйдете с четким понимает как закрыть свои финансовые потребности и с заработанными деньгами.</p>
+  </div>
+  <div class="tf-card">
+    <div class="tf-kicker">Кто проводит практикум:</div>
+    <div class="host-card">
+      <div class="host-copy">
+        <div class="host-name">Андрей Золотарев</div>
+        <div class="host-line">С 2012 занимается трафиком и партнёрскими программами</div>
+        <div class="host-line"><strong>2020 - 2024</strong> сооснователь saas проектов</div>
+        <div class="host-line"><a href="https://cleverapp.pro/" class="host-link" target="_blank" rel="noopener noreferrer">https://cleverapp.pro/</a> - создание воронок продаж</div>
+        <div class="host-line"><a href="https://crmca.pro/" class="host-link" target="_blank" rel="noopener noreferrer">https://crmca.pro/</a> - CRM платформа для бизнеса</div>
+        <div class="host-line"><strong>2025 - 2026</strong> ведение закрытых сообществ</div>
+      </div>
+      <div class="host-photo-box">
+        <img src="https://storage2.bothelp.io/connection/3e/3eef/3eefce8527364c811d6ddac8efcccdc8/Dizayn_bez_nazvaniya_-_Post_v_Instagram_1_1__3_.png" alt="Андрей Золотарев" class="host-photo">
+      </div>
+    </div>
+    <div class="tf-title" style="font-size: 28px; text-align: center; margin-bottom: 32px;">И Команда</div>
+    <div class="team-grid">
+      <div class="team-card"><img src="https://storage2.bothelp.io/connection/4c/4cee/4ceea6153cb29db3681f0fbff4f14259/Skrinshot-20260418-192654.jpg" alt="Владимир" class="team-img"><div class="team-name">Владимир</div><div class="team-role">Управление проектом</div></div>
+      <div class="team-card"><img src="https://storage2.bothelp.io/connection/34/3409/3409ca759199b58efcb3550ae8da0ce0/Snimok_ekrana_2026-01-22_191140.png" alt="Сергей" class="team-img"><div class="team-name">Сергей</div><div class="team-role">Маркетинг</div></div>
+      <div class="team-card"><img src="https://storage2.bothelp.io/connection/bf/bf20/bf20ddfe647ef22b7cb6c999d4d714fa/photo_5427282183635800368_y.jpg" alt="Константин" class="team-img"><div class="team-name">Константин</div><div class="team-role">Тех. процессы</div></div>
+      <div class="team-card"><img src="https://storage2.bothelp.io/connection/37/378c/378c20ed6b0af0f24d00ff538144c377/Snimok_ekrana_2026-01-22_192819.png" alt="Антон" class="team-img"><div class="team-name">Антон</div><div class="team-role">Продажи</div></div>
+    </div>
+  </div>
+  <div class="tf-card" id="offer-entry" style="border: 2px solid var(--tf-yellow);">
+    <h2 class="tf-title text-center">Итого за 2 часа практикума:</h2>
+    <ul class="tf-list">
+      <li class="tf-list-item icon-check">Вы увидите как работает кардинально другой метод создания дохода в 2026.</li>
+      <li class="tf-list-item icon-check">Вы заработаете первые 5000Р.</li>
+      <li class="tf-list-item icon-check">Поймёте как этот результат перевести в регулярный.</li>
+    </ul>
+    <div class="price-box">
+      <div class="price-caption">Стоимость участия в практикуме всего 990Р.</div>
+      <div class="price-value">990Р</div>
+    </div>
+    <p class="tf-text text-center" style="font-weight: 900; color: var(--tf-dark); margin-top: 16px; margin-bottom: 24px; font-size: 20px;">!!! При этом вы можете принять участие БЕСПЛАТНО.</p>
+    <p class="tf-text text-center" style="font-weight:700; color: var(--text-main); margin-bottom: 32px;">Всё как описывалось ранее - напишите мне, чтобы оформить дебетовую карту и я вас добавлю в список участников практикума (вот так это работает на практике).</p>
+    <a href="https://voronkapodkluch.getcourse.ru/page2?gcao=54688&gcpc=421e3" class="tf-btn btn-yellow" target="_blank" rel="noopener noreferrer">ОПЛАТИТЬ УЧАСТИЕ</a>
+    <div class="text-outline-box">НАПИСАТЬ МНЕ И ОФОРМИТЬ КАРТУ</div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+      <a href="https://t.me/oksanakor" class="tf-btn btn-tg" style="margin-bottom: 0; padding: 16px;" target="_blank" rel="noopener noreferrer">Телеграм</a>
+      <a href="https://iimax.ru/oksanakor" class="tf-btn btn-max" style="margin-bottom: 0; padding: 16px;" target="_blank" rel="noopener noreferrer">Мах</a>
+    </div>
+    <div class="offer-limit">Места ограничены!</div>
+  </div>
+  <div class="tf-card">
+    <div class="doubt-box">
+      <p>Скорее всего, у вас сейчас есть сомнения…</p>
+      <p>И это нормально.</p>
+      <p>Потому что вы уже пробовали. Тратили деньги, время, силы — и не получали результата.</p>
+      <p style="margin-top: 24px; color: var(--text-main);"><strong>Но давай честно 👇</strong></p>
+      <p style="color: #2563eb;"><strong>Назовите хоть одну причину что бы не идти. Хоть одну.</strong></p>
+    </div>
+    <div class="faq-item"><p class="faq-q"><span style="font-size: 24px;">❌</span> «А вдруг это снова не сработает?»</p><p class="faq-a">→ Уже сотни людей используют этот метод и я в их числе.</p></div>
+    <div class="faq-item"><p class="faq-q"><span style="font-size: 24px;">❌</span> «Я уже терял(а) деньги… не хочу повторения»</p><p class="faq-a">→ Есть гарантия возврата - если вам хоть что то не понравится, напишите мне и сделаем возврат в течении 24 часов. При этом вы можете не платить деньгами, а оформить карту (мне банк заплатит) и принять участие бесплатно.</p></div>
+    <div class="faq-item"><p class="faq-q"><span style="font-size: 24px;">❌</span> «Если оформлять карту, то мне нужно сообщить вам свои данные?»</p><p class="faq-a">→ Нет, конечно, заявку на карту вы оформляете на официальном сайте банка. Мне никакие данные сообщать не нужно.</p></div>
+    <div class="faq-item"><p class="faq-q"><span style="font-size: 24px;">❌</span> «Где гарантии что это не очередной лохотрон?»</p><p class="faq-a">→ Мы все работаем в белую. Платежи принимаются официально через Геткурс. Вот реквизиты организатора практикума - <a href="https://www.tbank.ru/business/contractor/legal/321665800084396/" class="inline-link" target="_blank" rel="noopener noreferrer">Реквизиты</a>.<br><br>Так же вот ссылка на <a href="https://t.me/modernisto" class="inline-link" target="_blank" rel="noopener noreferrer">официальный Телеграм канал организаторов</a>. Там вы сможете ближе познакомится с этой командой.</p></div>
+  </div>
+  <div class="tf-card" id="offer-contacts">
+    <h2 class="tf-title">Давайте так.</h2>
+    <p class="tf-text">Если у вас есть ещё вопросы, то напишите мне, я помогу во всём разобраться</p>
+    <div class="contact-grid">
+      <a href="https://t.me/oksanakor" class="tf-btn btn-tg" target="_blank" rel="noopener noreferrer">Мой Телеграм</a>
+      <a href="https://iimax.ru/oksanakor" class="tf-btn btn-max" target="_blank" rel="noopener noreferrer">Мой  Мах</a>
+    </div>
+  </div>
+  <div class="tf-final">
+    <p>Можно продолжать делать ВСЁ ТО ЖЕ САМОЕ…Но где вы будете через месяц? В той же точке или даже хуже.</p>
+    <p>Или наконец попробовать то, где уже есть система, поддержка и реальные результаты.</p>
+    <p class="end">Решение за вами.</p>
+  </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  function hideBotHelpBlock() {
+    const checkbox = document.querySelector('.wh-checkbox, .wh-mini-landing-policy input[type="checkbox"]');
+    if (checkbox) {
+      checkbox.checked = true;
+      checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    const policy = document.querySelector('.wh-mini-landing-policy');
+    if (policy) {
+      policy.style.display = 'none';
+      policy.style.height = '0';
+      policy.style.margin = '0';
+      policy.style.padding = '0';
+      policy.style.overflow = 'hidden';
+    }
+    const error = document.getElementById('privacy-policy-error-message');
+    if (error) error.style.display = 'none';
+    const powered = document.querySelector('.wh-landing-powered-by');
+    if (powered) powered.style.display = 'none';
+  }
+  hideBotHelpBlock();
+  const observer = new MutationObserver(function () { hideBotHelpBlock(); });
+  observer.observe(document.body, { childList: true, subtree: true });
+  setTimeout(function () { observer.disconnect(); }, 5000);
+});
+</script>
+</body>
+</html>
