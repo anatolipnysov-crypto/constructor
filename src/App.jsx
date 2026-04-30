@@ -1,5 +1,5 @@
 ﻿import { useState, useMemo, useEffect } from 'react';
-import { Copy, Check, Wand2, BookOpen, User, Target, Rocket, AlertCircle, ChevronDown, RotateCcw, Eye, Download, Sun, Moon, Image as ImageIcon, Megaphone, Sparkles, Lightbulb, TrendingUp, FileText, ExternalLink, ShieldCheck, Bot, Route } from 'lucide-react';
+import { Copy, Check, Wand2, BookOpen, User, Target, Rocket, AlertCircle, ChevronDown, RotateCcw, Eye, Download, Sun, Moon, Image as ImageIcon, Megaphone, Sparkles, Lightbulb, TrendingUp, FileText, ExternalLink, ShieldCheck, Bot, Route, ListChecks } from 'lucide-react';
 import saleMaleTemplate from './templates/sale-male.html?raw';
 import saleFemaleTemplate from './templates/sale-female.html?raw';
 import offerTemplate from './templates/offer.html?raw';
@@ -593,6 +593,15 @@ const HEADLINE_WORKFLOW = [
   ['4. Сгенерировать заголовки', 'По 10 вариантов на каждый стиль, до 56 символов, с подсчётом длины и без универсальной воды.'],
   ['5. Отобрать 15 для старта', 'Оставляем самые понятные и модерационно чистые: 3 группы по 5 заголовков.'],
   ['6. Только потом делать креативы', 'Каждый баннер собирается под конкретный заголовок, а не наоборот.']
+];
+
+const AFTER_GENERATION_FLOW = [
+  ['1. Вставьте всё, что уже выдала нейросеть', '90 заголовков, 5 текстов и 8 быстрых ссылок вставляются в поля ниже. Ничего руками пока не улучшаем.'],
+  ['2. Скопируйте промпт отбора', 'Он выберет 15 самых понятных заголовков, разобьёт их на 3 группы и напишет, какой текст должен быть на баннере.'],
+  ['3. Результат отбора вставьте во второе поле', 'Берёте ответ нейросети с 15 заголовками и вставляете в поле "Финальные 15 заголовков".'],
+  ['4. Скопируйте промпт матрицы объявлений', 'Он соберёт структуру: 3 группы по 5 объявлений, какой текст, какие быстрые ссылки и что делать с креативом.'],
+  ['5. Каждый заголовок отдельно переносите в "Креативы"', 'Не пачкой. Один заголовок = один промпт на картинку = один готовый баннер для объявления.'],
+  ['6. После 15 креативов идите в "Запуск РСЯ"', 'В Директе создаёте 1 кампанию, 3 группы, 15 объявлений и отправляете на модерацию.']
 ];
 
 function pickPromptText(start, end) {
@@ -1503,6 +1512,10 @@ export default function Constructor() {
   const [adPain, setAdPain] = useState('');
   const [adBenefit, setAdBenefit] = useState('');
   const [adNiche, setAdNiche] = useState('');
+  const [generatedHeadlines, setGeneratedHeadlines] = useState('');
+  const [generatedTexts, setGeneratedTexts] = useState('');
+  const [generatedQuickLinks, setGeneratedQuickLinks] = useState('');
+  const [finalHeadlines, setFinalHeadlines] = useState('');
   const [creativeHeadline, setCreativeHeadline] = useState('');
   const [creativeAudience, setCreativeAudience] = useState('');
   const [creativeMethod, setCreativeMethod] = useState('');
@@ -1731,6 +1744,98 @@ ${adNiche ? `НИША/КАТЕГОРИЯ: ${adNiche}\n` : ''}
 
 Никакой воды. Все тексты готовы к переносу в Яндекс.Директ.`;
   }, [adProduct, adAudience, adPain, adBenefit, adNiche]);
+
+  const headlineSelectionPrompt = useMemo(() => {
+    if (!generatedHeadlines.trim()) return '';
+    return `Ты — редактор рекламных объявлений Яндекс.Директа для РСЯ и модерационный фильтр.
+
+У меня уже есть черновик от нейросети: 90 заголовков, 5 текстов объявления и 8 быстрых ссылок.
+Нужно не генерировать всё заново, а отобрать рабочий стартовый набор.
+
+КРИТИЧНО ДЛЯ МОДЕРАЦИИ:
+• в объявлениях о заработке нельзя обещать быстрый доход, гарантии, безопасность и нереалистичную прибыль;
+• нельзя писать туманные фразы без объяснения объекта продвижения;
+• человек и модератор должны понимать, что после клика будет разбор/практикум/маршрут/мини-лендинг/бот/оффер, а не абстрактный "способ заработка";
+• не использовать банки, карты, кредиты, платежи, выплаты и скрины денег в холодном объявлении.
+
+МОИ 90 ЗАГОЛОВКОВ:
+${generatedHeadlines}
+
+МОИ 5 ТЕКСТОВ ОБЪЯВЛЕНИЙ:
+${generatedTexts || 'Тексты не вставлены. Если их нет, предложи 5 нейтральных текстов до 81 символа.'}
+
+МОИ 8 БЫСТРЫХ ССЫЛОК:
+${generatedQuickLinks || 'Быстрые ссылки не вставлены. Если их нет, предложи 8 нейтральных быстрых ссылок с описаниями.'}
+
+ЧТО НУЖНО СДЕЛАТЬ:
+1. Удали слабые, одинаковые и рискованные заголовки.
+2. Отдельно выпиши фразы, которые лучше НЕ переносить в Директ, и объясни почему.
+3. Выбери 15 заголовков для первого запуска.
+4. Разбей 15 заголовков на 3 группы по 5:
+   • группа 1 = одна боль или один сегмент;
+   • группа 2 = вторая боль или второй сегмент;
+   • группа 3 = третья гипотеза.
+5. Для каждого заголовка подбери:
+   • лучший текст объявления из списка;
+   • 2-4 подходящие быстрые ссылки;
+   • текст на баннер до 7 слов;
+   • идею визуала без денег, карт, банков и гарантий;
+   • риск модерации: низкий/средний/высокий.
+
+ФОРМАТ ОТВЕТА:
+Сначала коротко: "Что я убрал и почему".
+Потом таблица:
+Группа | Заголовок | Текст объявления | Быстрые ссылки | Текст на баннер | Визуал | Риск модерации | Что должен понять модератор.
+
+В конце дай список:
+"Эти 15 заголовков копируйте дальше в конструктор креативов по одному".`;
+  }, [generatedHeadlines, generatedTexts, generatedQuickLinks]);
+
+  const adMatrixPrompt = useMemo(() => {
+    if (!finalHeadlines.trim()) return '';
+    return `Ты — специалист по запуску РСЯ в Яндекс.Директе.
+
+Я уже отобрал финальные 15 заголовков. Нужно превратить их в понятную структуру для рекламного кабинета.
+
+ФИНАЛЬНЫЕ 15 ЗАГОЛОВКОВ / ОТВЕТ ПОСЛЕ ОТБОРА:
+${finalHeadlines}
+
+ИСХОДНЫЕ ТЕКСТЫ ОБЪЯВЛЕНИЙ:
+${generatedTexts || 'Если текстов нет в исходнике, предложи 5 текстов до 81 символа.'}
+
+БЫСТРЫЕ ССЫЛКИ:
+${generatedQuickLinks || 'Если быстрых ссылок нет в исходнике, предложи 8 быстрых ссылок и описания.'}
+
+Собери точную матрицу запуска:
+
+1. Кампания:
+   • название кампании;
+   • ссылка ведёт на предлендинг РСЯ;
+   • стратегия: максимум конверсий;
+   • показы: только РСЯ.
+
+2. Группы объявлений:
+   • 3 группы по 5 объявлений;
+   • название каждой группы;
+   • какая гипотеза/боль тестируется в группе.
+
+3. Для каждого объявления:
+   • номер группы;
+   • номер объявления;
+   • заголовок 1;
+   • текст объявления до 81 символа;
+   • какие быстрые ссылки поставить;
+   • уточнения;
+   • какой креатив нужен;
+   • какой заголовок перенести во вкладку "Креативы" для генерации картинки.
+
+4. Проверь модерацию:
+   • нет ли обещаний дохода;
+   • понятен ли объект продвижения;
+   • совпадает ли объявление с предлендингом.
+
+Формат ответа — таблица, которую можно переносить в Яндекс.Директ без дополнительных размышлений.`;
+  }, [finalHeadlines, generatedTexts, generatedQuickLinks]);
 
   const creativePrompt = useMemo(() => {
     if (!creativeHeadline) return '';
@@ -2151,6 +2256,19 @@ ${creativeTone || 'Пользователь не заполнил. Исполь�
               <h2 className={`text-2xl font-black mb-2 ${text}`}>📢 Сборка заголовков для РСЯ</h2>
               <p className={`text-sm ${textMuted} mb-4`}>Здесь сначала собираем смыслы и заголовки. Только после отбора заголовков делаем креативы, потому что баннер должен усиливать конкретный посыл, а не жить отдельно.</p>
 
+              <div className={`${dark ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-emerald-50 border-emerald-200'} border-2 rounded-2xl p-4 mb-4`}>
+                <h3 className={`font-black mb-2 flex items-center gap-2 ${text}`}><Target className="w-5 h-5 text-emerald-600" /> Если у вас уже есть 90 заголовков, 5 текстов и 8 быстрых ссылок</h3>
+                <p className={`text-xs ${dark ? 'text-slate-300' : 'text-slate-700'} mb-3`}>Дальше не нужно гадать. Идёте строго по механике ниже: вставили черновики → отобрали 15 → собрали матрицу → каждый заголовок отдельно отправили в креативы → загрузили в Директ.</p>
+                <div className="grid md:grid-cols-3 gap-2">
+                  {AFTER_GENERATION_FLOW.map((step, i) => (
+                    <div key={i} className={`${dark ? 'bg-slate-900/70' : 'bg-white'} rounded-xl p-3 border ${dark ? 'border-slate-700' : 'border-emerald-100'}`}>
+                      <div className={`font-black text-xs mb-1 ${text}`}>{step[0]}</div>
+                      <p className={`text-[11px] ${textMuted}`}>{step[1]}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <div className={`${dark ? 'bg-red-500/10 border-red-500/30' : 'bg-red-50 border-red-200'} border-2 rounded-xl p-4 mb-4`}>
                 <h3 className={`font-black mb-2 flex items-center gap-2 ${text}`}><ShieldCheck className="w-4 h-4 text-red-500" /> Инструкция для прохождения модерации</h3>
                 <p className={`text-xs ${dark ? 'text-slate-300' : 'text-slate-700'} mb-3`}>По правилам Яндекса в объявлениях о заработке нельзя обещать быстрый доход, гарантии, безопасность и нереалистичную прибыль. Также объект продвижения должен быть понятен: что именно человек увидит после клика.</p>
@@ -2223,6 +2341,71 @@ ${creativeTone || 'Пользователь не заполнил. Исполь�
                   </div>
                 </div>
               )}
+            </div>
+
+            <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
+              <h3 className={`text-lg font-black mb-2 flex items-center gap-2 ${text}`}><ListChecks className="w-5 h-5 text-emerald-600" /> Что делать после генерации: точная инструкция</h3>
+              <p className={`text-xs ${textMuted} mb-4`}>Этот блок для ситуации, когда нейросеть уже выдала черновики. Вставьте их сюда и копируйте промпты по порядку.</p>
+
+              <div className="grid md:grid-cols-3 gap-3 mb-4">
+                <TextArea label="1. Все 90 заголовков" hint="вставьте как есть" value={generatedHeadlines} onChange={setGeneratedHeadlines} rows={8} placeholder={"1. ...\n2. ...\n3. ..."} dark={dark} />
+                <TextArea label="2. 5 текстов объявлений" hint="если есть" value={generatedTexts} onChange={setGeneratedTexts} rows={8} placeholder={"Текст 1...\nТекст 2..."} dark={dark} />
+                <TextArea label="3. 8 быстрых ссылок" hint="текст + описание" value={generatedQuickLinks} onChange={setGeneratedQuickLinks} rows={8} placeholder={"Ссылка 1 — описание...\nСсылка 2 — описание..."} dark={dark} />
+              </div>
+
+              <div className="grid lg:grid-cols-2 gap-4">
+                <div className={`${dark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} border rounded-2xl p-4`}>
+                  <div className={`font-black text-sm mb-1 ${text}`}>Шаг А. Отобрать 15 заголовков</div>
+                  <p className={`text-xs ${textMuted} mb-3`}>Берёте 90 заголовков и получаете: 15 финальных, 3 группы по 5, текст на баннер и риск модерации.</p>
+                  {!headlineSelectionPrompt ? (
+                    <div className={`${dark ? 'bg-slate-900' : 'bg-white'} rounded-xl p-4 text-center`}>
+                      <AlertCircle className="w-6 h-6 mx-auto mb-2 text-yellow-500" />
+                      <p className={`text-xs ${textMuted}`}>Вставьте хотя бы 90 заголовков — появится промпт отбора.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <CopyBtn text={headlineSelectionPrompt} label={`Скопировать промпт отбора (${headlineSelectionPrompt.length} симв.)`} dark={dark} />
+                      <details className={`${dark ? 'bg-slate-900' : 'bg-white'} rounded-xl`}>
+                        <summary className={`cursor-pointer p-3 font-bold text-sm flex items-center justify-between ${text}`}>
+                          <span className="flex items-center gap-2"><Eye className="w-4 h-4" /> Посмотреть промпт</span>
+                          <ChevronDown className="w-4 h-4" />
+                        </summary>
+                        <pre className={`p-3 text-[10px] whitespace-pre-wrap leading-relaxed max-h-72 overflow-y-auto border-t ${dark ? 'border-slate-700 text-slate-300' : 'border-slate-200 text-slate-700'}`}>{headlineSelectionPrompt}</pre>
+                      </details>
+                    </div>
+                  )}
+                </div>
+
+                <div className={`${dark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} border rounded-2xl p-4`}>
+                  <div className={`font-black text-sm mb-1 ${text}`}>Шаг Б. Собрать матрицу для Директа</div>
+                  <p className={`text-xs ${textMuted} mb-3`}>После Шага А вставьте сюда ответ нейросети с 15 заголовками. Получите таблицу для кабинета: 3 группы, 15 объявлений, какие креативы делать.</p>
+                  <TextArea label="Финальные 15 заголовков после отбора" value={finalHeadlines} onChange={setFinalHeadlines} rows={5} placeholder="Вставьте ответ нейросети после Шага А: таблицу с 15 заголовками..." dark={dark} />
+                  <div className="mt-3">
+                    {!adMatrixPrompt ? (
+                      <div className={`${dark ? 'bg-slate-900' : 'bg-white'} rounded-xl p-4 text-center`}>
+                        <AlertCircle className="w-6 h-6 mx-auto mb-2 text-yellow-500" />
+                        <p className={`text-xs ${textMuted}`}>Вставьте финальные 15 заголовков — появится промпт матрицы.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <CopyBtn text={adMatrixPrompt} label={`Скопировать промпт матрицы (${adMatrixPrompt.length} симв.)`} dark={dark} />
+                        <details className={`${dark ? 'bg-slate-900' : 'bg-white'} rounded-xl`}>
+                          <summary className={`cursor-pointer p-3 font-bold text-sm flex items-center justify-between ${text}`}>
+                            <span className="flex items-center gap-2"><Eye className="w-4 h-4" /> Посмотреть промпт</span>
+                            <ChevronDown className="w-4 h-4" />
+                          </summary>
+                          <pre className={`p-3 text-[10px] whitespace-pre-wrap leading-relaxed max-h-72 overflow-y-auto border-t ${dark ? 'border-slate-700 text-slate-300' : 'border-slate-200 text-slate-700'}`}>{adMatrixPrompt}</pre>
+                        </details>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className={`${dark ? 'bg-blue-500/10 border-blue-500/30' : 'bg-blue-50 border-blue-200'} border rounded-xl p-3 mt-4`}>
+                <p className={`text-xs ${dark ? 'text-slate-300' : 'text-slate-700'}`}><strong>Дальше:</strong> из таблицы берёте первый заголовок, переходите во вкладку "Креативы", вставляете его в поле "Выбранный заголовок" и копируете промпт картинки. Так повторяете 15 раз.</p>
+                <button onClick={() => setTab('creative')} className="mt-3 px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-black">Перейти к креативам</button>
+              </div>
             </div>
 
             {/* Памятка по лимитам */}
