@@ -64,6 +64,15 @@ Owns:
 
 The credential must never be copied into project state or `localStorage`.
 
+### `projectData.js`
+
+Owns:
+
+- the allowlist of safe Atmospace project fields;
+- safe serialization and deserialization;
+- removal of password, advertising credential, CAPTCHA, API-token, and access-token fields;
+- creation of a one-time generation request from safe project data plus a write-only credential.
+
 ### `quizEngine.js`
 
 Owns:
@@ -131,7 +140,7 @@ The production default already points to the same URL. No protected value belong
 
 ## Next safe integration step
 
-Add a constructor project-data contract that stores only safe Atmospace fields, and connect the new modules to one existing section without redesigning it.
+Connect the completed technical modules to one existing constructor section without redesigning it.
 
 That integration should:
 
