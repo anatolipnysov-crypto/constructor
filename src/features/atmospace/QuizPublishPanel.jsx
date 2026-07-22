@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import {
   Download,
   ExternalLink,
+  Globe2,
   LoaderCircle,
   Rocket,
   ShieldCheck,
@@ -16,8 +17,10 @@ import {
   QUIZ_PUBLISH_STORAGE_KEY,
   serializeQuizPublishConfig,
 } from './publishedQuiz.js'
+import { publishPreparedQuiz } from './publishingClient.js'
 
 const QUIZ_PROJECT_STORAGE_KEY = 'atmospaceLongQuizProjectV1'
+const QUIZ_PUBLISHED_PAGE_STORAGE_KEY = 'atmospaceQuizPublishedPageV1'
 
 function loadJson(key) {
   try {
@@ -35,6 +38,15 @@ function loadPublishConfig() {
   } catch {
     return {}
   }
+}
+
+function normalizeSlug(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80)
 }
 
 function downloadHtml(filename, content) {
@@ -69,6 +81,10 @@ function Field({ label, value, onChange, placeholder, type = 'text', help }) {
 export default function QuizPublishPanel() {
   const initialConfig = useMemo(loadPublishConfig, [])
   const initialQuiz = useMemo(() => loadJson(QUIZ_PROJECT_STORAGE_KEY), [])
+  const initialPublishedPage = useMemo(
+    () => loadJson(QUIZ_PUBLISHED_PAGE_STORAGE_KEY),
+    [],
+  )
   const [open, setOpen] = useState(false)
   const [landingName, setLandingName] = useState(
     initialConfig.landingName || initialQuiz.name || 'Персональный квиз Атмосферы',
@@ -76,6 +92,10 @@ export default function QuizPublishPanel() {
   const [landingCode, setLandingCode] = useState(initialConfig.landingCode || '')
   const [counterId, setCounterId] = useState(initialConfig.counterId || '')
   const [credential, setCredential] = useState('')
+  const [pageSlug, setPageSlug] = useState(
+    initialPublishedPage.slug || normalizeSlug(initialQuiz.id) || 'personal-plan',
+  )
+  const [publishedPage, setPublishedPage] = useState(initialPublishedPage)
   const [publishConfig, setPublishConfig] = useState(initialConfig)
   const [status, setStatus] = useState('idle')
   const [message, setMessage] = useState('')
@@ -84,6 +104,22 @@ export default function QuizPublishPanel() {
     publishConfig.publicLandingKey
     && publishConfig.counterId,
   )
+
+  function buildReadyPage() {
+    const project = loadJson(QUIZ_PROJECT_STORAGE_KEY)
+    const validation = validateLongQuizProject(project)
+    if (!validation.ok) {
+      throw new Error(validation.errors[0] || 'Сначала заполните квиз.')
+    }
+
+    return {
+      project: validation.project,
+      html: buildPublishedLongQuizHtml(
+        validation.project,
+        publishConfig,
+      ),
+    }
+  }
 
   async function preparePage() {
     setStatus('preparing')
@@ -111,7 +147,7 @@ export default function QuizPublishPanel() {
       setPublishConfig(nextConfig)
       setCredential('')
       setStatus('ready')
-      setMessage('Страница подготовлена. Теперь можно скачать готовый файл.')
+      setMessage('Страница подготовлена. Теперь её можно опубликовать или скачать файлом.')
     } catch (error) {
       setStatus('error')
       setMessage(
@@ -121,21 +157,46 @@ export default function QuizPublishPanel() {
     }
   }
 
+  async function publishPage() {
+    setStatus('publishing')
+    setMessage('Публикуем страницу…')
+
+    try {
+      const readyPage = buildReadyPage()
+      const result = await publishPreparedQuiz({
+        slug: pageSlug,
+        title: readyPage.project.name || landingName,
+        html: readyPage.html,
+      })
+
+      const nextPublishedPage = {
+        slug: result.slug,
+        publicUrl: result.publicUrl,
+        version: result.version,
+        updatedAt: result.updatedAt,
+      }
+      window.localStorage.setItem(
+        QUIZ_PUBLISHED_PAGE_STORAGE_KEY,
+        JSON.stringify(nextPublishedPage),
+      )
+      setPublishedPage(nextPublishedPage)
+      setPageSlug(result.slug)
+      setStatus('ready')
+      setMessage('Страница опубликована. Ссылку можно использовать в рекламе.')
+    } catch (error) {
+      setStatus('error')
+      setMessage(
+        error?.publicMessage
+          || error?.message
+          || 'Не удалось опубликовать страницу. Скачайте готовый файл или попробуйте позже.',
+      )
+    }
+  }
+
   function downloadPublishedQuiz() {
     try {
-      const project = loadJson(QUIZ_PROJECT_STORAGE_KEY)
-      const validation = validateLongQuizProject(project)
-      if (!validation.ok) {
-        setMessage(validation.errors[0] || 'Сначала заполните квиз.')
-        setStatus('error')
-        return
-      }
-
-      const html = buildPublishedLongQuizHtml(
-        validation.project,
-        publishConfig,
-      )
-      downloadHtml(`${validation.project.id || 'atmospace-quiz'}-ready.html`, html)
+      const readyPage = buildReadyPage()
+      downloadHtml(`${readyPage.project.id || 'atmospace-quiz'}-ready.html`, readyPage.html)
       setStatus('ready')
       setMessage('Готовая страница скачана. Опубликуйте этот файл на выбранном домене.')
     } catch (error) {
@@ -209,7 +270,16 @@ export default function QuizPublishPanel() {
                     value={credential}
                     onChange={setCredential}
                     placeholder="Вставьте значение только на время подготовки"
-                    help="Значение передаётся защищённому серверу один раз, не сохраняется в браузере и не попадает в скачанный HTML."
+                    help="Значение передаётся защищённому серверу один раз, не сохраняется в браузере и не попадает в готовую страницу."
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <Field
+                    label="Адрес страницы"
+                    value={pageSlug}
+                    onChange={(value) => setPageSlug(normalizeSlug(value))}
+                    placeholder="personal-plan"
+                    help="Используйте латинские буквы, цифры и дефисы. После публикации получится ссылка вида /q/personal-plan."
                   />
                 </div>
               </div>
@@ -228,24 +298,45 @@ export default function QuizPublishPanel() {
                 </div>
               )}
 
-              <div className="grid gap-3 md:grid-cols-2">
+              {publishedPage.publicUrl && (
+                <a
+                  href={publishedPage.publicUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-black text-emerald-800 hover:bg-emerald-100"
+                >
+                  <span className="min-w-0 truncate">{publishedPage.publicUrl}</span>
+                  <ExternalLink className="h-5 w-5 shrink-0" />
+                </a>
+              )}
+
+              <div className="grid gap-3 md:grid-cols-3">
                 <button
                   type="button"
                   onClick={preparePage}
-                  disabled={status === 'preparing' || !landingName.trim() || !landingCode.trim() || !counterId.trim() || !credential.trim()}
+                  disabled={status === 'preparing' || status === 'publishing' || !landingName.trim() || !landingCode.trim() || !counterId.trim() || !credential.trim()}
                   className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-4 text-sm font-black text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {status === 'preparing' ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <ExternalLink className="h-5 w-5" />}
-                  {status === 'preparing' ? 'Подготавливаем…' : 'Подготовить страницу'}
+                  {status === 'preparing' ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <ShieldCheck className="h-5 w-5" />}
+                  {status === 'preparing' ? 'Подготавливаем…' : 'Подготовить'}
+                </button>
+                <button
+                  type="button"
+                  onClick={publishPage}
+                  disabled={!prepared || status === 'preparing' || status === 'publishing' || pageSlug.length < 3}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-4 text-sm font-black text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {status === 'publishing' ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <Globe2 className="h-5 w-5" />}
+                  {status === 'publishing' ? 'Публикуем…' : 'Опубликовать'}
                 </button>
                 <button
                   type="button"
                   onClick={downloadPublishedQuiz}
-                  disabled={!prepared}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-4 text-sm font-black text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={!prepared || status === 'preparing' || status === 'publishing'}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-700 px-4 py-4 text-sm font-black text-white hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Download className="h-5 w-5" />
-                  Скачать готовую страницу
+                  Скачать файл
                 </button>
               </div>
 
