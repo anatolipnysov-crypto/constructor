@@ -8,6 +8,7 @@ const PUBLIC_MESSAGES = Object.freeze({
   unauthorized: 'У вас нет доступа к публикации страниц.',
   invalid_request: 'Проверьте адрес страницы и попробуйте ещё раз.',
   invalid_page: 'Не удалось проверить готовую страницу. Подготовьте её заново.',
+  address_unavailable: 'Этот адрес уже используется. Выберите другой адрес страницы.',
   storage_unavailable: 'Публикация временно недоступна. Попробуйте немного позже.',
 })
 
@@ -39,26 +40,33 @@ function normalizeSlug(value) {
   return slug
 }
 
-function isSameOriginRequest(request) {
+function isProtectedConstructorRequest(request) {
   const origin = request.headers.get('origin')
-  if (!origin) return false
+  const referrer = request.headers.get('referer')
+  if (!origin || !referrer) return false
+
   try {
-    return new URL(origin).origin === new URL(request.url).origin
+    const requestOrigin = new URL(request.url).origin
+    const originUrl = new URL(origin)
+    const referrerUrl = new URL(referrer)
+    return originUrl.origin === requestOrigin
+      && referrerUrl.origin === requestOrigin
+      && !referrerUrl.pathname.startsWith('/q/')
   } catch {
     return false
   }
 }
 
-function hasAccessIdentity(request) {
+function readAccessIdentity(request) {
   const email = normalizeText(
     request.headers.get('cf-access-authenticated-user-email'),
     320,
-  )
+  )?.toLowerCase() ?? null
   const assertion = normalizeText(
     request.headers.get('cf-access-jwt-assertion'),
     16_384,
   )
-  return Boolean(email && assertion)
+  return email && assertion ? email : null
 }
 
 function isPublishingEnabled(env) {
@@ -68,7 +76,11 @@ function isPublishingEnabled(env) {
 
 function resolveStore(env) {
   const store = env?.[KV_BINDING_NAME]
-  return store && typeof store.put === 'function' ? store : null
+  return store
+    && typeof store.put === 'function'
+    && typeof store.get === 'function'
+    ? store
+    : null
 }
 
 async function readJsonBody(request) {
@@ -115,20 +127,20 @@ function validatePublishedQuizHtml(value) {
   return { html, size }
 }
 
-async function buildVersion(html) {
+async function buildHash(value, byteCount = 12) {
   const digest = await crypto.subtle.digest(
     'SHA-256',
-    new TextEncoder().encode(html),
+    new TextEncoder().encode(value),
   )
   return Array.from(new Uint8Array(digest))
-    .slice(0, 12)
+    .slice(0, byteCount)
     .map((byte) => byte.toString(16).padStart(2, '0'))
     .join('')
 }
 
 export function createQuizPublishHandler() {
   return async function handleQuizPublish({ request, env = {} }) {
-    if (!isSameOriginRequest(request)) {
+    if (!isProtectedConstructorRequest(request)) {
       return json({ ok: false, message: PUBLIC_MESSAGES.unauthorized }, 403)
     }
 
@@ -136,7 +148,8 @@ export function createQuizPublishHandler() {
       return json({ ok: false, message: PUBLIC_MESSAGES.disabled }, 503)
     }
 
-    if (!hasAccessIdentity(request)) {
+    const accessIdentity = readAccessIdentity(request)
+    if (!accessIdentity) {
       return json({ ok: false, message: PUBLIC_MESSAGES.unauthorized }, 403)
     }
 
@@ -161,7 +174,13 @@ export function createQuizPublishHandler() {
     }
 
     try {
-      const version = await buildVersion(validated.html)
+      const ownerHash = await buildHash(accessIdentity)
+      const existing = await store.get(`quiz:${slug}`, { type: 'json' })
+      if (existing?.ownerHash && existing.ownerHash !== ownerHash) {
+        return json({ ok: false, message: PUBLIC_MESSAGES.address_unavailable }, 409)
+      }
+
+      const version = await buildHash(validated.html)
       const updatedAt = new Date().toISOString()
       const record = {
         html: validated.html,
@@ -169,6 +188,7 @@ export function createQuizPublishHandler() {
         slug,
         version,
         updatedAt,
+        ownerHash,
       }
 
       await store.put(`quiz:${slug}`, JSON.stringify(record), {
@@ -177,6 +197,7 @@ export function createQuizPublishHandler() {
           version,
           updatedAt,
           size: validated.size,
+          ownerHash,
         },
       })
 
