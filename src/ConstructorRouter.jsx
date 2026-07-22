@@ -3,6 +3,7 @@ import { ListChecks } from 'lucide-react'
 
 import Constructor from './App.jsx'
 import LongQuizEditor from './features/atmospace/LongQuizEditor.jsx'
+import QuizPublishPanel from './features/atmospace/QuizPublishPanel.jsx'
 
 const QUIZ_TOOL_VALUE = 'atmosphere-quiz'
 
@@ -51,7 +52,12 @@ export default function ConstructorRouter() {
   }
 
   if (tool === QUIZ_TOOL_VALUE) {
-    return <LongQuizEditor onBack={openConstructor} />
+    return (
+      <>
+        <LongQuizEditor onBack={openConstructor} />
+        <QuizPublishPanel />
+      </>
+    )
   }
 
   return (
