@@ -3,6 +3,7 @@ import fs from 'node:fs'
 
 import {
   createProtectedStorageSetItem,
+  installProtectedProjectStorageGuard,
   PROTECTED_PROJECT_STORAGE_KEY,
   sanitizeProjectStorageValue,
   sanitizeSerializedProjectStorage,
@@ -81,6 +82,49 @@ assert.equal(writes[1].value.includes('must-not-persist'), true)
 
 protectedSetItem.call(storage, 'unrelated-key', JSON.stringify(protectedProject))
 assert.equal(writes[2].value.includes('must-not-persist'), true)
+
+class FakeStorage {
+  constructor(initialEntries = []) {
+    this.values = new Map(initialEntries)
+  }
+
+  getItem(key) {
+    return this.values.has(key) ? this.values.get(key) : null
+  }
+
+  setItem(key, value) {
+    this.values.set(key, String(value))
+  }
+}
+
+const browserLocalStorage = new FakeStorage([
+  [PROTECTED_PROJECT_STORAGE_KEY, JSON.stringify(protectedProject)],
+])
+const fakeWindow = {
+  Storage: FakeStorage,
+  localStorage: browserLocalStorage,
+}
+
+assert.equal(installProtectedProjectStorageGuard({ windowObject: fakeWindow }), true)
+assert.equal(
+  browserLocalStorage.getItem(PROTECTED_PROJECT_STORAGE_KEY).includes('must-not-persist'),
+  false,
+)
+assert.equal(installProtectedProjectStorageGuard({ windowObject: fakeWindow }), false)
+
+browserLocalStorage.setItem(
+  PROTECTED_PROJECT_STORAGE_KEY,
+  JSON.stringify(protectedProject),
+)
+assert.equal(
+  browserLocalStorage.getItem(PROTECTED_PROJECT_STORAGE_KEY).includes('must-not-persist'),
+  false,
+)
+browserLocalStorage.setItem('ordinary-project-cache', JSON.stringify(protectedProject))
+assert.equal(
+  browserLocalStorage.getItem('ordinary-project-cache').includes('must-not-persist'),
+  true,
+)
 
 const routerSource = fs.readFileSync(
   new URL('../src/ConstructorRouter.jsx', import.meta.url),
