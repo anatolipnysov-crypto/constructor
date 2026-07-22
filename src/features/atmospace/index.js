@@ -12,6 +12,14 @@ export {
 } from './generationClient.js'
 
 export {
+  atmospaceProjectDataContract,
+  buildAtmospaceGenerationInput,
+  deserializeAtmospaceProjectData,
+  sanitizeAtmospaceProjectData,
+  serializeAtmospaceProjectData,
+} from './projectData.js'
+
+export {
   AtmospaceRuntimeError,
   atmospaceRuntimeClientContract,
   initializeAtmospaceLanding,
