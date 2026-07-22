@@ -16,6 +16,16 @@ html { scroll-behavior:smooth; }
 body { margin:0; background:#fff; }
 button,input { font:inherit; }
 .quiz-page { width:100%; }
+.quiz-option:hover, .quiz-option:focus-visible { border-color:var(--accent); }
+@media (max-width:640px) {
+  .quiz-page { padding:8px; }
+  .quiz-question, .quiz-result { border-radius:16px; }
+}
+@keyframes result-in {
+  from { opacity:0; transform:translateY(14px); }
+  to { opacity:1; transform:none; }
+}
+.quiz-result.is-visible { animation:result-in .35s ease both; }
 </style>
 </head>
 <body>
@@ -42,7 +52,16 @@ assert.equal(embedCode.includes('<head'), false)
 assert.equal(embedCode.includes('<body'), false)
 assert.equal(embedCode.includes(':root {'), false)
 assert.equal(embedCode.includes('\nbody {'), false)
-assert.match(embedCode, /\.atmospace-quiz-embed/)
+assert.match(embedCode, /\.atmospace-quiz-embed \{ --accent:#2563eb;/)
+assert.match(embedCode, /\.atmospace-quiz-embed, \.atmospace-quiz-embed \* \{ box-sizing:border-box;/)
+assert.match(embedCode, /\.atmospace-quiz-embed button, \.atmospace-quiz-embed input \{ font:inherit;/)
+assert.match(embedCode, /\.atmospace-quiz-embed \.quiz-page \{ width:100%;/)
+assert.match(embedCode, /\.atmospace-quiz-embed \.quiz-option:hover, \.atmospace-quiz-embed \.quiz-option:focus-visible/)
+assert.match(embedCode, /@media \(max-width:640px\)/)
+assert.match(embedCode, /\.atmospace-quiz-embed \.quiz-question, \.atmospace-quiz-embed \.quiz-result/)
+assert.match(embedCode, /@keyframes result-in \{\s*from \{ opacity:0;/)
+assert.equal(embedCode.includes('.quiz-page { width:100%; }'), false)
+assert.equal(embedCode.includes('.quiz-option:hover, .quiz-option:focus-visible'), false)
 
 for (const transientUrl of [
   'blob:https://constructor.example/temp-image',
