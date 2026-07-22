@@ -45,6 +45,15 @@ assert.equal(runtimeScript.includes("'yclid'"), true)
 assert.equal(runtimeScript.includes("'utm_source'"), true)
 assert.equal(runtimeScript.includes('window.__ATMOSPACE_REGISTRATION_URL__'), true)
 assert.equal(runtimeScript.includes("url.hostname.endsWith('.atmospace.pro')"), true)
+
+assert.equal(runtimeScript.includes('mc.yandex.ru/metrika/tag.js'), false)
+assert.equal(runtimeScript.includes("'init'"), false)
+assert.equal(runtimeScript.includes('data-atmospace-metrika'), false)
+assert.equal(runtimeScript.includes('pendingMetrikaGoals'), true)
+assert.equal(runtimeScript.includes("typeof window.ym !== 'function'"), true)
+assert.equal(runtimeScript.includes("window.addEventListener('load', tick"), true)
+assert.equal(runtimeScript.includes('attempts >= 40'), true)
+
 assert.equal(runtimeScript.includes('entry code'), false)
 assert.equal(runtimeScript.includes('join code'), false)
 assert.equal(runtimeScript.includes('invite code'), false)
@@ -57,6 +66,7 @@ assert.equal(publishedHtml.includes('must-not-be-stored'), false)
 assert.equal(publishedHtml.includes('landing_view'), true)
 assert.equal(publishedHtml.includes('quiz_completed'), true)
 assert.equal(publishedHtml.includes('registration_click'), true)
+assert.equal(publishedHtml.includes('mc.yandex.ru/metrika/tag.js'), false)
 assert.equal(publishedHtml.includes('Сейчас не удалось открыть регистрацию. Попробуйте ещё раз чуть позже.'), true)
 
 assert.throws(
