@@ -88,9 +88,11 @@ export function buildQuizRuntimeScript(project, publishConfig, {
     'use strict';
 
     const config = ${escapeScriptJson(runtimeConfig)};
-    const form = document.querySelector('.quiz-form');
-    const registrationButton = document.querySelector('.quiz-registration__button');
-    const registrationStatus = document.querySelector('.quiz-registration__status');
+    const runtimeScript = document.currentScript;
+    const runtimeRoot = runtimeScript?.closest('.atmospace-quiz-embed') || document;
+    const form = runtimeRoot.querySelector('.quiz-form');
+    const registrationButton = runtimeRoot.querySelector('.quiz-registration__button');
+    const registrationStatus = runtimeRoot.querySelector('.quiz-registration__status');
     const answeredGoalIndexes = new Set();
     let quizCompletedSent = false;
     let registrationNavigationStarted = false;
