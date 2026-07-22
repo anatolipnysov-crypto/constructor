@@ -46,6 +46,11 @@ assert.equal(runtimeScript.includes("'utm_source'"), true)
 assert.equal(runtimeScript.includes('window.__ATMOSPACE_REGISTRATION_URL__'), true)
 assert.equal(runtimeScript.includes("url.hostname.endsWith('.atmospace.pro')"), true)
 
+assert.equal(runtimeScript.includes('document.currentScript'), true)
+assert.equal(runtimeScript.includes("closest('.atmospace-quiz-embed')"), true)
+assert.equal(runtimeScript.includes("runtimeRoot.querySelector('.quiz-form')"), true)
+assert.equal(runtimeScript.includes("document.querySelector('.quiz-form')"), false)
+
 assert.equal(runtimeScript.includes('mc.yandex.ru/metrika/tag.js'), false)
 assert.equal(runtimeScript.includes("'init'"), false)
 assert.equal(runtimeScript.includes('data-atmospace-metrika'), false)
