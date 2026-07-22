@@ -33,32 +33,39 @@ const store = {
   },
 }
 
+function publishingRequest({
+  email = 'operator@example.com',
+  referrer = 'https://constructor.example/?tool=atmosphere-quiz',
+  body = { slug: 'personal-plan', title: 'Персональный план', html: validHtml },
+  includeAccess = true,
+} = {}) {
+  const headers = {
+    origin: 'https://constructor.example',
+    referer: referrer,
+    'content-type': 'application/json',
+  }
+  if (includeAccess) {
+    headers['cf-access-authenticated-user-email'] = email
+    headers['cf-access-jwt-assertion'] = 'signed-assertion-placeholder'
+  }
+
+  return new Request('https://constructor.example/api/quiz/publish', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  })
+}
+
 const publishHandler = createQuizPublishHandler()
 const disabledResponse = await publishHandler({
-  request: new Request('https://constructor.example/api/quiz/publish', {
-    method: 'POST',
-    headers: {
-      origin: 'https://constructor.example',
-      'content-type': 'application/json',
-      'cf-access-authenticated-user-email': 'operator@example.com',
-      'cf-access-jwt-assertion': 'signed-assertion-placeholder',
-    },
-    body: JSON.stringify({ slug: 'personal-plan', title: 'План', html: validHtml }),
-  }),
+  request: publishingRequest(),
   env: { ATMOSPACE_QUIZ_PAGES: store },
 })
 assert.equal(disabledResponse.status, 503)
 assert.equal(records.size, 0)
 
 const unauthorizedResponse = await publishHandler({
-  request: new Request('https://constructor.example/api/quiz/publish', {
-    method: 'POST',
-    headers: {
-      origin: 'https://constructor.example',
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({ slug: 'personal-plan', title: 'План', html: validHtml }),
-  }),
+  request: publishingRequest({ includeAccess: false }),
   env: {
     ATMOSPACE_QUIZ_PUBLISHING_MODE: 'cloudflare_access',
     ATMOSPACE_QUIZ_PAGES: store,
@@ -67,21 +74,20 @@ const unauthorizedResponse = await publishHandler({
 assert.equal(unauthorizedResponse.status, 403)
 assert.equal(records.size, 0)
 
-const publishedResponse = await publishHandler({
-  request: new Request('https://constructor.example/api/quiz/publish', {
-    method: 'POST',
-    headers: {
-      origin: 'https://constructor.example',
-      'content-type': 'application/json',
-      'cf-access-authenticated-user-email': 'operator@example.com',
-      'cf-access-jwt-assertion': 'signed-assertion-placeholder',
-    },
-    body: JSON.stringify({
-      slug: 'personal-plan',
-      title: 'Персональный план',
-      html: validHtml,
-    }),
+const publicPageRequest = await publishHandler({
+  request: publishingRequest({
+    referrer: 'https://constructor.example/q/already-published',
   }),
+  env: {
+    ATMOSPACE_QUIZ_PUBLISHING_MODE: 'cloudflare_access',
+    ATMOSPACE_QUIZ_PAGES: store,
+  },
+})
+assert.equal(publicPageRequest.status, 403)
+assert.equal(records.size, 0)
+
+const publishedResponse = await publishHandler({
+  request: publishingRequest(),
   env: {
     ATMOSPACE_QUIZ_PUBLISHING_MODE: 'cloudflare_access',
     ATMOSPACE_QUIZ_PAGES: store,
@@ -95,6 +101,37 @@ assert.match(publishedPayload.data.version, /^[a-f0-9]{24}$/)
 assert.equal(JSON.stringify(publishedPayload).includes('operator@example.com'), false)
 assert.equal(JSON.stringify(publishedPayload).includes(validHtml), false)
 assert.equal(records.has('quiz:personal-plan'), true)
+assert.match(records.get('quiz:personal-plan').value.ownerHash, /^[a-f0-9]{24}$/)
+assert.equal(
+  JSON.stringify(records.get('quiz:personal-plan')).includes('operator@example.com'),
+  false,
+)
+
+const sameOwnerUpdate = await publishHandler({
+  request: publishingRequest({
+    body: {
+      slug: 'personal-plan',
+      title: 'Обновлённый персональный план',
+      html: validHtml.replace('const click', 'const updated = true; const click'),
+    },
+  }),
+  env: {
+    ATMOSPACE_QUIZ_PUBLISHING_MODE: 'cloudflare_access',
+    ATMOSPACE_QUIZ_PAGES: store,
+  },
+})
+assert.equal(sameOwnerUpdate.status, 200)
+
+const foreignOwnerUpdate = await publishHandler({
+  request: publishingRequest({ email: 'second-operator@example.com' }),
+  env: {
+    ATMOSPACE_QUIZ_PUBLISHING_MODE: 'cloudflare_access',
+    ATMOSPACE_QUIZ_PAGES: store,
+  },
+})
+assert.equal(foreignOwnerUpdate.status, 409)
+const foreignOwnerPayload = await foreignOwnerUpdate.json()
+assert.match(foreignOwnerPayload.message, /адрес уже используется/i)
 
 const pageHandler = createPublishedQuizHandler()
 const pageResponse = await pageHandler({
@@ -103,8 +140,11 @@ const pageResponse = await pageHandler({
   params: { slug: 'personal-plan' },
 })
 assert.equal(pageResponse.status, 200)
-assert.equal(await pageResponse.text(), validHtml)
-assert.match(pageResponse.headers.get('content-security-policy'), /api\.atmospace\.pro/)
+assert.match(await pageResponse.text(), /Обновлённый|updated = true/)
+const csp = pageResponse.headers.get('content-security-policy')
+assert.match(csp, /api\.atmospace\.pro/)
+assert.equal(csp.includes("connect-src 'self'"), false)
+assert.equal(csp.includes("form-action 'self'"), false)
 assert.equal(pageResponse.headers.get('x-frame-options'), 'DENY')
 const etag = pageResponse.headers.get('etag')
 assert.ok(etag)
@@ -175,6 +215,10 @@ const publishSource = fs.readFileSync(
   new URL('../functions/api/quiz/publish.js', import.meta.url),
   'utf8',
 )
+const pageSource = fs.readFileSync(
+  new URL('../functions/q/[slug].js', import.meta.url),
+  'utf8',
+)
 const panelSource = fs.readFileSync(
   new URL('../src/features/atmospace/QuizPublishPanel.jsx', import.meta.url),
   'utf8',
@@ -182,7 +226,10 @@ const panelSource = fs.readFileSync(
 assert.match(publishSource, /ATMOSPACE_QUIZ_PUBLISHING_MODE/)
 assert.match(publishSource, /cf-access-jwt-assertion/)
 assert.match(publishSource, /ATMOSPACE_QUIZ_PAGES/)
+assert.match(publishSource, /ownerHash/)
+assert.match(publishSource, /!referrerUrl\.pathname\.startsWith\('\/q\/'\)/)
 assert.equal(publishSource.includes('console.log'), false)
+assert.equal(pageSource.includes("connect-src 'self'"), false)
 assert.match(panelSource, /Опубликовать/)
 assert.match(panelSource, /Скачать файл/)
 assert.equal(panelSource.includes('KV'), false)
