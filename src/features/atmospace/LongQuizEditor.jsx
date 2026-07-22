@@ -5,6 +5,7 @@ import {
   ChevronUp,
   Download,
   Eye,
+  Image as ImageIcon,
   ListChecks,
   Plus,
   RotateCcw,
@@ -68,7 +69,7 @@ function makeUniqueQuestion(question, questionIndex) {
   return copy
 }
 
-function Input({ label, value, onChange, placeholder, dark = false }) {
+function Input({ label, value, onChange, placeholder, help, dark = false }) {
   return (
     <label className="block">
       <span className={`mb-1.5 block text-xs font-black ${dark ? 'text-slate-300' : 'text-slate-700'}`}>
@@ -85,6 +86,7 @@ function Input({ label, value, onChange, placeholder, dark = false }) {
             : 'border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:border-blue-500'
         }`}
       />
+      {help && <span className={`mt-1.5 block text-[11px] leading-relaxed ${dark ? 'text-slate-500' : 'text-slate-500'}`}>{help}</span>}
     </label>
   )
 }
@@ -110,7 +112,7 @@ function TextArea({ label, value, onChange, placeholder, rows = 3, dark = false 
   )
 }
 
-function QuizPreview({ project, validation, dark }) {
+function QuizPreview({ validation, dark }) {
   const quizDefinition = useMemo(
     () => validation.ok ? buildQuizEngineDefinition(validation.project) : null,
     [validation],
@@ -144,6 +146,13 @@ function QuizPreview({ project, validation, dark }) {
   return (
     <div className={`overflow-hidden rounded-3xl border shadow-xl ${dark ? 'border-slate-700 bg-slate-950' : 'border-slate-200 bg-slate-50'}`}>
       <div className="bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 p-6 text-white">
+        {validation.project.heroImageUrl && (
+          <img
+            src={validation.project.heroImageUrl}
+            alt={validation.project.heroImageAlt || validation.project.title}
+            className="mb-5 max-h-72 w-full rounded-2xl object-cover shadow-xl"
+          />
+        )}
         <div className="mb-3 inline-flex rounded-full bg-yellow-400 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-slate-900">
           {validation.project.eyebrow}
         </div>
@@ -169,6 +178,14 @@ function QuizPreview({ project, validation, dark }) {
       <div className="space-y-4 p-4">
         {validation.project.questions.map((question, questionIndex) => (
           <section key={question.id} className={`rounded-2xl border p-4 ${dark ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'}`}>
+            {question.imageUrl && (
+              <img
+                src={question.imageUrl}
+                alt={question.imageAlt || question.title}
+                loading="lazy"
+                className="mb-4 max-h-64 w-full rounded-xl object-cover"
+              />
+            )}
             <div className="mb-3 flex items-start gap-3">
               <div className="grid h-9 w-9 flex-none place-items-center rounded-xl bg-blue-50 text-sm font-black text-blue-600">
                 {questionIndex + 1}
@@ -428,6 +445,38 @@ export default function LongQuizEditor({ onBack }) {
             </section>
 
             <section className={`${card} rounded-3xl border p-5 shadow-sm md:p-6`}>
+              <div className="mb-4 flex items-center gap-2">
+                <ImageIcon className="h-5 w-5 text-blue-600" />
+                <div>
+                  <h2 className={`text-xl font-black ${text}`}>Обложка квиза</h2>
+                  <p className={`mt-1 text-xs ${muted}`}>Картинка остаётся на медиасервере и подгружается по ссылке.</p>
+                </div>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="md:col-span-2">
+                  <Input
+                    label="Прямая HTTPS-ссылка на обложку"
+                    value={project.heroImageUrl || ''}
+                    onChange={(value) => updateProject('heroImageUrl', value)}
+                    placeholder="https://media.example.ru/quiz/cover.webp"
+                    help="Вставьте прямую ссылку на файл. Загрузка изображения в конструктор не выполняется."
+                    dark={dark}
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <Input
+                    label="Описание обложки"
+                    value={project.heroImageAlt || ''}
+                    onChange={(value) => updateProject('heroImageAlt', value)}
+                    placeholder="Мужчина планирует следующий шаг"
+                    help="Короткое описание помогает доступности страницы."
+                    dark={dark}
+                  />
+                </div>
+              </div>
+            </section>
+
+            <section className={`${card} rounded-3xl border p-5 shadow-sm md:p-6`}>
               <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
                 <div>
                   <h2 className={`text-xl font-black ${text}`}>Вопросы: {project.questions.length}</h2>
@@ -464,6 +513,21 @@ export default function LongQuizEditor({ onBack }) {
                     <div className="space-y-3">
                       <Input label="Текст вопроса" value={question.title || ''} onChange={(value) => updateQuestion(questionIndex, { title: value })} placeholder="Напишите вопрос простым языком" dark={dark} />
                       <TextArea label="Пояснение" value={question.description || ''} onChange={(value) => updateQuestion(questionIndex, { description: value })} placeholder="Необязательное короткое пояснение" rows={2} dark={dark} />
+                      <Input
+                        label="Прямая HTTPS-ссылка на изображение"
+                        value={question.imageUrl || ''}
+                        onChange={(value) => updateQuestion(questionIndex, { imageUrl: value })}
+                        placeholder="https://media.example.ru/quiz/question-1.webp"
+                        help="Поле необязательное. Файл остаётся на медиасервере."
+                        dark={dark}
+                      />
+                      <Input
+                        label="Описание изображения"
+                        value={question.imageAlt || ''}
+                        onChange={(value) => updateQuestion(questionIndex, { imageAlt: value })}
+                        placeholder="Человек устал после рабочего дня"
+                        dark={dark}
+                      />
 
                       <div>
                         <div className={`mb-2 text-xs font-black ${text}`}>Варианты ответов</div>
@@ -530,7 +594,7 @@ export default function LongQuizEditor({ onBack }) {
             <div className="mb-3 flex items-center gap-2 px-1 text-sm font-black text-blue-600">
               <Eye className="h-5 w-5" /> Живой предпросмотр
             </div>
-            <QuizPreview project={project} validation={validation} dark={dark} />
+            <QuizPreview validation={validation} dark={dark} />
           </aside>
         </div>
       </div>
