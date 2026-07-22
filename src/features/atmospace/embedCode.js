@@ -35,26 +35,153 @@ function assertPortableAssets(html) {
   }
 }
 
-function scopeStandaloneStyles(css) {
-  return String(css ?? '')
-    .replace(
-      /:root\s*\{([^}]*)\}/g,
-      `${EMBED_ROOT_SELECTOR} {$1}`,
-    )
-    .replace(
-      /(^|})\s*\*\s*\{([^}]*)\}/g,
-      `$1\n${EMBED_ROOT_SELECTOR}, ${EMBED_ROOT_SELECTOR} * {$2}`,
-    )
-    .replace(/(^|})\s*html\s*\{[^}]*\}/g, '$1')
-    .replace(
-      /(^|})\s*body\s*\{([^}]*)\}/g,
-      `$1\n${EMBED_ROOT_SELECTOR} {$2}`,
-    )
-    .replace(
-      /(^|})\s*button,input\s*\{([^}]*)\}/g,
-      `$1\n${EMBED_ROOT_SELECTOR} button, ${EMBED_ROOT_SELECTOR} input {$2}`,
-    )
-    .trim()
+function findMatchingBrace(css, openingIndex) {
+  let depth = 0
+  let quote = null
+  let escaped = false
+
+  for (let index = openingIndex; index < css.length; index += 1) {
+    const character = css[index]
+
+    if (escaped) {
+      escaped = false
+      continue
+    }
+
+    if (character === '\\') {
+      escaped = true
+      continue
+    }
+
+    if (quote) {
+      if (character === quote) quote = null
+      continue
+    }
+
+    if (character === '"' || character === "'") {
+      quote = character
+      continue
+    }
+
+    if (character === '{') depth += 1
+    if (character === '}') {
+      depth -= 1
+      if (depth === 0) return index
+    }
+  }
+
+  return -1
+}
+
+function splitSelectorList(value) {
+  const selectors = []
+  let start = 0
+  let depth = 0
+  let quote = null
+  let escaped = false
+
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index]
+
+    if (escaped) {
+      escaped = false
+      continue
+    }
+
+    if (character === '\\') {
+      escaped = true
+      continue
+    }
+
+    if (quote) {
+      if (character === quote) quote = null
+      continue
+    }
+
+    if (character === '"' || character === "'") {
+      quote = character
+      continue
+    }
+
+    if (character === '(' || character === '[') depth += 1
+    if (character === ')' || character === ']') depth = Math.max(0, depth - 1)
+
+    if (character === ',' && depth === 0) {
+      selectors.push(value.slice(start, index))
+      start = index + 1
+    }
+  }
+
+  selectors.push(value.slice(start))
+  return selectors
+}
+
+function scopeSelector(selector) {
+  const normalized = selector.trim()
+  if (!normalized) return null
+
+  if (normalized === ':root' || normalized === 'html' || normalized === 'body') {
+    return EMBED_ROOT_SELECTOR
+  }
+
+  if (normalized === '*') {
+    return `${EMBED_ROOT_SELECTOR}, ${EMBED_ROOT_SELECTOR} *`
+  }
+
+  const withoutDocumentRoot = normalized
+    .replace(/^:root\b/, EMBED_ROOT_SELECTOR)
+    .replace(/^html\b/, EMBED_ROOT_SELECTOR)
+    .replace(/^body\b/, EMBED_ROOT_SELECTOR)
+
+  if (withoutDocumentRoot.startsWith(EMBED_ROOT_SELECTOR)) {
+    return withoutDocumentRoot
+  }
+
+  return `${EMBED_ROOT_SELECTOR} ${withoutDocumentRoot}`
+}
+
+function scopeSelectorHeader(header) {
+  return splitSelectorList(header)
+    .map(scopeSelector)
+    .filter(Boolean)
+    .join(', ')
+}
+
+function scopeCssRules(css) {
+  let result = ''
+  let cursor = 0
+
+  while (cursor < css.length) {
+    const openingIndex = css.indexOf('{', cursor)
+    if (openingIndex === -1) {
+      result += css.slice(cursor)
+      break
+    }
+
+    const closingIndex = findMatchingBrace(css, openingIndex)
+    if (closingIndex === -1) {
+      throw new TypeError('Не удалось безопасно подготовить стили квиза.')
+    }
+
+    const header = css.slice(cursor, openingIndex)
+    const body = css.slice(openingIndex + 1, closingIndex)
+    const trimmedHeader = header.trim()
+
+    if (/^@(media|supports|container|layer)\b/i.test(trimmedHeader)) {
+      result += `${header}{${scopeCssRules(body)}}`
+    } else if (/^@(-webkit-)?keyframes\b/i.test(trimmedHeader) || /^@font-face\b/i.test(trimmedHeader)) {
+      result += `${header}{${body}}`
+    } else if (trimmedHeader.startsWith('@')) {
+      result += `${header}{${body}}`
+    } else {
+      const leadingWhitespace = header.match(/^\s*/)?.[0] ?? ''
+      result += `${leadingWhitespace}${scopeSelectorHeader(trimmedHeader)} {${body}}`
+    }
+
+    cursor = closingIndex + 1
+  }
+
+  return result.trim()
 }
 
 export function buildTildaEmbedFromStandaloneHtml(standaloneHtml, {
@@ -71,7 +198,7 @@ export function buildTildaEmbedFromStandaloneHtml(standaloneHtml, {
   return `<!-- Атмосфера: вставьте код целиком в блок T123 «HTML-код» -->
 <div class="${EMBED_ROOT_CLASS}" data-atmospace-quiz="${normalizeEmbedId(embedId)}">
 <style>
-${scopeStandaloneStyles(styles)}
+${scopeCssRules(styles)}
 </style>
 ${body}
 </div>`
