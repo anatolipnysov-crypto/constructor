@@ -1,14 +1,17 @@
 /* eslint-disable react-refresh/only-export-components */
 
+import { ensureAtmospaceMetrikaGoals } from './metrikaGoals.js'
+
 const DEFAULT_ATMOSPACE_API_BASE_URL = 'https://api.atmospace.pro'
 const GENERATE_PATH = '/api/landing-runtime/generate'
 const MAX_REQUEST_BYTES = 64 * 1024
-const REQUEST_TIMEOUT_MS = 15_000
+const REQUEST_TIMEOUT_MS = 30_000
 
 const PUBLIC_MESSAGES = Object.freeze({
   invalid_request: 'Проверьте заполненные данные и попробуйте ещё раз.',
   origin_not_allowed: 'Не удалось выполнить действие с этой страницы.',
   payload_too_large: 'Слишком большой объём данных. Сократите значения и повторите.',
+  metrika_unavailable: 'Не удалось подготовить цели Метрики. Проверьте номер счётчика и доступ к нему.',
   service_unavailable: 'Сервис временно недоступен. Попробуйте ещё раз.',
 })
 
@@ -94,6 +97,8 @@ function normalizeGenerateRequest(body) {
 
   return {
     ok: true,
+    credential: adGoalCredential,
+    counterId,
     payload: {
       landing_name: landingName,
       landing_code: landingCode,
@@ -122,7 +127,10 @@ function normalizeSafeGenerateResponse(payload) {
   }
 }
 
-export function createGenerateHandler({ fetchImpl = globalThis.fetch } = {}) {
+export function createGenerateHandler({
+  fetchImpl = globalThis.fetch,
+  ensureGoals = ensureAtmospaceMetrikaGoals,
+} = {}) {
   return async function handleGenerate({ request, env = {} }) {
     if (!isSameOriginRequest(request)) {
       return json({
@@ -162,6 +170,20 @@ export function createGenerateHandler({ fetchImpl = globalThis.fetch } = {}) {
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
 
     try {
+      try {
+        await ensureGoals({
+          counterId: normalizedRequest.counterId,
+          credential: normalizedRequest.credential,
+          fetchImpl,
+          signal: controller.signal,
+        })
+      } catch {
+        return json({
+          ok: false,
+          message: PUBLIC_MESSAGES.metrika_unavailable,
+        }, 400)
+      }
+
       const upstreamResponse = await fetchImpl(endpoint, {
         method: 'POST',
         headers: {
