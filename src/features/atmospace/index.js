@@ -6,6 +6,12 @@ export {
 } from './advertisingContext.js'
 
 export {
+  AtmospaceGenerationError,
+  atmospaceGenerationClientContract,
+  generateAtmospaceLanding,
+} from './generationClient.js'
+
+export {
   AtmospaceRuntimeError,
   atmospaceRuntimeClientContract,
   initializeAtmospaceLanding,
@@ -22,3 +28,7 @@ export {
 export {
   createQuizRegistrationController,
 } from './quizRegistrationController.js'
+
+export {
+  useQuizRegistration,
+} from './useQuizRegistration.js'
