@@ -3,6 +3,8 @@ import { normalizeQuizDefinition } from './quizEngine.js'
 export const LONG_QUIZ_MIN_QUESTIONS = 3
 export const LONG_QUIZ_MAX_QUESTIONS = 7
 
+const MAX_IMAGE_URL_LENGTH = 2048
+
 function text(value, fallback = '') {
   return typeof value === 'string' && value.trim()
     ? value.trim()
@@ -15,6 +17,24 @@ function identifier(value, fallback) {
     .replace(/[^a-z0-9_-]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 96) || fallback
+}
+
+function imageUrl(value) {
+  return text(value).slice(0, MAX_IMAGE_URL_LENGTH)
+}
+
+export function isValidRemoteImageUrl(value) {
+  const normalized = imageUrl(value)
+  if (!normalized) return true
+
+  try {
+    const url = new URL(normalized)
+    return url.protocol === 'https:'
+      && !url.username
+      && !url.password
+  } catch {
+    return false
+  }
 }
 
 function escapeHtml(value) {
@@ -71,6 +91,8 @@ export function normalizeLongQuizProject(project) {
         id: questionId,
         title: text(question?.title, `Вопрос ${questionIndex + 1}`),
         description: text(question?.description),
+        imageUrl: imageUrl(question?.imageUrl),
+        imageAlt: text(question?.imageAlt),
         options,
       }
     })
@@ -83,6 +105,8 @@ export function normalizeLongQuizProject(project) {
     title: text(project?.title, 'Что сейчас мешает вам двигаться вперёд?'),
     subtitle: text(project?.subtitle, 'Ответьте на несколько коротких вопросов.'),
     intro: text(project?.intro),
+    heroImageUrl: imageUrl(project?.heroImageUrl),
+    heroImageAlt: text(project?.heroImageAlt),
     resultLead: text(project?.resultLead, 'На основе ваших ответов мы определили направление, с которого разумнее начать.'),
     registrationText: text(project?.registrationText, 'Создайте аккаунт, чтобы получить первый персональный шаг.'),
     registrationButtonText: text(project?.registrationButtonText, 'Получить первый персональный шаг'),
@@ -107,9 +131,16 @@ export function validateLongQuizProject(project) {
     errors.push(`Оставьте не больше ${LONG_QUIZ_MAX_QUESTIONS} вопросов.`)
   }
 
+  if (!isValidRemoteImageUrl(quiz.heroImageUrl)) {
+    errors.push('Для обложки используйте прямую HTTPS-ссылку на изображение.')
+  }
+
   quiz.questions.forEach((question, index) => {
     if (!question.title) {
       errors.push(`Заполните текст вопроса ${index + 1}.`)
+    }
+    if (!isValidRemoteImageUrl(question.imageUrl)) {
+      errors.push(`Для изображения вопроса ${index + 1} используйте прямую HTTPS-ссылку.`)
     }
     if (question.options.length < 2) {
       errors.push(`В вопросе ${index + 1} должно быть минимум два ответа.`)
@@ -163,10 +194,15 @@ function renderQuestion(question, index) {
               <span>${escapeHtml(option.label)}</span>
             </label>`).join('')
 
+  const image = question.imageUrl
+    ? `<img class="quiz-question__image" src="${escapeHtml(question.imageUrl)}" alt="${escapeHtml(question.imageAlt || question.title)}" loading="lazy" decoding="async">`
+    : ''
+
   return `
         <section class="quiz-question" data-question-id="${escapeHtml(question.id)}">
           <div class="quiz-question__number">${index + 1}</div>
           <div class="quiz-question__content">
+            ${image}
             <h2>${escapeHtml(question.title)}</h2>
             ${question.description ? `<p>${escapeHtml(question.description)}</p>` : ''}
             <div class="quiz-options">${options}
@@ -204,6 +240,9 @@ export function buildLongQuizLandingHtml(project) {
   }
 
   const questionsHtml = quiz.questions.map(renderQuestion).join('\n')
+  const heroImage = quiz.heroImageUrl
+    ? `<img class="quiz-hero__image" src="${escapeHtml(quiz.heroImageUrl)}" alt="${escapeHtml(quiz.heroImageAlt || quiz.title)}" loading="eager" decoding="async" fetchpriority="high">`
+    : ''
 
   return `<!doctype html>
 <html lang="ru">
@@ -218,7 +257,8 @@ export function buildLongQuizLandingHtml(project) {
     body { margin:0; background:#f8fafc; color:var(--ink); font-family:Inter,Manrope,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
     button,input { font:inherit; }
     .quiz-page { width:min(920px,calc(100% - 28px)); margin:0 auto; padding:28px 0 72px; }
-    .quiz-hero { padding:42px clamp(22px,5vw,56px); border-radius:32px; color:white; background:radial-gradient(circle at 90% 0%,rgba(250,204,21,.32),transparent 34%),linear-gradient(135deg,#0f172a,#1e3a8a 58%,#0f172a); box-shadow:0 28px 70px rgba(15,23,42,.2); }
+    .quiz-hero { overflow:hidden; padding:42px clamp(22px,5vw,56px); border-radius:32px; color:white; background:radial-gradient(circle at 90% 0%,rgba(250,204,21,.32),transparent 34%),linear-gradient(135deg,#0f172a,#1e3a8a 58%,#0f172a); box-shadow:0 28px 70px rgba(15,23,42,.2); }
+    .quiz-hero__image { display:block; width:100%; max-height:440px; margin:0 0 28px; border-radius:22px; object-fit:cover; box-shadow:0 20px 45px rgba(0,0,0,.28); }
     .quiz-eyebrow { display:inline-flex; padding:7px 13px; border-radius:999px; background:#facc15; color:#172033; font-size:12px; font-weight:900; letter-spacing:.06em; text-transform:uppercase; }
     .quiz-hero h1 { margin:18px 0 12px; max-width:760px; font-size:clamp(34px,6vw,64px); line-height:1.02; letter-spacing:-.045em; }
     .quiz-hero__subtitle { max-width:720px; margin:0; color:#dbeafe; font-size:clamp(17px,2.5vw,22px); line-height:1.5; }
@@ -229,6 +269,7 @@ export function buildLongQuizLandingHtml(project) {
     .quiz-progress__text { min-width:92px; color:var(--muted); font-size:13px; font-weight:800; text-align:right; }
     .quiz-question { display:grid; grid-template-columns:54px minmax(0,1fr); gap:18px; margin:18px 0; padding:clamp(22px,4vw,38px); border:1px solid var(--line); border-radius:26px; background:white; box-shadow:0 16px 45px rgba(15,23,42,.07); }
     .quiz-question__number { display:grid; place-items:center; width:48px; height:48px; border-radius:16px; background:var(--soft); color:var(--accent); font-size:19px; font-weight:900; }
+    .quiz-question__image { display:block; width:100%; max-height:390px; margin:0 0 22px; border-radius:20px; object-fit:cover; background:#e2e8f0; }
     .quiz-question h2 { margin:2px 0 8px; font-size:clamp(23px,3vw,32px); line-height:1.15; letter-spacing:-.025em; }
     .quiz-question p { margin:0 0 18px; color:var(--muted); line-height:1.55; }
     .quiz-options { display:grid; gap:10px; }
@@ -248,12 +289,13 @@ export function buildLongQuizLandingHtml(project) {
     .quiz-registration__button:disabled { cursor:wait; opacity:.65; box-shadow:none; }
     .quiz-registration__status { min-height:22px; margin:10px 0 0; color:var(--muted); font-size:13px; text-align:center; }
     @keyframes result-in { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:none; } }
-    @media (max-width:640px) { .quiz-page { width:min(100% - 18px,920px); padding-top:10px; } .quiz-hero { border-radius:22px; } .quiz-question { grid-template-columns:1fr; padding:22px 16px; border-radius:20px; } .quiz-question__number { width:40px; height:40px; border-radius:13px; } .quiz-progress__text { min-width:75px; font-size:12px; } }
+    @media (max-width:640px) { .quiz-page { width:min(100% - 18px,920px); padding-top:10px; } .quiz-hero { border-radius:22px; } .quiz-hero__image,.quiz-question__image { border-radius:16px; } .quiz-question { grid-template-columns:1fr; padding:22px 16px; border-radius:20px; } .quiz-question__number { width:40px; height:40px; border-radius:13px; } .quiz-progress__text { min-width:75px; font-size:12px; } }
   </style>
 </head>
 <body>
   <main class="quiz-page">
     <header class="quiz-hero">
+      ${heroImage}
       <div class="quiz-eyebrow">${escapeHtml(quiz.eyebrow)}</div>
       <h1>${escapeHtml(quiz.title)}</h1>
       <p class="quiz-hero__subtitle">${escapeHtml(quiz.subtitle)}</p>
