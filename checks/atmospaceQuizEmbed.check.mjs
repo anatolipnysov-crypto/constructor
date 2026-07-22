@@ -21,6 +21,12 @@ button,input { font:inherit; }
   .quiz-page { padding:8px; }
   .quiz-question, .quiz-result { border-radius:16px; }
 }
+@supports (display:grid) {
+  .quiz-options { display:grid; }
+}
+@container quiz-shell (min-width:500px) {
+  .quiz-result { padding:32px; }
+}
 @keyframes result-in {
   from { opacity:0; transform:translateY(14px); }
   to { opacity:1; transform:none; }
@@ -59,9 +65,13 @@ assert.match(embedCode, /\.atmospace-quiz-embed \.quiz-page \{ width:100%;/)
 assert.match(embedCode, /\.atmospace-quiz-embed \.quiz-option:hover, \.atmospace-quiz-embed \.quiz-option:focus-visible/)
 assert.match(embedCode, /@media \(max-width:640px\)/)
 assert.match(embedCode, /\.atmospace-quiz-embed \.quiz-question, \.atmospace-quiz-embed \.quiz-result/)
+assert.match(embedCode, /@supports \(display:grid\)[\s\S]*\.atmospace-quiz-embed \.quiz-options/)
+assert.match(embedCode, /@container quiz-shell \(min-width:500px\)[\s\S]*\.atmospace-quiz-embed \.quiz-result/)
 assert.match(embedCode, /@keyframes result-in \{\s*from \{ opacity:0;/)
 assert.equal(embedCode.includes('.quiz-page { width:100%; }'), false)
 assert.equal(embedCode.includes('.quiz-option:hover, .quiz-option:focus-visible'), false)
+assert.equal(embedCode.includes('\n  .quiz-options { display:grid; }'), false)
+assert.equal(embedCode.includes('\n  .quiz-result { padding:32px; }'), false)
 
 for (const transientUrl of [
   'blob:https://constructor.example/temp-image',
