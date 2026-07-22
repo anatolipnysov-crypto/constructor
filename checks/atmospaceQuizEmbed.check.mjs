@@ -68,10 +68,10 @@ assert.match(embedCode, /\.atmospace-quiz-embed \.quiz-question, \.atmospace-qui
 assert.match(embedCode, /@supports \(display:grid\)[\s\S]*\.atmospace-quiz-embed \.quiz-options/)
 assert.match(embedCode, /@container quiz-shell \(min-width:500px\)[\s\S]*\.atmospace-quiz-embed \.quiz-result/)
 assert.match(embedCode, /@keyframes result-in \{\s*from \{ opacity:0;/)
-assert.equal(embedCode.includes('.quiz-page { width:100%; }'), false)
-assert.equal(embedCode.includes('.quiz-option:hover, .quiz-option:focus-visible'), false)
-assert.equal(embedCode.includes('\n  .quiz-options { display:grid; }'), false)
-assert.equal(embedCode.includes('\n  .quiz-result { padding:32px; }'), false)
+assert.doesNotMatch(embedCode, /(^|\n)\s*\.quiz-page\s*\{/m)
+assert.doesNotMatch(embedCode, /(^|\n)\s*\.quiz-option:hover\s*,/m)
+assert.doesNotMatch(embedCode, /@supports[^{}]*\{\s*\.quiz-options\s*\{/m)
+assert.doesNotMatch(embedCode, /@container[^{}]*\{\s*\.quiz-result\s*\{/m)
 
 for (const transientUrl of [
   'blob:https://constructor.example/temp-image',
