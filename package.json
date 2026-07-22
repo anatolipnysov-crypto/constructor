@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "check:atmosphere-quiz": "node checks/atmospaceLongQuiz.check.mjs",
+    "prebuild": "npm run check:atmosphere-quiz",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"
