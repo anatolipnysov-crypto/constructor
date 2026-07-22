@@ -326,14 +326,16 @@ export function buildLongQuizLandingHtml(project) {
   <script>
     (() => {
       const config = ${escapeScriptJson(publicConfig)};
-      const form = document.querySelector('.quiz-form');
-      const result = document.querySelector('.quiz-result');
-      const resultTitle = document.querySelector('.quiz-result__title');
-      const resultBody = document.querySelector('.quiz-result__body');
-      const progressBar = document.querySelector('.quiz-progress__bar');
-      const progressText = document.querySelector('.quiz-progress__text');
-      const registrationButton = document.querySelector('.quiz-registration__button');
-      const registrationStatus = document.querySelector('.quiz-registration__status');
+      const quizScript = document.currentScript;
+      const quizRoot = quizScript?.closest('.atmospace-quiz-embed') || document;
+      const form = quizRoot.querySelector('.quiz-form');
+      const result = quizRoot.querySelector('.quiz-result');
+      const resultTitle = quizRoot.querySelector('.quiz-result__title');
+      const resultBody = quizRoot.querySelector('.quiz-result__body');
+      const progressBar = quizRoot.querySelector('.quiz-progress__bar');
+      const progressText = quizRoot.querySelector('.quiz-progress__text');
+      const registrationButton = quizRoot.querySelector('.quiz-registration__button');
+      const registrationStatus = quizRoot.querySelector('.quiz-registration__status');
       const answers = {};
 
       function resolveResult() {
