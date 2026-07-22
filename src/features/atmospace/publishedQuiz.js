@@ -88,9 +88,11 @@ export function buildQuizRuntimeScript(project, publishConfig, {
     'use strict';
 
     const config = ${escapeScriptJson(runtimeConfig)};
-    const form = document.querySelector('.quiz-form');
-    const registrationButton = document.querySelector('.quiz-registration__button');
-    const registrationStatus = document.querySelector('.quiz-registration__status');
+    const runtimeScript = document.currentScript;
+    const runtimeRoot = runtimeScript?.closest('.atmospace-quiz-embed') || document;
+    const form = runtimeRoot.querySelector('.quiz-form');
+    const registrationButton = runtimeRoot.querySelector('.quiz-registration__button');
+    const registrationStatus = runtimeRoot.querySelector('.quiz-registration__status');
     const answeredGoalIndexes = new Set();
     let quizCompletedSent = false;
     let registrationNavigationStarted = false;
@@ -139,36 +141,63 @@ export function buildQuizRuntimeScript(project, publishConfig, {
       };
     }
 
-    function installMetrika() {
-      const counterId = Number.parseInt(String(config.counterId), 10);
-      if (!Number.isInteger(counterId) || counterId <= 0) return null;
+    const metrikaCounterId = (() => {
+      const value = Number.parseInt(String(config.counterId), 10);
+      return Number.isInteger(value) && value > 0 ? value : null;
+    })();
+    const pendingMetrikaGoals = [];
+    let metrikaFlushScheduled = false;
 
-      window.ym = window.ym || function() {
-        (window.ym.a = window.ym.a || []).push(arguments);
-      };
-      window.ym.l = window.ym.l || Date.now();
-
-      if (!document.querySelector('script[data-atmospace-metrika]')) {
-        const script = document.createElement('script');
-        script.async = true;
-        script.src = 'https://mc.yandex.ru/metrika/tag.js';
-        script.dataset.atmospaceMetrika = 'true';
-        document.head.appendChild(script);
+    function finishPendingMetrikaGoals() {
+      while (pendingMetrikaGoals.length > 0) {
+        const item = pendingMetrikaGoals.shift();
+        item.done();
       }
-
-      try {
-        window.ym(counterId, 'init', {
-          clickmap: true,
-          trackLinks: true,
-          accurateTrackBounce: true,
-          webvisor: false,
-        });
-      } catch {}
-
-      return counterId;
     }
 
-    const metrikaCounterId = installMetrika();
+    function flushPendingMetrikaGoals() {
+      if (!metrikaCounterId || typeof window.ym !== 'function') {
+        return false;
+      }
+
+      while (pendingMetrikaGoals.length > 0) {
+        const item = pendingMetrikaGoals.shift();
+        try {
+          window.ym(metrikaCounterId, 'reachGoal', item.goalName, {}, item.done);
+        } catch {
+          item.done();
+        }
+      }
+      return true;
+    }
+
+    function scheduleMetrikaFlush() {
+      if (metrikaFlushScheduled || pendingMetrikaGoals.length === 0) return;
+      metrikaFlushScheduled = true;
+      let attempts = 0;
+
+      const tick = () => {
+        if (flushPendingMetrikaGoals()) {
+          metrikaFlushScheduled = false;
+          return;
+        }
+
+        attempts += 1;
+        if (attempts >= 40) {
+          finishPendingMetrikaGoals();
+          metrikaFlushScheduled = false;
+          return;
+        }
+
+        window.setTimeout(tick, 250);
+      };
+
+      if (document.readyState === 'complete') {
+        tick();
+      } else {
+        window.addEventListener('load', tick, { once: true });
+      }
+    }
 
     function reachGoal(goalName, callback) {
       let callbackCalled = false;
@@ -178,16 +207,13 @@ export function buildQuizRuntimeScript(project, publishConfig, {
         if (typeof callback === 'function') callback();
       };
 
-      if (!metrikaCounterId || typeof window.ym !== 'function') {
+      if (!metrikaCounterId) {
         done();
         return;
       }
 
-      try {
-        window.ym(metrikaCounterId, 'reachGoal', goalName, {}, done);
-      } catch {
-        done();
-      }
+      pendingMetrikaGoals.push({ goalName, done });
+      scheduleMetrikaFlush();
     }
 
     reachGoal('landing_view');
