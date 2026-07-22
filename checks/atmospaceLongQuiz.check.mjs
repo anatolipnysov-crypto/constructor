@@ -7,6 +7,7 @@ import {
 import {
   buildLongQuizLandingHtml,
   buildQuizEngineDefinition,
+  isValidRemoteImageUrl,
   LONG_QUIZ_MAX_QUESTIONS,
   LONG_QUIZ_MIN_QUESTIONS,
   validateLongQuizProject,
@@ -42,11 +43,58 @@ assert.equal(html.includes('join code'), false)
 assert.equal(html.includes('handoff'), false)
 assert.equal(html.includes('debug'), false)
 
+const imagePreset = createAtmospaceMenRestartPreset()
+imagePreset.heroImageUrl = 'https://media.example.ru/quiz/cover.webp?version=2'
+imagePreset.heroImageAlt = 'Мужчина планирует следующий шаг'
+imagePreset.questions[0].imageUrl = 'https://media.example.ru/quiz/question-1.jpg'
+imagePreset.questions[0].imageAlt = 'Человек после рабочего дня'
+
+const imageValidation = validateLongQuizProject(imagePreset)
+assert.equal(imageValidation.ok, true)
+const imageHtml = buildLongQuizLandingHtml(imagePreset)
+assert.equal(imageHtml.includes(imagePreset.heroImageUrl), true)
+assert.equal(imageHtml.includes(imagePreset.questions[0].imageUrl), true)
+assert.equal(imageHtml.includes('Мужчина планирует следующий шаг'), true)
+assert.equal(imageHtml.includes('Человек после рабочего дня'), true)
+assert.equal(imageHtml.includes('class="quiz-hero__image"'), true)
+assert.equal(imageHtml.includes('class="quiz-question__image"'), true)
+assert.equal(imageHtml.includes('loading="lazy"'), true)
+assert.equal(imageHtml.includes('fetchpriority="high"'), true)
+
+assert.equal(isValidRemoteImageUrl('https://media.example.ru/image.webp'), true)
+assert.equal(isValidRemoteImageUrl(''), true)
+for (const invalidUrl of [
+  'http://media.example.ru/image.webp',
+  'blob:https://constructor.example/image',
+  'file:///tmp/image.webp',
+  'data:image/png;base64,AAAA',
+  'not-a-url',
+  'https://user:password@media.example.ru/image.webp',
+]) {
+  assert.equal(isValidRemoteImageUrl(invalidUrl), false)
+}
+
+const invalidHero = createAtmospaceMenRestartPreset()
+invalidHero.heroImageUrl = 'blob:https://constructor.example/temp'
+const invalidHeroValidation = validateLongQuizProject(invalidHero)
+assert.equal(invalidHeroValidation.ok, false)
+assert.equal(invalidHeroValidation.errors.some((error) => error.includes('обложки')), true)
+
+const invalidQuestionImage = createAtmospaceMenRestartPreset()
+invalidQuestionImage.questions[1].imageUrl = 'http://media.example.ru/question.jpg'
+const invalidQuestionValidation = validateLongQuizProject(invalidQuestionImage)
+assert.equal(invalidQuestionValidation.ok, false)
+assert.equal(invalidQuestionValidation.errors.some((error) => error.includes('вопроса 2')), true)
+
 const unsafePreset = createAtmospaceMenRestartPreset()
 unsafePreset.title = '<script>window.attacked=true</script>'
+unsafePreset.heroImageUrl = 'https://media.example.ru/image.webp?name=" onerror="alert(1)'
+unsafePreset.heroImageAlt = '<b>Описание</b>'
 const escapedHtml = buildLongQuizLandingHtml(unsafePreset)
 assert.equal(escapedHtml.includes('<script>window.attacked=true</script>'), false)
 assert.equal(escapedHtml.includes('&lt;script&gt;window.attacked=true&lt;/script&gt;'), true)
+assert.equal(escapedHtml.includes(' onerror="alert(1)'), false)
+assert.equal(escapedHtml.includes('&lt;b&gt;Описание&lt;/b&gt;'), true)
 
 const tooShort = createAtmospaceMenRestartPreset()
 tooShort.questions = tooShort.questions.slice(0, 2)
