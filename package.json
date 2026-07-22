@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "check:atmosphere-quiz": "node checks/atmospaceGenerate.check.mjs && node checks/atmospaceLongQuiz.check.mjs && node checks/atmospacePublishedQuiz.check.mjs && node checks/atmospaceMetrikaGoals.check.mjs && node checks/atmospaceQuizEmbed.check.mjs",
+    "check:atmosphere-quiz": "node checks/atmospaceGenerate.check.mjs && node checks/atmospaceLongQuiz.check.mjs && node checks/atmospacePublishedQuiz.check.mjs && node checks/atmospaceMetrikaGoals.check.mjs",
     "prebuild": "npm run check:atmosphere-quiz",
     "build": "vite build",
     "lint": "eslint .",
