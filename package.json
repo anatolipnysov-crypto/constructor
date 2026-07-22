@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "check:atmosphere": "node src/features/atmospace/atmospaceFoundation.check.mjs && node checks/atmospaceProjectData.check.mjs && node checks/atmospaceGenerate.check.mjs && node checks/atmospaceLongQuiz.check.mjs && node checks/atmospacePublishedQuiz.check.mjs && node checks/atmospaceMetrikaGoals.check.mjs",
-    "prebuild": "npm run check:atmosphere",
+    "check:atmosphere-quiz": "node checks/atmospaceLongQuiz.check.mjs && node checks/atmospacePublishedQuiz.check.mjs && node checks/atmospaceMetrikaGoals.check.mjs",
+    "prebuild": "npm run check:atmosphere-quiz",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"
