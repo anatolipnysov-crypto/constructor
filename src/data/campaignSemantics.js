@@ -561,4 +561,3 @@ export function pickCampaignVisualDirection(profile, seed = '', index = 0) {
 }
 
 export { CAMPAIGN_SEMANTIC_PROFILES };
-

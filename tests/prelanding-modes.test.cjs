@@ -333,4 +333,3 @@ const built = fs.readFileSync(path.join(distAssetsDir, bundle), 'utf8');
 });
 
 console.log('Atmospace prelanding six-format test passed');
-
