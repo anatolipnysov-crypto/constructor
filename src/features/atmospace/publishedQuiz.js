@@ -263,8 +263,9 @@ export function buildQuizRuntimeScript(project, publishConfig, {
         return;
       }
 
-      window.__ATMOSPACE_REGISTRATION_URL__ = registrationUrl;
-      window.dispatchEvent(new CustomEvent('atmospace:registration-ready'));
+      runtimeRoot.dispatchEvent(new CustomEvent('atmospace:registration-ready', {
+        detail: { registrationUrl },
+      }));
 
       if (registrationStatus) registrationStatus.textContent = 'Всё готово.';
       if (!registrationButton) return;

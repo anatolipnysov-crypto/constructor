@@ -4,8 +4,11 @@ import { ListChecks } from 'lucide-react'
 import Constructor from './App.jsx'
 import LongQuizEditor from './features/atmospace/LongQuizEditor.jsx'
 import QuizPublishPanel from './features/atmospace/QuizPublishPanel.jsx'
+import { installProtectedProjectStorageGuard } from './security/protectedProjectStorage.js'
 
 const QUIZ_TOOL_VALUE = 'atmosphere-quiz'
+
+installProtectedProjectStorageGuard()
 
 function readToolFromLocation() {
   if (typeof window === 'undefined') {
