@@ -5,10 +5,17 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "check:atmosphere-quiz": "node checks/atmospaceGenerate.check.mjs && node checks/atmospaceLongQuiz.check.mjs && node checks/atmospacePublishedQuiz.check.mjs && node checks/atmospaceMetrikaGoals.check.mjs && node checks/atmospaceQuizEmbed.check.mjs && node checks/protectedProjectStorage.check.mjs",
-    "prebuild": "npm run check:atmosphere-quiz",
+    "dev:ui": "vite",
+    "dev:api": "node ai-server.js",
     "build": "vite build",
     "lint": "eslint .",
+    "test:bothelp": "node tests/bothelp-link.test.cjs",
+    "test:prelanding": "node tests/prelanding-modes.test.cjs",
+    "test:atmospace": "node tests/atmospace-generate.test.cjs",
+    "test:atmospace-input": "node tests/atmospace-landing-input.test.mjs",
+    "test:semantics": "node tests/campaign-semantics.test.mjs",
+    "test:ui": "node tests/interface-cleanup.test.cjs",
+    "test:banner-formats": "node tests/banner-formats.test.cjs",
     "preview": "vite preview"
   },
   "dependencies": {

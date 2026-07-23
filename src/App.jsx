@@ -1,10 +1,8 @@
 ﻿import { useState, useMemo, useEffect } from 'react';
-import { Copy, Check, Wand2, BookOpen, User, Target, Rocket, AlertCircle, ChevronDown, RotateCcw, Eye, Download, Sun, Moon, Image as ImageIcon, Megaphone, Sparkles, Lightbulb, TrendingUp, FileText, ExternalLink, ShieldCheck, Bot, Route, ListChecks } from 'lucide-react';
-import saleMaleTemplate from './templates/sale-male.html?raw';
-import saleFemaleTemplate from './templates/sale-female.html?raw';
-import offerTemplate from './templates/offer.html?raw';
-import prelandingTemplate from './templates/prelanding-bothelp.html?raw';
-import bonusPromptsRaw from './data/prompts111.txt?raw';
+import { Copy, Check, Wand2, BookOpen, AlertCircle, ChevronDown, RotateCcw, Eye, Sun, Moon, Sparkles, Lightbulb, ShieldCheck } from 'lucide-react';
+import AIBannerStudio from './components/AIBannerStudio';
+import { buildCampaignLandingLogic, resolveCampaignSemanticProfile } from './data/campaignSemantics';
+import { getAtmospaceGenerateErrorMessage, validateAtmospaceLandingInput } from './utils/atmospaceLandingInput';
 
 /* ================== УТИЛИТЫ ================== */
 async function copyToClipboard(text) {
@@ -25,997 +23,710 @@ async function copyToClipboard(text) {
   } catch { return false; }
 }
 
-function downloadFile(filename, content) {
-  const type = filename.endsWith('.txt') ? 'text/plain;charset=utf-8' : 'text/html;charset=utf-8';
-  const blob = new Blob([content], { type });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-function loadSavedProject() {
+function readAtmospaceLandingArtifacts() {
   try {
-    return { ...PROJECT_DEFAULTS, ...JSON.parse(localStorage.getItem('constructorProjectData') || '{}') };
+    const parsed = JSON.parse(localStorage.getItem(ATMOSPACE_LANDING_ARTIFACTS_STORAGE_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed.filter((item) => item?.embedCode).slice(0, 12) : [];
   } catch {
-    return PROJECT_DEFAULTS;
+    return [];
   }
 }
 
+function saveAtmospaceLandingArtifact(artifact) {
+  if (!artifact?.embedCode) return [];
+  const safeArtifact = {
+    artifactId: String(artifact.artifactId || ''),
+    inputKey: String(artifact.inputKey || ''),
+    landingName: String(artifact.landingName || ''),
+    landingCode: String(artifact.landingCode || ''),
+    counterId: String(artifact.counterId || ''),
+    publicLandingKey: String(artifact.publicLandingKey || ''),
+    embedCode: String(artifact.embedCode || ''),
+    generatedAt: String(artifact.generatedAt || new Date().toISOString()),
+    status: String(artifact.status || 'generated'),
+    runtimeStatus: String(artifact.runtimeStatus || '')
+  };
+  const next = [
+    safeArtifact,
+    ...readAtmospaceLandingArtifacts().filter((item) => (
+      item.publicLandingKey !== safeArtifact.publicLandingKey
+      || item.landingCode !== safeArtifact.landingCode
+    ))
+  ].slice(0, 12);
+  try {
+    localStorage.setItem(ATMOSPACE_LANDING_ARTIFACTS_STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    // The current generated HTML remains available even if browser storage is blocked.
+  }
+  return next;
+}
+
+function buildAtmospaceRuntimeInputKey(input = {}) {
+  return [
+    String(input.landingName || '').trim(),
+    String(input.landingCode || '').trim(),
+    String(input.counterId || '').trim()
+  ].join('|');
+}
+
+function safeAtmospaceFilename(name = 'landing') {
+  const slug = String(name || 'landing')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-zа-яё0-9]+/gi, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+  return `${slug || 'landing'}-index.html`;
+}
+
+const AUTH_STORAGE_KEY = 'constructorAuthorizedClient';
+const REGISTERED_ACCOUNTS_STORAGE_KEY = 'constructorRegisteredAccounts';
+const PENDING_ACCESS_STORAGE_KEY = 'constructorPendingAccessRequest';
+const USAGE_STORAGE_KEY_PREFIX = 'constructorUsage:';
+const LEGACY_PROJECT_STORAGE_KEY = 'constructorProjectData';
+const PROJECT_STORAGE_KEY_PREFIX = 'constructorProjectData:';
+const ATMOSPACE_LANDING_ARTIFACTS_STORAGE_KEY = 'constructorAtmospaceLandingArtifacts';
+const ATMOSPACE_GENERATE_ENDPOINT = '/api/atmospace/generate';
+const ATMOSPACE_PUBLIC_API_BASE_URL = 'https://api.atmospace.pro';
+const ATMOSPACE_INIT_ENDPOINT = `${ATMOSPACE_PUBLIC_API_BASE_URL}/api/landing-runtime/init`;
+const ATMOSPACE_CLICK_ENDPOINT = `${ATMOSPACE_PUBLIC_API_BASE_URL}/api/landing-runtime/click`;
+const ATMOSPACE_GENERATED_RUNTIME_VERSION = 'sergey-constructor-atmospace-v1';
+const DEFAULT_CLIENT_LIMITS = { banners: 12, prelandings: 4 };
+const TILDA_PRELAND_BUILD_VERSION = '20260601-modernisto-control-v2';
+const CONSTRUCTOR_ACCESS_MODE = 'owner_only';
+const OWNER_LOGIN = 'admin';
+const OWNER_PASSWORD = 'admin';
+
+function projectStorageKey(account) {
+  return account?.login ? `${PROJECT_STORAGE_KEY_PREFIX}${account.login}` : LEGACY_PROJECT_STORAGE_KEY;
+}
+
+function normalizeLogin(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function isOwnerOnlyMode() {
+  return CONSTRUCTOR_ACCESS_MODE === 'owner_only';
+}
+
+function isOwnerAccount(account) {
+  return account?.role === 'admin' && normalizeLogin(account.login) === OWNER_LOGIN;
+}
+
+function normalizeEmail(value) {
+  return normalizeLogin(value);
+}
+
+function isValidEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(String(value || '').trim());
+}
+
+function readRegisteredAccounts() {
+  if (isOwnerOnlyMode()) return [];
+  try {
+    const parsed = JSON.parse(localStorage.getItem(REGISTERED_ACCOUNTS_STORAGE_KEY) || '[]');
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((account) => {
+        const login = normalizeEmail(account?.email || account?.login);
+        if (!login) return null;
+        const label = String(account?.label || account?.clientName || login).trim();
+        return {
+          ...account,
+          email: login,
+          login,
+          password: String(account?.password || ''),
+          role: 'client',
+          label,
+          clientId: account?.clientId || makeClientId(readNextClientNumber(), label),
+          metrikaId: String(account?.metrikaId || ''),
+          metrikaToken: String(account?.metrikaToken || ''),
+          getcourseLink: String(account?.getcourseLink || ''),
+          partnerCode: String(account?.partnerCode || ''),
+          limits: { ...DEFAULT_CLIENT_LIMITS, ...(account?.limits || {}) }
+        };
+      })
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function saveRegisteredAccounts(accounts) {
+  try {
+    localStorage.setItem(REGISTERED_ACCOUNTS_STORAGE_KEY, JSON.stringify(accounts));
+  } catch {
+    // If storage is blocked, registration still fails gracefully with the visible error.
+  }
+}
+
+function rememberApprovedAccount(account) {
+  if (!account?.login) return;
+  const accounts = readRegisteredAccounts();
+  const normalized = normalizeLogin(account.login);
+  const next = [
+    ...accounts.filter((item) => normalizeLogin(item.login) !== normalized),
+    {
+      ...account,
+      role: account.role || 'client',
+      label: account.label || account.clientName || account.login,
+      limits: { ...DEFAULT_CLIENT_LIMITS, ...(account.limits || {}) }
+    }
+  ];
+  saveRegisteredAccounts(next);
+}
+
+function readPendingAccessRequest() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PENDING_ACCESS_STORAGE_KEY) || 'null');
+    return parsed?.requestId && parsed?.requestToken ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function savePendingAccessRequest(request) {
+  try {
+    localStorage.setItem(PENDING_ACCESS_STORAGE_KEY, JSON.stringify(request));
+  } catch {
+    // Pending approval still works in memory while the page is open.
+  }
+}
+
+function clearPendingAccessRequest() {
+  try {
+    localStorage.removeItem(PENDING_ACCESS_STORAGE_KEY);
+  } catch {
+    // Ignore storage errors.
+  }
+}
+
+function findClientAccount(login) {
+  const normalized = normalizeLogin(login);
+  if (!normalized) return null;
+  const builtInAccount = CLIENT_ACCOUNTS.find((account) => normalizeLogin(account.login) === normalized);
+  if (isOwnerOnlyMode()) return builtInAccount && isOwnerAccount(builtInAccount) ? builtInAccount : null;
+  if (builtInAccount) return builtInAccount;
+  return readRegisteredAccounts().find((account) => normalizeLogin(account.login) === normalized || normalizeEmail(account.email) === normalized) || null;
+}
+
+function readAuthorizedClient() {
+  try {
+    const account = findClientAccount(localStorage.getItem(AUTH_STORAGE_KEY));
+    if (isOwnerOnlyMode() && !isOwnerAccount(account)) {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      clearPendingAccessRequest();
+      return null;
+    }
+    return account;
+  } catch {
+    return null;
+  }
+}
+
+function isUnlimitedAccount(account) {
+  return account?.role === 'admin' || account?.limits?.unlimited === true;
+}
+
+function accountUsageKey(account) {
+  return `${USAGE_STORAGE_KEY_PREFIX}${account?.login || 'guest'}`;
+}
+
+function readAccountUsage(account) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(accountUsageKey(account)) || '{}');
+    return {
+      banners: Math.max(0, Number(saved.banners) || 0),
+      prelandings: Math.max(0, Number(saved.prelandings) || 0)
+    };
+  } catch {
+    return { banners: 0, prelandings: 0 };
+  }
+}
+
+function saveAccountUsage(account, usage) {
+  try {
+    localStorage.setItem(accountUsageKey(account), JSON.stringify({
+      banners: Math.max(0, Number(usage?.banners) || 0),
+      prelandings: Math.max(0, Number(usage?.prelandings) || 0)
+    }));
+  } catch {
+    // Local limits are still shown for the current session even if storage is blocked.
+  }
+}
+
+function getAccountLimit(account, key) {
+  if (isUnlimitedAccount(account)) return Infinity;
+  return Number(account?.limits?.[key]) || DEFAULT_CLIENT_LIMITS[key] || 0;
+}
+
+function withAccountDefaults(account, data = {}) {
+  const next = { ...PROJECT_DEFAULTS, ...data };
+  if (!account) return next;
+  const forceAccountIdentity = !isUnlimitedAccount(account) && String(account.login || '').startsWith('access:');
+  return {
+    ...next,
+    clientCode: forceAccountIdentity ? (account.clientId || next.clientCode || '') : next.clientCode || (isUnlimitedAccount(account) ? '' : account.clientId),
+    clientDisplayName: forceAccountIdentity ? (account.label || next.clientDisplayName || '') : next.clientDisplayName || account.label || '',
+    metrikaId: next.metrikaId || account.metrikaId || '',
+    metrikaToken: next.metrikaToken || account.metrikaToken || '',
+    getcourseLink: next.getcourseLink || account.getcourseLink || '',
+    partnerCode: next.partnerCode || account.partnerCode || ''
+  };
+}
+
+function normalizeProjectOwnerValue(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function savedProjectBelongsToAnotherClient(saved = {}, account) {
+  if (!account || isUnlimitedAccount(account)) return false;
+  const savedAccountLogin = normalizeLogin(saved.__accountLogin);
+  const savedAccountClientId = String(saved.__accountClientId || '').trim();
+  if (savedAccountLogin && savedAccountLogin !== normalizeLogin(account.login)) return true;
+  if (savedAccountClientId && savedAccountClientId !== String(account.clientId || '').trim()) return true;
+  const savedName = normalizeProjectOwnerValue(saved.clientDisplayName);
+  const accountName = normalizeProjectOwnerValue(account.label);
+  const savedClientCode = String(saved.clientCode || '').trim();
+  const accountClientCode = String(account.clientId || '').trim();
+  if (savedName && accountName && savedName !== accountName) return true;
+  if (savedClientCode && accountClientCode && savedClientCode !== accountClientCode) {
+    const accountSlug = slugifyClientName(account.label || '');
+    if (accountSlug && !savedClientCode.toLowerCase().includes(accountSlug)) return true;
+  }
+  return false;
+}
+
+function loadSavedProject(account) {
+  try {
+    const storageKey = projectStorageKey(account);
+    const accountProjectRaw = account?.login ? localStorage.getItem(storageKey) : '';
+    if (accountProjectRaw) {
+      const saved = JSON.parse(accountProjectRaw);
+      if (!savedProjectBelongsToAnotherClient(saved, account)) {
+        return withAccountDefaults(account, saved);
+      }
+      localStorage.removeItem(storageKey);
+    }
+
+    if (!account || isUnlimitedAccount(account)) {
+      const legacyRaw = localStorage.getItem(LEGACY_PROJECT_STORAGE_KEY);
+      if (legacyRaw) return withAccountDefaults(account, JSON.parse(legacyRaw));
+    }
+
+    return withAccountDefaults(account, PROJECT_DEFAULTS);
+  } catch {
+    return withAccountDefaults(account, PROJECT_DEFAULTS);
+  }
+}
+
+function saveProjectForAccount(account, data) {
+  try {
+    const payload = withAccountDefaults(account, data);
+    if (account?.login) {
+      payload.__accountLogin = account.login;
+      payload.__accountClientId = account.clientId || '';
+      payload.__accountLabel = account.label || '';
+    }
+    localStorage.setItem(projectStorageKey(account), JSON.stringify(payload));
+  } catch {
+    // localStorage can be blocked in private mode; the current session still works.
+  }
+}
+
+const CLIENT_ID_COUNTER_KEY = 'constructorClientIdNextNumber';
+const CLIENT_ID_START_NUMBER = 101;
+
+const RU_TO_LATIN = {
+  а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i',
+  й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't',
+  у: 'u', ф: 'f', х: 'h', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'sch', ъ: '', ы: 'y',
+  ь: '', э: 'e', ю: 'yu', я: 'ya'
+};
+
+function transliterateRu(value = '') {
+  return String(value)
+    .split('')
+    .map((char) => {
+      const lower = char.toLowerCase();
+      const converted = RU_TO_LATIN[lower] ?? char;
+      return char === lower ? converted : converted.toUpperCase();
+    })
+    .join('');
+}
+
+function slugifyClientName(value = '') {
+  const slug = transliterateRu(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .replace(/_+/g, '_')
+    .slice(0, 54);
+  return slug || 'client';
+}
+
+function parseClientIdNumber(clientId = '') {
+  const match = String(clientId).match(/^client[_-](\d{1,6})/i);
+  return match ? Number(match[1]) : 0;
+}
+
+function readNextClientNumber() {
+  try {
+    const saved = Number(localStorage.getItem(CLIENT_ID_COUNTER_KEY));
+    return Number.isFinite(saved) && saved >= CLIENT_ID_START_NUMBER ? saved : CLIENT_ID_START_NUMBER;
+  } catch {
+    return CLIENT_ID_START_NUMBER;
+  }
+}
+
+function reserveNextClientNumber(number) {
+  try {
+    localStorage.setItem(CLIENT_ID_COUNTER_KEY, String(number + 1));
+  } catch {
+    // localStorage can be blocked in private mode; generation still works for the current click.
+  }
+}
+
+function makeClientId(number, displayName) {
+  return `client_${String(Math.max(1, number)).padStart(3, '0')}_${slugifyClientName(displayName)}`;
+}
+
 /* ================== ТЕКСТЫ ПРЕДЛЕНДИНГА ================== */
+const CLIENT_PRELANDING_CORE_TEXT = `Каркас предлендинга строится вокруг заголовка и текста клиента.
+
+Это не брендовый лендинг и не страница с готовой легендой. Конструктор берёт смысл объявления, выбирает один из семи форматов и собирает короткую посадочную страницу под переход в мессенджер.
+
+Узнаете сценарий
+1. Человек видит знакомую боль или желание
+2. Сразу понимает, зачем смотреть разбор
+3. Получает 2-3 сильных мини-оффера без лишней теории
+4. Переходит в Telegram или MAX на следующий шаг
+
+Главная задача: не добавить отсебятину, а усилить введённый заголовок, описание и выбранную структуру.`;
+
 const TPL = [
-  { id: 1, t: 'Без курсов и контента', a: 'Жёсткий разрыв', c: 'from-red-500 to-orange-500', h: 'Кардинально другой метод дохода в 2026г', p: ['Без курсов', 'Без контента', 'Без навыков'],
-    txt: `Кардинально другой метод дохода в 2026г\n\nБез курсов. Без контента. Без навыков.\n\nУзнаете сценарий\n1. Купили 5+ курсов — результата ноль\n2. Вложили время и деньги — отдачи нет\n3. Годы усилий — всё те же 3 копейки\n4. Обещания гуру — пустой кошелёк\n\nВсё, хватит. Сколько вам нужно ещё времени и попыток, чтобы понять что это не работает.\n\nЕсть КАРДИНАЛЬНО ДРУГОЙ МЕТОД.\n\nЗа 8 минут вы в деталях увидите способ, который полностью изменит все ваши представления о том, как выйти на доход от 200 000 в мес.\n\nпочему вы тратите годы в попытках заработать 3 копейки и всё безрезультатно\n\nметод, который работает прямо сейчас в условиях блокировок и замедлений\n\nКак вырасти в доходе если ты НЕ умеешь писать контент, а все вокруг только и говорят «делать контент нужно каждый день». Спойлер — речь не про ИИ, не про навыки.\n\nВам не надоело покупать курсы и не видеть результата? Хватит. СМОТРИТЕ КАК МОЖНО ПО-ДРУГОМУ.` },
-  { id: 2, t: 'Без продаж и маркетинга', a: 'Снятие возражений', c: 'from-blue-500 to-cyan-500', h: 'Кардинально другой метод создания онлайн-дохода в 2026г', p: ['Без продаж', 'Без маркетинга', 'Без соц. сетей', 'И даже без ИИ'],
-    txt: `Кардинально другой метод создания онлайн-дохода в 2026г\n\nБез продаж\nБез маркетинга\nБез ведения соц. сетей\nИ даже без ИИ\n\nЗа 8 минут вы в деталях увидите способ, который полностью изменит все ваши представления о том, как выйти на доход от 200 000 в мес.\n\n- почему вы тратите годы в попытках заработать 3 копейки и всё безрезультатано\n- метод, который работает прямо сейчас в условиях блокировок и замедлений\n- Как вырасти в доходе если ты НЕ умеешь писать контент, а все вокруг только и говорят "делать контент нужно каждый день". Спойлер - речь не про ИИ, не про навыки.\n\nВам не надоело покупать курсы и не видеть результата? Хватит. СМОТРИТЕ КАК МОЖНО ПО ДРУГОМУ` },
-  { id: 3, t: '5000Р за 2 часа', a: 'Доверие', c: 'from-emerald-500 to-green-500', h: 'Метод который позволяет заработать первые 5000Р за 2 часа', p: ['Не казино', 'Не крипта', 'Не ставки', 'Белый метод'],
-    txt: `Метод который позволяет заработать первые 5000Р за 2 часа.\n\nНе казино\nНе крипта\nНе ставки\n\nНормальный, белый метод, который даёт результат без вложений.\n\nЗа 8 минут вы в деталях увидите способ, который полностью изменит все ваши представления о том, как выйти на доход от 200 000 в мес.\n\n- почему вы тратите годы в попытках заработать 3 копейки и всё безрезультатано\n- метод, который работает прямо сейчас в условиях блокировок и замедлений\n- Как вырасти в доходе если ты НЕ умеешь писать контент, а все вокруг только и говорят "делать контент нужно каждый день". Спойлер - речь не про ИИ, не про навыки.\n\nВам не надоело покупать курсы и не видеть результата? Хватит. СМОТРИТЕ КАК МОЖНО ПО ДРУГОМУ` }
+  {
+    id: 1,
+    t: 'Жёсткий разрыв',
+    a: 'Боль и разворот',
+    c: 'from-red-500 to-orange-500',
+    h: 'Старый подход больше не работает? Посмотрите другой маршрут',
+    p: ['Боль', 'Причина', 'Первый шаг'],
+    txt: CLIENT_PRELANDING_CORE_TEXT
+  },
+  {
+    id: 2,
+    t: 'Снятие возражений',
+    a: 'Доверительный вход',
+    c: 'from-blue-500 to-cyan-500',
+    h: 'Сначала короткий разбор — потом понятный первый шаг',
+    p: ['Сценарий', 'Три ответа', 'CTA'],
+    txt: `Формат для аудитории, которой важно сначала разобраться.
+
+Лендинг показывает не обещание чуда, а спокойную логику: что человек увидит, почему это отличается от старого подхода и какой следующий шаг откроется в мессенджере.
+
+Страница должна работать как мост между объявлением и ботом: без бренда, без лишних деталей, без фантазий поверх заголовка клиента.`
+  },
+  {
+    id: 3,
+    t: 'Доверие и ясность',
+    a: 'Чистый маршрут',
+    c: 'from-emerald-500 to-green-500',
+    h: 'Покажите человеку понятный путь без перегруза',
+    p: ['Контекст', 'Разбор', 'Решение'],
+    txt: `Формат для чистой, спокойной подачи.
+
+Он не спорит с человеком и не давит. Он показывает: вот проблема, вот короткий разбор, вот что станет понятнее, вот кнопка перехода.
+
+Вся конкретика берётся из заголовка, описания и выбранного сценария.`
+  }
 ];
 
 const PRELANDING_CONTENT = {
   1: {
-    badge: 'Только для тех, кто устал от курсов',
-    titleHtml: 'Кардинально <span>ДРУГОЙ МЕТОД</span> дохода в 2026г.',
-    pills: ['Без курсов', 'Без контента', 'Без навыков'],
-    painTitle: 'Узнаете сценарий?',
+    badge: 'Короткий практический разбор',
+    titleHtml: 'Старый подход больше <span>не даёт результата?</span>',
+    pills: ['Без своего продукта', 'Без долгого запуска', 'Без продаж в лоб'],
+    painTitle: 'Узнаёте ситуацию?',
     painItems: [
-      'Купили 5+ курсов - результата ноль',
-      'Вложили время и деньги - отдачи нет',
-      'Годы усилий - все те же 3 копейки',
-      'Обещания гуру - пустой кошелек'
+      'Пробовали старый путь, но он снова не даёт нужного результата',
+      'Есть желание двигаться дальше, но непонятно, с чего начать',
+      'Не хочется снова покупать теорию и месяцами готовиться',
+      'Нужен короткий разбор и понятный первый шаг'
     ],
-    painAlert: 'Все, хватит. Сколько вам нужно еще времени и попыток, чтобы понять что это не работает.',
-    trustTitle: 'Нормальный, понятный метод.',
-    trustSmall: 'Без серых схем и без обещаний чудес.',
-    valueTitle: 'За 8 минут вы увидите способ, который меняет представление о доходе:',
+    painAlert: 'Смысл страницы — быстро показать другой маршрут и перевести человека к следующему шагу без перегруза.',
+    trustTitle: 'Сначала понятный разбор, потом первый шаг.',
+    trustSmall: 'Человек видит связку: проблема, новый подход, мини-офферы и переход в выбранный мессенджер.',
+    valueTitle: 'Что человек увидит внутри',
     valueItems: [
-      'почему вы годами пробуете разные курсы и не видите результата.',
-      'как устроен другой подход, который работает через готовую систему.',
-      'как двигаться к доходу без ежедневного контента и роли эксперта.'
+      'почему старый подход мог не сработать именно в его ситуации',
+      'какой новый маршрут можно рассмотреть без долгой подготовки',
+      'какой первый шаг откроется сразу после перехода в мессенджер'
     ],
-    actionTitle: 'СМОТРИТЕ, КАК МОЖНО ПО-ДРУГОМУ',
-    actionSubtitle: 'Жмите на кнопку ниже и забирайте материал. Это займет 8 минут.'
+    actionTitle: 'Откройте короткий разбор',
+    actionSubtitle: 'Выберите мессенджер и перейдите к первому шагу. Лендинг останется открытым.'
   },
   2: {
-    badge: 'Для тех, кто не хочет продавать в лоб',
-    titleHtml: 'Кардинально другой метод создания <span>онлайн-дохода</span> в 2026г.',
-    pills: ['Без продаж', 'Без маркетинга', 'Без соц. сетей', 'И даже без ИИ'],
-    painTitle: 'Вам не надоело покупать курсы и не видеть результата?',
+    badge: 'Спокойный вход без давления',
+    titleHtml: 'Сначала разберитесь, <span>почему старое не сработало</span>',
+    pills: ['Короткий разбор', 'Понятный маршрут', 'Первый шаг'],
+    painTitle: 'Почему человек не идёт дальше?',
     painItems: [
-      'Выискиваешь денежную нишу',
-      'Покупаешь "на этот раз точно работающий курс"',
-      'Пытаешься делать, ничего не выходит - выгораешь'
+      'Он уже видел много обещаний и не верит громким словам',
+      'Ему нужен не шум, а понятная логика следующего действия',
+      'Он хочет увидеть смысл до того, как что-то покупать или оставлять заявку',
+      'Ему проще перейти, когда страница говорит коротко и конкретно'
     ],
-    painAlert: 'Сколько нужно еще попыток, чтобы понять, что этот путь НЕ работает?',
-    trustTitle: 'Белый, понятный, спокойный подход.',
-    trustSmall: 'Не казино. Не крипта. Не ставки.',
-    valueTitle: 'За 8 минут вы в деталях увидите способ, который изменит ваше представление о доходе:',
+    painAlert: 'Этот формат снимает сопротивление: без давления, без обещаний результата, без лишней истории.',
+    trustTitle: 'Показываем человеку смысл до клика.',
+    trustSmall: 'Три коротких блока объясняют, почему стоит открыть разбор и что человек получит после перехода.',
+    valueTitle: 'Что станет понятнее после разбора',
     valueItems: [
-      'почему вы тратите годы на попытки заработать 3 копейки и все безрезультатно.',
-      'метод, который работает сейчас в условиях блокировок и замедлений.',
-      'как вырасти в доходе, если вы не умеете писать контент.'
+      'где именно ломается старый путь или привычная модель действий',
+      'какой первый шаг можно сделать без лишней подготовки',
+      'почему переход в мессенджер нужен для продолжения разбора'
     ],
-    actionTitle: 'СМОТРИТЕ, КАК МОЖНО ПО-ДРУГОМУ',
-    actionSubtitle: 'Жмите на кнопку ниже и забирайте материал. Это займет 8 минут.'
+    actionTitle: 'Перейти к разбору',
+    actionSubtitle: 'Следующий шаг откроется в выбранном мессенджере без закрытия лендинга.'
   },
   3: {
-    badge: 'Практический разбор метода',
-    titleHtml: 'Метод, который помогает получить <span>первый результат</span> за 2 часа.',
-    pills: ['Не казино', 'Не крипта', 'Не ставки', 'Белый метод'],
-    painTitle: 'Надоели пустые обещания и сложные схемы?',
+    badge: 'Чистый маршрут вместо хаоса',
+    titleHtml: 'Нужен не новый шум, а <span>понятный следующий шаг</span>',
+    pills: ['Ясная логика', 'Без перегруза', 'CTA сразу'],
+    painTitle: 'Когда информации много, а решения нет',
     painItems: [
-      'Ищете понятный способ выйти из тупика',
-      'Попадаете на фейковые обещания и мутные схемы',
-      'Теряете время, силы и веру в результат'
+      'Человек устал от длинных объяснений и общих обещаний',
+      'Ему нужно быстро понять, что изменится после клика',
+      'Текст должен вести к действию, а не расплываться в теорию',
+      'Визуал должен усиливать смысл, а не спорить с ним'
     ],
-    painAlert: 'Смотрите разбор и поймите, как устроен метод без лишней мистики.',
-    trustTitle: 'Нормальный, белый метод.',
-    trustSmall: 'Без казино, крипты, ставок и серых историй.',
-    valueTitle: 'За 8 минут вы увидите точную логику системы:',
+    painAlert: 'Страница работает как короткий мост: заголовок, смысл, три мини-оффера и CTA.',
+    trustTitle: 'Минимум лишнего, максимум ясности.',
+    trustSmall: 'Дизайн и текст подстраиваются под введённый заголовок и описание клиента.',
+    valueTitle: 'Что усиливает переход',
     valueItems: [
-      'как устроен практикум и почему он отличается от обычных курсов.',
-      'что именно мешает получить результат в старой модели.',
-      'как разовый результат переводится в регулярный процесс.'
+      'сильный первый экран с понятным обещанием разбора',
+      'мини-офферы, которые раскрывают выгоды без повторов',
+      'финальный CTA, который не ломает страницу и открывает мессенджер'
     ],
-    actionTitle: 'ПОСМОТРИТЕ 8-МИНУТНЫЙ РАЗБОР',
-    actionSubtitle: 'Нажмите на кнопку ниже, чтобы перейти в бот и получить материал.'
+    actionTitle: 'Открыть первый шаг',
+    actionSubtitle: 'Нажмите на удобный мессенджер и продолжите разбор там.'
   }
 };
 
-const RESOURCE_LINKS = [
-  ['Шаблон бота Telegram', 'https://bothelp.io/f/0db8f39436a', 'Импорт цепочки сообщений для Telegram в BotHelp'],
-  ['Шаблон бота MAX', 'https://bothelp.io/f/480233785ed', 'Импорт цепочки сообщений для MAX в BotHelp'],
-  ['Медиаматериалы', 'https://t.me/+GxVXDEDwp9c1Yzg6', 'Фото, видео, исходники и материалы для сборки'],
-  ['Регистрация домена', 'https://www.reg.ru/domain/new/?rlink=reflink-31567885', 'Домен для проекта и мини-лендингов'],
-  ['ADVT / рекламный кабинет', 'https://advt.pro/c/for-referrals/?referrerId=01KM4Z0EA2DD6SEHV5JV77N04E', 'Сервис для работы с рекламой и партнёрскими задачами'],
-  ['MAX: подключение организации', 'https://dev.max.ru/docs/maxbusiness/connection', 'Официальная инструкция MAX по верификации организации'],
-  ['MAX: создание бота', 'https://dev.max.ru/docs/chatbots/bots-create', 'Официальная инструкция MAX по созданию и модерации бота']
+const CLIENT_PRELANDING_RULES = [
+  'лендинг не должен продавать продукт в лоб',
+  'не добавляем бренды, названия систем и внутренние термины без ввода пользователя',
+  'не обещаем гарантированный доход, быстрый результат или лёгкие деньги',
+  'используем заголовок, описание клиента и выбранную структуру как главный источник смысла',
+  'убираем повторы: если смысл уже есть в карточках, не дублируем его отдельными плашками',
+  'главная цель страницы — понятный переход в Telegram или MAX на короткий разбор'
 ];
 
-const ROADMAP_STEPS = [
-  { title: 'Заполнить рабочие данные', desc: 'Соберите в одной панели Telegram, MAX, GetCourse, домен, ссылки лендингов, документы и Метрику.', tab: 'how', scrollTo: 'project-panel' },
-  { title: 'Регистрация ИП на НПД', desc: 'Оформите правовую базу по инструкции, чтобы корректно принимать оплату и работать с документами.', tab: 'how', guideIndex: 0 },
-  { title: 'Домен и сервисы', desc: 'Зарегистрируйте домен, Workle/партнёрские кабинеты и подготовьте доступы для связки.', tab: 'how', guideIndex: 2 },
-  { title: 'BotHelp и боты', desc: 'Создайте кабинет BotHelp, Telegram-бота, MAX-бота и импортируйте шаблоны цепочек.', tab: 'install' },
-  { title: 'Документы для предлендинга', desc: 'Соберите три юридические страницы и сохраните ссылки: политика, ПДн, рекламное согласие.', tab: 'docs' },
-  { title: 'Предлендинг РСЯ', desc: 'Соберите первый мини-лендинг через Инструменты роста, подключите кнопки каналов, Метрику и пользовательские соглашения.', tab: 'pre' },
-  { title: 'Продающая история', desc: 'Подставьте личные данные, фото и ссылку на оффер, затем вставьте HTML в BotHelp.', tab: 'sale' },
-  { title: 'Оффер практикума', desc: 'Подставьте GetCourse, Telegram и MAX. Цена и структура оффера остаются без изменений.', tab: 'offer' },
-  { title: 'Метрика и цели', desc: 'Сохраните номер счётчика, идентификатор цели подписки и API-токен для офлайн-конверсий.', tab: 'how', scrollTo: 'metrics-guide' },
-  { title: 'Заголовки РСЯ', desc: 'Сначала сделайте ДНК клиента, затем заголовки, тексты, быстрые ссылки и структуру групп.', tab: 'ads' },
-  { title: 'Креативы под заголовки', desc: 'Каждый баннер собирается под один выбранный заголовок и проверяется по правилам модерации.', tab: 'creative' },
-  { title: 'Запуск рекламы', desc: 'Создайте кампанию РСЯ, укажите предлендинг, отправьте на модерацию и проверьте всю цепочку.', tab: 'launch' }
+const CLIENT_PRELANDING_MARKETING_ANGLES = [
+  {
+    id: 'old-way-break',
+    label: 'Старый подход не работает',
+    badge: 'Короткий практический разбор',
+    trigger: ['устал', 'надоело', 'курс', 'обуч', 'не работает', 'не получилось', 'результат', 'опор', 'риск', 'доход'],
+    defaultTitle: 'Старый подход больше не даёт результата?',
+    defaultText: 'Короткий разбор показывает, какой другой маршрут можно рассмотреть без долгой подготовки и продаж в лоб.',
+    methodName: 'Другой маршрут без старой перегрузки',
+    trustSmall: 'Человек видит, зачем смотреть разбор, и получает понятный следующий шаг без давления.',
+    valueTitle: 'Что человек поймёт после перехода',
+    painItems: [
+      'старый способ уже не даёт нужной опоры',
+      'человек хочет больше ясности перед следующим шагом',
+      'не хочется снова входить в долгую подготовку',
+      'нужен короткий маршрут без лишнего шума'
+    ],
+    cards: [
+      { title: 'Вторая опора', text: 'Разбор показывает, как не зависеть только от одного источника денег или одного сценария.' },
+      { title: 'Вход без продукта', text: 'Не нужно сначала придумывать товар, собирать запуск и месяцами готовиться.' },
+      { title: 'Без продаж в лоб', text: 'Человек сначала видит механику и сам понимает, зачем идти дальше.' }
+    ],
+    valueItems: [
+      'почему текущий подход мог упереться в потолок',
+      'как выглядит первый шаг без своего продукта и долгого запуска',
+      'что откроется в выбранном мессенджере после клика'
+    ],
+    actionTitle: 'Откройте разбор и заберите первый шаг',
+    actionSubtitle: 'Разбор откроется в новой вкладке, а лендинг останется доступным.'
+  },
+  {
+    id: 'first-step-clarity',
+    label: 'Нужен понятный первый шаг',
+    badge: 'Понятный маршрут',
+    trigger: ['первый шаг', 'маршрут', 'с чего начать', 'понятно', 'план', 'система', 'хаос', 'старт'],
+    defaultTitle: 'Непонятно, с чего начать дальше?',
+    defaultText: 'Покажем короткую последовательность: что мешает, какой смысл за первым шагом и куда перейти дальше.',
+    methodName: 'Сначала ясность, потом действие',
+    trustSmall: 'Лендинг не перегружает деталями. Он даёт человеку причину открыть разбор.',
+    valueTitle: 'Что станет яснее внутри',
+    painItems: [
+      'много вариантов, но нет простого решения',
+      'сложно понять, какой шаг делать первым',
+      'не хочется тратить время на длинную теорию',
+      'нужен спокойный переход без давления'
+    ],
+    cards: [
+      { title: 'Смысл перед кликом', text: 'На первом экране человек сразу понимает, зачем смотреть разбор.' },
+      { title: 'Короткий маршрут', text: 'Сначала демонстрация, затем выбор мессенджера, затем первый понятный шаг.' },
+      { title: 'Без давления', text: 'Посадочная не продаёт в лоб и сохраняет доверие до перехода.' }
+    ],
+    valueItems: [
+      'как быстро понять главный смысл предложения',
+      'почему первый шаг не требует долгой подготовки',
+      'какой переход логично сделать после первого экрана'
+    ],
+    actionTitle: 'Перейти к первому шагу',
+    actionSubtitle: 'Выберите Telegram или MAX и продолжите разбор в удобном мессенджере.'
+  },
+  {
+    id: 'extra-support',
+    label: 'Нужна дополнительная опора',
+    badge: 'Финансовая опора без схем',
+    trigger: ['финанс', 'деньг', 'зарплат', 'опора', 'ресурс', 'доход', 'потолок', 'больше', 'уровень'],
+    defaultTitle: 'Один доход — это риск. Нужна дополнительная опора?',
+    defaultText: 'Узнайте, как создать дополнительную финансовую опору без своего продукта, долгого запуска и продаж в лоб.',
+    methodName: 'Опора без обещаний лёгких денег',
+    trustSmall: 'Страница не обещает доход. Она объясняет, какой разбор стоит открыть и почему.',
+    valueTitle: 'Что покажем внутри',
+    painItems: [
+      'один источник денег больше не даёт спокойствия',
+      'хочется вырасти, но без авантюр и быстрых схем',
+      'не хочется начинать с продукта, упаковки и сложного запуска',
+      'нужен понятный первый шаг, а не очередная теория'
+    ],
+    cards: [
+      { title: 'Вторая опора', text: 'Как смотреть на дополнительный доход без иллюзии лёгких денег.' },
+      { title: 'Без долгого запуска', text: 'Первый шаг открывается через короткий разбор, а не через месяцы подготовки.' },
+      { title: 'Без продаж в лоб', text: 'Сначала человек видит механику и понимает, зачем двигаться дальше.' }
+    ],
+    valueItems: [
+      'как зайти без своего продукта и долгой подготовки',
+      'почему человеку не нужно продавать в лоб на первом касании',
+      'какой следующий шаг откроется в выбранном мессенджере'
+    ],
+    actionTitle: 'Откройте разбор и заберите первый шаг',
+    actionSubtitle: 'Выберите удобный мессенджер. Разбор откроется в новой вкладке.'
+  },
+  {
+    id: 'higher-level',
+    label: 'Хочу выйти на следующий уровень',
+    badge: 'Следующий уровень без перегруза',
+    trigger: ['уровень', 'больше', 'рост', 'потолок', 'зарабатыва', 'хочу', 'развиваться', 'масштаб'],
+    defaultTitle: 'Доход есть, но финансовый потолок уже чувствуется?',
+    defaultText: 'Посмотрите метод, который показывает, как выйти на следующий уровень без смены профессии и лишней суеты.',
+    methodName: 'Рост через понятный маршрут',
+    trustSmall: 'Фокус не на громких обещаниях, а на понятном переходе от интереса к первому действию.',
+    valueTitle: 'Что человек увидит внутри',
+    painItems: [
+      'текущий доход есть, но роста уже не хватает',
+      'не хочется менять всё с нуля ради следующего уровня',
+      'нужен спокойный путь без давления и хаоса',
+      'важно увидеть механику до принятия решения'
+    ],
+    cards: [
+      { title: 'Потолок виден', text: 'Человек узнаёт свою ситуацию и понимает, почему прежний путь мог замедлиться.' },
+      { title: 'Маршрут короче', text: 'Разбор показывает не всю систему сразу, а ближайший шаг к следующему уровню.' },
+      { title: 'Решение без давления', text: 'Человек сам выбирает Telegram или MAX и продолжает там.' }
+    ],
+    valueItems: [
+      'почему текущий доход может упираться в потолок',
+      'какой первый шаг не требует смены профессии',
+      'как продолжить разбор без закрытия лендинга'
+    ],
+    actionTitle: 'Посмотреть первый шаг',
+    actionSubtitle: 'Разбор откроется в выбранном мессенджере, лендинг останется доступным.'
+  }
 ];
 
 const PROJECT_FIELDS = [
-  ['projectName', 'Название проекта', 'Например: Оксана Корчагина / Атмосфера'],
-  ['domain', 'Домен', 'https://example.ru'],
-  ['bothelpDomain', 'Поддомен BotHelp', 'example.bothelp.io'],
-  ['telegramLink', 'Ссылка Telegram', 'https://t.me/username'],
-  ['maxLink', 'Ссылка MAX', 'https://iimax.ru/username'],
-  ['getcourseLink', 'Партнёрская ссылка GetCourse', 'https://...gcao=...&gcpc=...'],
-  ['prelandingLink', 'Ссылка на предлендинг BotHelp', 'https://bhurl.ru/... или ваш домен'],
-  ['storyLink', 'Ссылка на продающую историю', 'https://...'],
-  ['offerLink', 'Ссылка на оффер', 'https://...'],
-  ['privacyLink', 'Политика конфиденциальности', 'https://.../privacy'],
-  ['personalLink', 'Согласие на ПДн', 'https://.../personal-data'],
-  ['adsConsentLink', 'Согласие на рекламу', 'https://.../ads-consent'],
-  ['metrikaId', 'Номер счётчика Метрики', '12345678'],
-  ['metrikaGoal', 'Идентификатор цели подписки', 'subscription_ml_7'],
-  ['metrikaToken', 'API-токен Метрики', 'Храните аккуратно, не публикуйте'],
-  ['workleLink', 'Ссылка/кабинет Workle', 'https://...']
+  ['clientDisplayName', 'Название лендинга', 'Лендинг клиента'],
+  ['partnerCode', 'Код для рекламного лендинга', 'cabinet_code'],
+  ['metrikaId', 'Номер рекламного счётчика', '12345678'],
+  ['metrikaToken', 'Защищённый ключ отправки целей', 'AQAAAA...', 'password']
 ];
 
 const PROJECT_DEFAULTS = PROJECT_FIELDS.reduce((acc, [key]) => ({ ...acc, [key]: '' }), {});
+const YANDEX_DIRECT_URL_PARAMS = 'utm_source=yandex&utm_medium=cpc&utm_campaign={campaign_id}&utm_content={ad_id}&utm_term={keyword}&yd_campaign_id={campaign_id}&yd_ad_id={ad_id}&yd_group_id={gbid}&yd_creative_id={creative_id}&yd_source={source}&yd_source_type={source_type}&yd_device={device_type}&yd_region_id={region_id}&yclid={yclid}';
 
-const makeVisualStep = (title, desc, images) => ({ title, desc, images });
-
-const GUIDE_VISUALS = {
-  workle: [
-    makeVisualStep('1. Переход по реферальной ссылке', 'Откройте Workle Pro по реферальной ссылке и нажмите регистрацию.', ['/guide/workle/workle-1-1.png']),
-    makeVisualStep('2. Заполнение регистрационной формы', 'Введите контактные данные и начните регистрацию профиля.', ['/guide/workle/workle-2-1.png', '/guide/workle/workle-2-2.png']),
-    makeVisualStep('3. Подтверждение почты и пароль', 'Подтвердите почту кодом/паролем, затем задайте свой надёжный пароль.', ['/guide/workle/workle-3-1.png', '/guide/workle/workle-3-2.png']),
-    makeVisualStep('4. Профиль активирован', 'После активации нажмите "Перейти на Workle Pro" и зайдите в личный кабинет.', ['/guide/workle/workle-4-1.png', '/guide/workle/workle-4-2.png']),
-    makeVisualStep('5. Проверка личного кабинета', 'Проверьте, что профиль открыт и регистрация прошла по нужной ссылке.', ['/guide/workle/workle-5-1.png', '/guide/workle/workle-5-2.png'])
-  ],
-  domain: [
-    makeVisualStep('1. Аккаунт Reg.ru и подтверждение данных', 'Авторизуйтесь/зарегистрируйтесь, откройте настройки и подтвердите данные физического лица, почту и телефон.', ['/guide/domain/domain-1-1.jpg', '/guide/domain/domain-1-2.jpg']),
-    makeVisualStep('2. Поиск и добавление домена', 'Откройте раздел доменов, введите имя домена латиницей и добавьте его в корзину.', ['/guide/domain/domain-2-1.jpg', '/guide/domain/domain-2-2.jpg']),
-    makeVisualStep('3. Оплата без лишних услуг', 'В заказе отключите дополнительные услуги, оставьте только домен и оплатите.', ['/guide/domain/domain-3-1.jpg'])
-  ],
-  getcourse: [
-    makeVisualStep('1. Заявка в партнёрский кабинет', 'Перейдите на страницу школы, укажите имя и почту, затем подтвердите email.', ['/guide/getcourse/getcourse-1-1.png']),
-    makeVisualStep('2. Вход в GetCourse', 'Возьмите логин/пароль из письма, перейдите на страницу входа и авторизуйтесь.', ['/guide/getcourse/getcourse-2-1.png', '/guide/getcourse/getcourse-2-2.png']),
-    makeVisualStep('3. Открыть кабинет партнёра', 'В левом меню нажмите "Мои покупки" с иконкой кошелька.', ['/guide/getcourse/getcourse-3-1.png']),
-    makeVisualStep('4. Раздел рекламных предложений', 'В кабинете партнёра откройте "Рекламные предложения".', ['/guide/getcourse/getcourse-4-1.png', '/guide/getcourse/getcourse-4-2.png']),
-    makeVisualStep('5. Ссылка на оплату 990', 'Найдите предложение "Оплата продукта 990" и скопируйте полный URL с параметрами gcao и gcpc.', ['/guide/getcourse/getcourse-5-1.png'])
-  ],
-  bothelp: [
-    makeVisualStep('1. Регистрация в BotHelp', 'Перейдите на bothelp.io, смените язык при необходимости и нажмите "Регистрация".', ['/guide/bothelp/bothelp-1-1.jpg', '/guide/bothelp/bothelp-1-2.jpg']),
-    makeVisualStep('2. Поддомен и телефон', 'Придумайте поддомен латиницей, укажите телефон и обязательно сохраните входные данные.', ['/guide/bothelp/bothelp-2-1.jpg', '/guide/bothelp/bothelp-2-2.jpg']),
-    makeVisualStep('3. Собственный домен', 'Откройте настройку домена и добавьте DNS-запись у регистратора по инструкции BotHelp.', ['/guide/bothelp/bothelp-3-1.jpg', '/guide/bothelp/bothelp-3-2.jpg']),
-    makeVisualStep('4. Подключение каналов', 'В настройках откройте "Каналы", добавьте Telegram/MAX и вставьте токен нужного бота.', ['/guide/bothelp/bothelp-4-1.jpg', '/guide/bothelp/bothelp-4-2.jpg', '/guide/bothelp/bothelp-4-3.jpg']),
-    makeVisualStep('5. Проверка канала', 'Убедитесь, что канал добавлен и доступен для кнопок мини-лендинга.', ['/guide/bothelp/bothelp-5-1.jpg'])
-  ],
-  telegram: [
-    makeVisualStep('1. Запуск BotFather', 'Откройте @BotFather, нажмите Start и выберите команду создания нового бота.', ['/guide/telegram/telegram-1-1.jpg', '/guide/telegram/telegram-1-2.jpg']),
-    makeVisualStep('2. Имя и username бота', 'Придумайте имя бота и username, который обязательно заканчивается на bot.', ['/guide/telegram/telegram-2-1.jpg', '/guide/telegram/telegram-2-2.jpg']),
-    makeVisualStep('3. Токен и настройки', 'После создания откройте бота в списке, сохраните токен и при необходимости добавьте аватар.', ['/guide/telegram/telegram-3-1.jpg', '/guide/telegram/telegram-3-2.jpg', '/guide/telegram/telegram-3-3.jpg'])
-  ],
-  directRegister: [
-    makeVisualStep('1. Создание Яндекс ID', 'На странице авторизации выберите создание ID для себя, введите новый номер и подтвердите его кодом.', ['/guide/direct-register/direct-register-2-1.png', '/guide/direct-register/direct-register-2-2.jpg', '/guide/direct-register/direct-register-2-3.png', '/guide/direct-register/direct-register-2-4.png']),
-    makeVisualStep('2. Логин, пароль и согласия', 'Придумайте логин/пароль, подтвердите данные и сохраните доступы в надёжном месте.', ['/guide/direct-register/direct-register-3-1.png', '/guide/direct-register/direct-register-3-2.png']),
-    makeVisualStep('3. Регистрация в Яндекс Директ', 'Перейдите в direct.yandex.ru, заполните анкету рекламодателя и подтвердите телефон.', ['/guide/direct-register/direct-register-4-1.jpg', '/guide/direct-register/direct-register-4-2.jpg'])
-  ],
-  rsyaAds: [
-    makeVisualStep('1. Подготовка исходников', 'Откройте лендинги, промпт ДНК клиента и нейросеть, в которой будете работать.', ['/guide/rsya-ads/rsya-ads-2-1.jpg']),
-    makeVisualStep('2. ДНК клиента', 'Скопируйте промпт ДНК клиента целиком и отправьте его в нейросеть.', ['/guide/rsya-ads/rsya-ads-3-1.jpg', '/guide/rsya-ads/rsya-ads-4-1.jpg']),
-    makeVisualStep('3. Передача лендингов и контекста', 'Дайте нейросети предлендинг, продающую историю, оффер и короткие ответы по ДНК клиента. В конструкторе есть подсказки по смыслу, но формулировки пишите своими словами.', ['/guide/rsya-ads/rsya-ads-5-1.jpg', '/guide/rsya-ads/rsya-ads-6-1.jpg']),
-    makeVisualStep('4. Сегменты и проверка анализа', 'Выберите сегменты аудитории, сохраните анализ и проверьте, что ЦА понята правильно.', ['/guide/rsya-ads/rsya-ads-7-1.jpg', '/guide/rsya-ads/rsya-ads-7-2.jpg', '/guide/rsya-ads/rsya-ads-8-1.jpg', '/guide/rsya-ads/rsya-ads-9-1.jpg']),
-    makeVisualStep('5. Генерация объявлений', 'Запустите промпт объявлений, получите заголовки, тексты, быстрые ссылки и проверьте модерационные риски.', ['/guide/rsya-ads/rsya-ads-10-1.jpg', '/guide/rsya-ads/rsya-ads-11-1.jpg']),
-    makeVisualStep('6. Сохранение результата', 'Сохраните 90 заголовков, 5 текстов и 8 быстрых ссылок. Затем вставьте их во вкладку "Заголовки РСЯ" в блок отбора и получите 15 финальных.', ['/guide/rsya-ads/rsya-ads-13-1.jpg', '/guide/rsya-ads/rsya-ads-13-2.jpg'])
-  ],
-  rsyaCreatives: [
-    makeVisualStep('1. Подготовьте фото героя', 'Соберите 2-3 качественных фото без чужих логотипов, где лицо видно полностью.', ['/guide/rsya-creatives/rsya-creatives-4-1.jpg']),
-    makeVisualStep('2. Контекст и первый баннер', 'Заполните каркас контекстного пролога во вкладке "Креативы", загрузите фото и сгенерируйте первый баннер под один заголовок.', ['/guide/rsya-creatives/rsya-creatives-7-1.jpg', '/guide/rsya-creatives/rsya-creatives-8-1.jpg']),
-    makeVisualStep('3. Развёрнутый промпт', 'Если нужен контроль композиции, используйте развёрнутый промпт с форматом 1:1 и расположением текста.', ['/guide/rsya-creatives/rsya-creatives-9-1.jpg', '/guide/rsya-creatives/rsya-creatives-10-1.jpg']),
-    makeVisualStep('4. Полировка в Canva', 'Если нейросеть исказила русский текст, загрузите баннер в Canva и наклейте заголовок вручную.', ['/guide/rsya-creatives/rsya-creatives-11-1.jpg', '/guide/rsya-creatives/rsya-creatives-12-1.jpg'])
-  ],
-  rsyaCampaign: [
-    makeVisualStep('1. Создание кампании', 'В Direct Pro нажмите "Добавить кампанию", вставьте ссылку с UTM и задайте название кампании.', ['/guide/rsya-campaign/rsya-campaign-3-1.jpg', '/guide/rsya-campaign/rsya-campaign-4-1.png', '/guide/rsya-campaign/rsya-campaign-4-2.png']),
-    makeVisualStep('2. Показы и стратегия', 'Выберите только РСЯ, стратегию "Максимум конверсий", бюджет и цель.', ['/guide/rsya-campaign/rsya-campaign-5-1.jpg', '/guide/rsya-campaign/rsya-campaign-6-1.jpg', '/guide/rsya-campaign/rsya-campaign-7-1.jpg']),
-    makeVisualStep('3. Отключить лишнюю автоматику', 'Отключите рекомендации, персонализацию, мониторинг сайта и расширенный геотаргетинг.', ['/guide/rsya-campaign/rsya-campaign-8-1.jpg', '/guide/rsya-campaign/rsya-campaign-10-1.png', '/guide/rsya-campaign/rsya-campaign-11-1.png']),
-    makeVisualStep('4. Быстрые ссылки и UTM', 'Добавьте быстрые ссылки, уточнения и UTM-параметры на уровне кампании.', ['/guide/rsya-campaign/rsya-campaign-9-1.jpg']),
-    makeVisualStep('5. Группы объявлений', 'Внутри одной кампании создайте 3 группы. Оставьте автотаргетинг включённым, ключи и интересы не добавляйте.', ['/guide/rsya-campaign/rsya-campaign-12-1.png', '/guide/rsya-campaign/rsya-campaign-13-1.png', '/guide/rsya-campaign/rsya-campaign-13-2.png', '/guide/rsya-campaign/rsya-campaign-14-1.jpg', '/guide/rsya-campaign/rsya-campaign-14-2.jpg']),
-    makeVisualStep('6. Первое объявление', 'Добавьте объявление: заголовок, текст, картинку 1:1, ссылку на предлендинг и нужные элементы.', ['/guide/rsya-campaign/rsya-campaign-15-2.png', '/guide/rsya-campaign/rsya-campaign-16-1.png', '/guide/rsya-campaign/rsya-campaign-16-2.jpg', '/guide/rsya-campaign/rsya-campaign-17-1.jpg', '/guide/rsya-campaign/rsya-campaign-17-2.png']),
-    makeVisualStep('7. Размножение объявлений', 'Сохраняйте первое объявление и создавайте остальные "на основе текущего", меняя заголовок и креатив.', ['/guide/rsya-campaign/rsya-campaign-18-1.png', '/guide/rsya-campaign/rsya-campaign-18-2.jpg', '/guide/rsya-campaign/rsya-campaign-19-1.png', '/guide/rsya-campaign/rsya-campaign-19-2.png', '/guide/rsya-campaign/rsya-campaign-20-1.png', '/guide/rsya-campaign/rsya-campaign-20-2.jpg']),
-    makeVisualStep('8. Готовая структура и запуск', 'Проверьте итог: 1 кампания, 3 группы, 15 объявлений, 15 баннеров. После этого отправьте кампанию на модерацию.', ['/guide/rsya-campaign/rsya-campaign-21-1.jpg', '/guide/rsya-campaign/rsya-campaign-22-1.jpg', '/guide/rsya-campaign/rsya-campaign-22-2.jpg', '/guide/rsya-campaign/rsya-campaign-23-1.jpg', '/guide/rsya-campaign/rsya-campaign-25-1.jpg'])
-  ]
-};
-
-const STEP_INSTRUCTIONS = [
-  {
-    title: 'Регистрация ИП на НПД',
-    tag: 'Правовая база',
-    steps: [
-      'Перейдите на Workle по ссылке из рабочих материалов: https://advt.pro/c/for-referrals/?referrerId=01KM4Z0EA2DD6SEHV5JV77N04E',
-      'В поисковой строке Workle введите "Точка Банк".',
-      'Найдите предложение "Регистрация бизнеса от банка Точка".',
-      'Нажмите кнопку "Подробнее".',
-      'На странице предложения нажмите "Оформить заявку".',
-      'После перехода на сайт Точка Банка нажмите "Оставить заявку".',
-      'В форме регистрации введите свой телефон и отправьте заявку.',
-      'Дождитесь звонка сотрудника банка.',
-      'На звонке обязательно скажите: "Я регистрирую ИП на НПД".',
-      'Дальше сотрудник Точка Банка подскажет, какие данные нужны и как завершить регистрацию.',
-      'После регистрации сохраните реквизиты: ФИО, статус, ИНН, ОГРНИП/ОГРН, email и телефон.',
-      'Перенесите эти данные во вкладку "Документы" конструктора.'
-    ],
-    visualSteps: [
-      {
-        title: '1. Найдите Точка Банк в Workle',
-        desc: 'В поиске Workle введите "Точка Банк" и выберите карточку "Регистрация бизнеса от банка Точка".',
-        image: '/guide/npd/npd-1-1.png'
-      },
-      {
-        title: '2. Откройте предложение',
-        desc: 'На странице предложения нажмите "Оформить заявку". Это переводит вас к заявке клиента.',
-        image: '/guide/npd/npd-1-2.png'
-      },
-      {
-        title: '3. Перейдите в Точка Банк',
-        desc: 'На сайте Точка Банка нажмите "Оставить заявку". Это старт регистрации бизнеса.',
-        image: '/guide/npd/npd-2-1.png'
-      },
-      {
-        title: '4. Оставьте телефон',
-        desc: 'Введите свой номер телефона. Когда позвонят из банка, скажите, что регистрируете ИП на НПД.',
-        image: '/guide/npd/npd-2-2.png'
-      }
-    ],
-    actionTab: 'docs',
-    actionLabel: 'Перейти к документам',
-    note: 'Ключевая фраза на звонке: "Регистрирую ИП на НПД". Этот шаг нужен до публикации документов и запуска рекламы, чтобы в политике и согласиях были корректные реквизиты оператора.'
-  },
-  {
-    title: 'Регистрация на платформе Workle',
-    tag: 'Партнёрка',
-    steps: [
-      'Откройте инструкцию Workle из материалов проекта.',
-      'Зарегистрируйте новый аккаунт или войдите в существующий.',
-      'Заполните профиль и подтвердите контактные данные.',
-      'Найдите нужные партнёрские предложения и сохраните ссылки/кабинет в рабочей панели проекта.',
-      'Проверьте, какие действия считаются целевыми и какие данные нельзя передавать в рекламе.',
-      'Если в воронке используются партнёрские действия, опишите их только на нужном этапе, без финансовых обещаний в холодной рекламе.'
-    ],
-    visualSteps: GUIDE_VISUALS.workle,
-    actionTab: 'how',
-    actionLabel: 'Заполнить рабочую панель',
-    note: 'Workle и партнёрские кабинеты не должны превращаться в обещание заработка в объявлении. В рекламе продвигаем понятный следующий шаг.'
-  },
-  {
-    title: 'Регистрация домена в Reg.ru',
-    tag: 'Домен',
-    steps: [
-      'Перейдите по ссылке Reg.ru из блока рабочих ссылок.',
-      'Авторизуйтесь или зарегистрируйтесь, если аккаунта ещё нет.',
-      'Нажмите логин в правом верхнем углу и перейдите в настройки.',
-      'Подтвердите данные физического лица: вручную или через Госуслуги.',
-      'Подтвердите почту и телефон.',
-      'Откройте раздел "Домены" и нажмите "Заказать новый домен".',
-      'Введите домен. Рекомендуемый формат: имя персонажа или проекта, например ivanov.ru.',
-      'Добавьте домен в корзину.',
-      'На странице заказа отключите все лишние услуги. Оставляем только сам домен.',
-      'Пополните кабинет удобным способом и оплатите домен.'
-    ],
-    visualSteps: GUIDE_VISUALS.domain,
-    actionTab: 'how',
-    actionLabel: 'Записать домен в рабочую панель',
-    note: 'Домен понадобится для BotHelp, Чатиума/MAX и рекламной связки. Название лучше выбирать простое, латиницей, без сложных символов.'
-  },
-  {
-    title: 'Партнёрский кабинет GetCourse',
-    tag: 'GetCourse',
-    steps: [
-      'Перейдите на страницу школы: https://voronkapodkluch.getcourse.ru/partnery_s_tg',
-      'Введите почту и имя, затем нажмите "Отправить".',
-      'Откройте почту, возьмите логин и пароль, подтвердите email.',
-      'Перейдите на страницу входа: https://voronkapodkluch.getcourse.ru/cms/system/login?required=true',
-      'Введите логин и пароль, нажмите "Войти".',
-      'В левом меню откройте "Мои покупки" - там находится кабинет партнёра.',
-      'В партнёрском кабинете перейдите в раздел "Рекламные предложения".',
-      'Найдите предложение "Оплата продукта 990".',
-      'Скопируйте полный URL из таблицы.',
-      'Проверьте, что ссылка содержит параметры gcao и gcpc и ведёт на страницу продукта/оплаты.'
-    ],
-    visualSteps: GUIDE_VISUALS.getcourse,
-    actionTab: 'offer',
-    actionLabel: 'Вставить ссылку в оффер',
-    note: 'Эта ссылка вставляется в оффер. Если человек оплатит по ней, он закрепляется за партнёром.'
-  },
-  {
-    title: 'Регистрация и первичная настройка BotHelp',
-    tag: 'BotHelp',
-    steps: [
-      'Перейдите на https://bothelp.io',
-      'Смените язык интерфейса, если нужно.',
-      'Нажмите "Регистрация".',
-      'Заполните поля регистрации.',
-      'На следующем шаге придумайте поддомен латиницей. Потом его нельзя будет изменить.',
-      'Запишите поддомен, логин и пароль в отдельный файл.',
-      'После входа сразу добавьте свой домен: DNS может прописываться не сразу.',
-      'Перейдите в "Инструменты роста".',
-      'Откройте настройку собственного домена и следуйте инструкции BotHelp по DNS.',
-      'В зоне DNS у регистратора добавьте записи, которые показывает BotHelp.',
-      'После сохранения дождитесь применения DNS.',
-      'Помните: редактировать HTML в теге Head и ставить свой favicon BotHelp разрешает только при подключённом собственном домене.'
-    ],
-    visualSteps: GUIDE_VISUALS.bothelp,
-    actionTab: 'install',
-    actionLabel: 'Открыть установку BotHelp',
-    note: 'Поддомен BotHelp - это адрес вашего кабинета. Собственный домен нужен для аккуратных ссылок, доверия в рекламе и расширенной вставки кода.'
-  },
-  {
-    title: 'Подключение Telegram и MAX каналов',
-    tag: 'Боты',
-    steps: [
-      'В BotHelp перейдите в "Настройки" -> "Каналы".',
-      'Нажмите "Добавить новый канал".',
-      'Выберите нужный мессенджер: Telegram или MAX.',
-      'Для Telegram сначала создайте бота через BotFather и получите токен.',
-      'Для MAX сначала подключите профиль организации, затем создайте бота и дождитесь модерации.',
-      'Вставьте токен бота в BotHelp.',
-      'Нажмите "Добавить канал".',
-      'Если BotHelp предлагает создать бота позже - выберите этот вариант.',
-      'Проверьте, что канал появился в списке и активен.',
-      'Если кнопки в мини-лендинге не добавляются, вернитесь в список ботов и активируйте бот через меню с тремя точками.',
-      'В мини-лендинге BotHelp кнопка Telegram/MAX появится только для подключённого канала: выберите канал, бота/авторассылку и стартовый шаг.'
-    ],
-    visualSteps: GUIDE_VISUALS.telegram,
-    actionTab: 'install',
-    actionLabel: 'Подключить бота в BotHelp',
-    note: 'MAX требует больше подготовки: организация, модерация, токен. Без одобрения MAX канал может не подключиться.'
-  },
-  {
-    title: 'Импорт шаблонов цепочек в BotHelp',
-    tag: 'Цепочки',
-    steps: [
-      'Откройте ссылку на шаблон Telegram: https://bothelp.io/f/0db8f39436a',
-      'Нажмите "Копировать в BotHelp".',
-      'Укажите поддомен своего кабинета BotHelp.',
-      'Нажмите "Копировать бота".',
-      'Задайте внутреннее имя бота/цепочки.',
-      'Выберите подключённый Telegram-канал.',
-      'Повторите то же для MAX по ссылке: https://bothelp.io/f/480233785ed',
-      'Откройте первое сообщение цепочки.',
-      'Вставьте ссылку на продающую историю.',
-      'Проверьте, что вся цепочка ведёт человека дальше на оффер.'
-    ],
-    actionTab: 'sale',
-    actionLabel: 'Перейти к продающей истории',
-    note: 'Схема: человек из предлендинга попадает в бот, бот сразу даёт продающую историю, дальше 30 дней возвращает к покупке.'
-  },
-  {
-    title: 'Создание предлендинга РСЯ в BotHelp',
-    tag: 'Предлендинг',
-    steps: [
-      'BotHelp -> "Инструменты роста" -> "Новый инструмент" -> "Мини-лендинг".',
-      'Название: "Предлендинг РСЯ".',
-      'Поля "Заголовок" и "Описание" оставьте полностью пустыми.',
-      'Стандартные картинки BotHelp не добавляйте.',
-      'Если BotHelp просит выбрать картинку/видео - пропустите: дизайн и весь визуал уже находятся в HTML из конструктора.',
-      'Внизу откройте "Расширенные настройки".',
-      'Включите "Отслеживать подписку через аналитику".',
-      'В поле Yandex.Metrica вставьте номер счётчика. Если BotHelp показывает ограничение для MAX, фиксируйте переходы и дальше передавайте офлайн-конверсии из бота.',
-      'Добавьте кнопки Telegram и MAX через "Добавить новую кнопку": выберите канал, нужного бота/авторассылку и шаг "Старт".',
-      'Включите "Вставить HTML-код".',
-      'Вставьте готовый HTML предлендинга из конструктора в окно Body.',
-      'Head заполняйте только если подключён собственный домен; без собственного домена весь код вставляйте в Body.',
-      'Включите "Настроить пользовательские соглашения", добавьте ссылки на документы и выберите формат чекбокса.',
-      'Сохраните мини-лендинг.',
-      'Скопируйте ссылку справа сверху. Для рекламы и Метрики используйте новую ссылку bhurl.ru или ссылку на собственном домене, если он подключён.'
-    ],
-    actionTab: 'pre',
-    actionLabel: 'Собрать предлендинг',
-    note: 'BotHelp автоматически создаёт ссылку и статистику мини-лендинга. Кнопки мессенджеров работают только после подключения соответствующих каналов.'
-  },
-  {
-    title: 'Создание юридических страниц',
-    tag: 'Документы',
-    steps: [
-      'В конструкторе откройте вкладку "Документы".',
-      'Заполните ФИО/статус, ИНН, ОГРН/ОГРНИП, email и телефон.',
-      'Скопируйте текст политики конфиденциальности.',
-      'В BotHelp создайте отдельный мини-лендинг под документ.',
-      'Вставьте текст политики в текстовое окно и сохраните страницу.',
-      'Скопируйте ссылку на страницу политики.',
-      'Повторите то же для согласия на обработку персональных данных.',
-      'Повторите то же для согласия на рекламные и информационные сообщения.',
-      'Вернитесь во вкладку "Документы" и вставьте полученные 3 ссылки.',
-      'Скопируйте фразу для чекбокса и используйте её в настройках соглашений BotHelp.',
-      'В BotHelp можно добавить до 5 собственных документов соглашений. Для нашей связки используем 3: политика, ПДн, рекламные сообщения.',
-      'Выберите формат чекбокса: один общий чекбокс для всех документов, отдельный чекбокс на каждый документ или без чекбокса - по вашей юридической модели.'
-    ],
-    actionTab: 'docs',
-    actionLabel: 'Заполнить документы',
-    note: 'Если пользовательские соглашения не настроены, BotHelp подставляет стандартные документы. Для РСЯ лучше подключить свои реальные документы.'
-  },
-  {
-    title: 'Продающая история',
-    tag: 'История',
-    steps: [
-      'Откройте вкладку "Продающая история".',
-      'Выберите мужскую или женскую версию.',
-      'Введите имя и фамилию персонажа.',
-      'Введите возраст без слова "лет".',
-      'Введите короткое имя, как его называют друзья.',
-      'Добавьте прямую ссылку на фото jpg/png.',
-      'Если фото лежит на компьютере, загрузите его в файловое хранилище BotHelp или закрытый Telegram-канал и скопируйте прямой URL.',
-      'Вставьте ссылку на оффер.',
-      'Скопируйте готовый HTML.',
-      'Создайте мини-лендинг BotHelp, включите HTML-код и вставьте HTML в Body.',
-      'Если страница будет на собственном домене, можно использовать Head для дополнительных технических вставок. Без собственного домена Head недоступен.'
-    ],
-    actionTab: 'sale',
-    actionLabel: 'Собрать историю',
-    note: 'Текст и структура продающей истории не меняются. Меняются только личные данные, фото и ссылка на оффер.'
-  },
-  {
-    title: 'Оффер практикума',
-    tag: 'Оффер',
-    steps: [
-      'Перед сборкой оффера подготовьте 3 ссылки: GetCourse, Telegram, MAX.',
-      'Откройте вкладку "Оффер".',
-      'Вставьте партнёрскую ссылку GetCourse на оплату 990Р.',
-      'Вставьте личную ссылку Telegram формата https://t.me/username.',
-      'Вставьте личную ссылку MAX.',
-      'Скопируйте готовый HTML оффера.',
-      'В BotHelp создайте мини-лендинг "Оффер Практикум".',
-      'Поля "Заголовок" и "Описание" оставьте пустыми.',
-      'Включите HTML-код в расширенных настройках.',
-      'Вставьте HTML в Body и сохраните.',
-      'Проверьте, что системные кнопки BotHelp не мешают офферу: у оффера свои кнопки GetCourse, Telegram и MAX уже находятся внутри HTML.'
-    ],
-    actionTab: 'offer',
-    actionLabel: 'Собрать оффер',
-    note: 'Цена 990Р, структура оффера, отзывы и команда не редактируются. Меняются только 3 личные ссылки.'
-  },
-  {
-    title: 'Регистрация Яндекс ID и кабинета Директа',
-    tag: 'Яндекс',
-    steps: [
-      'Откройте страницу регистрации Яндекс ID.',
-      'Нажмите "Ещё" -> "Создать ID для себя".',
-      'Введите новый номер телефона, который не привязан к другим рекламным кабинетам.',
-      'Подтвердите номер по звонку или СМС.',
-      'Придумайте логин и надёжный пароль.',
-      'Примите согласия и сохраните логин, пароль и телефон в надёжном месте.',
-      'Перейдите на direct.yandex.ru.',
-      'Нажмите "Зарегистрироваться" или "Начать продвижение".',
-      'Выберите страну, валюту, email и подтвердите телефон.',
-      'Проверьте, что личный кабинет Директа открывается.'
-    ],
-    visualSteps: GUIDE_VISUALS.directRegister,
-    actionTab: 'launch',
-    actionLabel: 'Перейти к запуску РСЯ',
-    note: 'Для Директа лучше использовать отдельный новый Яндекс ID и новый номер телефона. Логин потом изменить нельзя, поэтому сразу сохраняйте доступы.'
-  },
-  {
-    title: 'Создание рекламных объявлений РСЯ',
-    tag: 'РСЯ объявления',
-    steps: [
-      'Откройте нейросеть: ChatGPT, Claude или Gemini.',
-      'Откройте промпт "ДНК клиента" и скопируйте его целиком.',
-      'Отправьте промпт в нейросеть.',
-      'Подготовьте предлендинг, продающую историю и оффер: лучше открыть страницы или сохранить их как PDF.',
-      'Ответьте нейросети на вопросы о продукте, ЦА, болях, страхах и отличиях. Если не знаете, используйте подсказки из блока "Как отвечать на ДНК клиента", но пишите своими словами.',
-      'Прикрепите PDF-версии лендингов или передайте тексты страниц.',
-      'Выберите сегменты аудитории, с которыми будете стартовать.',
-      'Сохраните анализ ДНК клиента. Если ответ получился на 30-50 страниц, попросите сжать его до 1 страницы рабочей выжимки.',
-      'Запустите промпт для создания объявлений.',
-      'Получите 90 заголовков, 5 текстов объявлений и 8 быстрых ссылок.',
-      'Не переносите всё сразу в Директ. Сначала во вкладке "Заголовки РСЯ" вставьте 90 заголовков в блок отбора и получите 15 финальных.'
-    ],
-    visualSteps: GUIDE_VISUALS.rsyaAds,
-    actionTab: 'ads',
-    actionLabel: 'Собрать заголовки РСЯ',
-    note: 'Сначала делаем ДНК клиента и заголовки. Креативы создаются только после заголовков, потому что текст на баннере помогает РСЯ понять аудиторию.'
-  },
-  {
-    title: 'Создание графических креативов РСЯ',
-    tag: 'РСЯ креативы',
-    steps: [
-      'Возьмите структуру рекламного кабинета и 15 выбранных заголовков.',
-      'Подготовьте 2-3 фото героя: лицо видно, хорошее качество, без чужих брендов.',
-      'Откройте новый чат в ChatGPT.',
-      'Прикрепите фото героя и отправьте заполненный вами контекстный пролог из вкладки "Креативы". Не копируйте чужой контекст один в один.',
-      'Вставьте первый финальный заголовок и попросите сделать баннер 1:1 именно под него.',
-      'Если композиция слабая, используйте развёрнутый промпт с правилами: текст не закрывает человека, верх 60% под заголовок, низ 40% под описание.',
-      'Сгенерируйте 15 баннеров под 15 заголовков. Не 45: в первом запуске одна кампания, три группы и всего 15 объявлений.',
-      'Если ChatGPT искажает русский текст, перенесите картинку в Canva и наклейте заголовок вручную.',
-      'Сохраните PNG-файлы с понятными именами: гр1_заг1.png, гр1_заг2.png и так далее.',
-      'Проверьте, что нет гарантий дохода, конкретных сумм, сроков, логотипов банков и чужих брендов.'
-    ],
-    visualSteps: GUIDE_VISUALS.rsyaCreatives,
-    actionTab: 'creative',
-    actionLabel: 'Создать креативы',
-    note: 'Главная логика: один заголовок = один креатив. Не делайте абстрактные картинки без связи с текстом объявления.'
-  },
-  {
-    title: 'Настройка кампании в Директе РСЯ',
-    tag: 'РСЯ запуск',
-    steps: [
-      'Откройте Direct Pro и нажмите "Добавить кампанию". В первом запуске создаём ОДНУ кампанию, не три.',
-      'Вставьте ссылку на предлендинг с UTM-метками.',
-      'Назовите кампанию по гипотезе/сегменту.',
-      'В местах показа оставьте только РСЯ.',
-      'Выберите стратегию "Максимум конверсий" и недельный бюджет.',
-      'Добавьте счётчик Метрики и цель BotHelp или офлайн-цель.',
-      'Отключите лишнюю автоматическую помощь, персонализацию, мониторинг сайта и расширенный геотаргетинг.',
-      'Добавьте быстрые ссылки, уточнения и UTM.',
-      'Внутри одной кампании создайте 3 группы по 5 объявлений.',
-      'В группе оставьте автотаргетинг включённым, ключи и интересы не добавляйте.',
-      'Соберите первое объявление: заголовок, текст, изображение 1:1, ссылка на предлендинг.',
-      'Создайте остальные объявления "на основе текущего", меняя заголовки и креативы.',
-      'Проверьте структуру: 1 кампания -> 3 группы -> 15 объявлений -> 15 баннеров.',
-      'Отправьте на модерацию и после запуска не трогайте кампанию 7-14 дней без причины.'
-    ],
-    visualSteps: GUIDE_VISUALS.rsyaCampaign,
-    actionTab: 'launch',
-    actionLabel: 'Открыть запуск РСЯ',
-    note: 'Модерация отклоняет туманные фразы "способ заработка" и "метод дохода". Нужно раскрывать объект продвижения и не обещать быстрый/гарантированный доход.'
+async function requestConstructorAccess(payload) {
+  const response = await fetch('/api/request-access', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.ok) {
+    throw new Error(data.message || data.error || 'Не удалось отправить заявку.');
   }
-];
-
-const MODERATION_RULES = [
-  ['Объект продвижения должен быть понятен', 'В объявлении должно быть ясно, что именно человек увидит: разбор, практикум, мини-лендинг, бот, оффер или другой конкретный формат.'],
-  ['Без гарантий результата', 'Не обещаем быстрый доход, безопасный заработок, успешные сделки и конкретную прибыль как гарантированный итог.'],
-  ['Не используем туманные слова', 'Фразы "секретный способ", "новая схема", "метод заработка" без раскрытия объекта чаще всего вызывают вопросы.'],
-  ['Объявление совпадает с посадочной', 'Фразы из заголовка должны раскрываться на предлендинге, в боте, истории или оффере.']
-];
-
-const HEADLINE_ANGLES = [
-  ['Прямая реклама', 'Честно называем продукт: практикум/разбор партнёрской воронки.'],
-  ['Боль аудитории', 'Курсы не дали результата, нет системы, хаотичные попытки запуска.'],
-  ['Разрушение мифа', 'Не нужно сразу становиться блогером, экспертом или маркетологом.'],
-  ['Инструмент/метод', 'Проверяем, лучше ли аудитория реагирует на инструмент, формат или маршрут.'],
-  ['Маршрут запуска', 'Путь клиента: креатив -> предлендинг -> бот -> история -> оффер.'],
-  ['История/интрига', 'Короткий заход из продающей истории без обещаний денег.'],
-  ['Тест терминов', 'Проверяем, что лучше цепляет: воронка, связка, маршрут, система, разбор.']
-];
-
-const HEADLINE_WORKFLOW = [
-  ['1. Собрать исходники', 'Предлендинг, продающая история, оффер, комментарий модератора, данные ЦА и список запрещённых обещаний.'],
-  ['2. Выписать ДНК клиента', 'Боли, страхи, прошлые попытки, фразы клиента, что он не хочет делать, почему курсы не сработали.'],
-  ['3. Назвать объект продвижения', 'Во всех вариантах держим конкретику из вашего продукта и посадочной, не придумываем туманные схемы.'],
-  ['4. Сгенерировать заголовки', 'По 10 вариантов на каждый стиль, до 56 символов, с подсчётом длины и без универсальной воды.'],
-  ['5. Отобрать 15 для старта', 'Оставляем самые понятные и модерационно чистые: 3 группы по 5 заголовков.'],
-  ['6. Только потом делать креативы', 'Каждый баннер собирается под конкретный заголовок, а не наоборот.']
-];
-
-const AFTER_GENERATION_FLOW = [
-  ['1. Вставьте всё, что уже выдала нейросеть', '90 заголовков, 5 текстов и 8 быстрых ссылок вставляются в поля ниже. Ничего руками пока не улучшаем.'],
-  ['2. Скопируйте промпт отбора', 'Он выберет 15 самых понятных заголовков, разобьёт их на 3 группы и напишет, какой текст должен быть на баннере.'],
-  ['3. Результат отбора вставьте во второе поле', 'Берёте ответ нейросети с 15 заголовками и вставляете в поле "Финальные 15 заголовков".'],
-  ['4. Скопируйте промпт матрицы объявлений', 'Он соберёт структуру: 3 группы по 5 объявлений, какой текст, какие быстрые ссылки и что делать с креативом.'],
-  ['5. Каждый заголовок отдельно переносите в "Креативы"', 'Не пачкой. Один заголовок = один промпт на картинку = один готовый баннер для объявления.'],
-  ['6. После 15 креативов идите в "Запуск РСЯ"', 'В Директе создаёте 1 кампанию, 3 группы, 15 объявлений и отправляете на модерацию.']
-];
-
-const RSYA_SIMPLE_RULES = [
-  ['Сколько кампаний?', 'Одна. Не три. Для первого запуска делаем 1 кампанию РСЯ. Внутри неё 3 группы объявлений.'],
-  ['Сколько групп?', 'Три группы. Каждая группа = одна боль, один сегмент или одна гипотеза.'],
-  ['Сколько объявлений?', '15 объявлений: 3 группы по 5 объявлений. Не 45.'],
-  ['Сколько баннеров?', '15 баннеров: один баннер под один финальный заголовок.'],
-  ['Сколько фото?', 'Можно взять 2-3 фото героя и на их основе сделать 15 баннеров. Не нужно искать 15 разных людей.'],
-  ['Когда делать картинки?', 'Только после отбора 15 заголовков. Сначала смысл, потом картинка.']
-];
-
-const DNA_EXAMPLES = [
-  ['Что за продукт?', 'Опишите своими словами: формат, что человек увидит внутри, какой следующий шаг. Не копируйте чужую формулировку.'],
-  ['Для кого?', 'Не "для всех". Укажите возраст/ситуацию/уровень опыта/что человек уже пробовал и где застрял.'],
-  ['Главная проблема?', 'Пишите конкретную проблему клиента, а не общую фразу "хочет заработать". Например: не понимает порядок действий, не проходит модерацию, нет связки.'],
-  ['Что получает?', 'Опишите полезный результат процесса: маршрут, разбор, инструкция, понятная последовательность, материалы для запуска. Без гарантий денег.'],
-  ['Почему именно у вас?', 'Назовите реальное отличие: опыт, собранные материалы, связка, поддержка, понятная структура. Не пишите "лучший" и "гарантированный".'],
-  ['Цена/условия?', 'В ДНК можно указать цену как факт. В холодных заголовках цену не делаем главным обещанием, если это не отдельный тест.']
-];
-
-const RSYA_FAQ = [
-  ['Нужно ли делать анализ продукта перед объявлениями?', 'Да. Сначала коротко отвечаем на вопросы ДНК клиента и даём лендинги/оффер. Без этого нейросеть пишет абстрактную ерунду.'],
-  ['Если ДНК клиента выдал 54 страницы?', 'Это нормально, но в рекламу это не несём. Попросите нейросеть сжать результат до 1 страницы: ЦА, боли, страхи, 5 фраз клиента, 5 безопасных углов для рекламы.'],
-  ['Насколько жёстко бить по боли?', 'Для РСЯ лучше средне: узнаваемая боль без давления. Не пишем про долги, кредиты, отчаяние и гарантии дохода в лоб.'],
-  ['Упоминать цену 990 рублей в заголовке?', 'В первом запуске нет. Цену можно тестировать позже в отдельной гипотезе. В стартовых заголовках лучше продавать понятный маршрут/разбор/практикум.'],
-  ['Можно ли делать 3 кампании сразу?', 'Нет. Первый запуск: 1 кампания. Иначе бюджет распылится, а Яндекс не поймёт, кому искать аудиторию.'],
-  ['Что делать после 15 заголовков?', 'Каждый заголовок отдельно вставляете во вкладку "Креативы" и получаете промпт картинки. Повторяете 15 раз.']
-];
-
-function pickPromptText(start, end) {
-  const startIndex = bonusPromptsRaw.indexOf(start);
-  if (startIndex === -1) return '';
-  const endIndex = end ? bonusPromptsRaw.indexOf(end, startIndex + start.length) : -1;
-  const text = bonusPromptsRaw.slice(startIndex, endIndex === -1 ? undefined : endIndex).trim();
-  return text.replace(/\n--- PAGE \d+ ---\n/g, '\n').trim();
+  return data;
 }
 
-const BONUS_PROMPTS = [
-  {
-    title: 'Промпт-инженер PRO',
-    category: 'AI / база',
-    value: '9 900 ₽',
-    description: 'Создаёт сильные, структурированные промпты под любую задачу.',
-    text: pickPromptText('1. Что делает этот промпт?', 'NEW!! Охуенный Маркетолог / контент')
-  },
-  {
-    title: 'Маркетолог полного цикла',
-    category: 'Маркетинг',
-    value: '14 900 ₽',
-    description: 'Анализ ЦА, идеи воронок, продуктов, лид-магнитов и стратегий.',
-    text: pickPromptText('NEW!! Охуенный Маркетолог / контент', 'NEW 🔥  ДНК Клиента 2.0')
-  },
-  {
-    title: 'ДНК клиента 2.0',
-    category: 'ЦА',
-    value: '24 900 ₽',
-    description: 'Глубокая распаковка аудитории, болей, желаний и языка клиента.',
-    text: pickPromptText('NEW 🔥  ДНК Клиента 2.0', 'NEW!! 🔥  Промпт: Архитектор Tripwire-продуктов')
-  },
-  {
-    title: 'Архитектор Tripwire-продуктов',
-    category: 'Продукт',
-    value: '19 900 ₽',
-    description: 'Помогает придумать недорогой входной продукт для воронки.',
-    text: pickPromptText('NEW!! 🔥  Промпт: Архитектор Tripwire-продуктов', 'NEW!! 🧬  ДНК Клиента')
-  },
-  {
-    title: 'ДНК клиента: усиленный анализ',
-    category: 'ЦА',
-    value: '24 900 ₽',
-    description: 'Расширенный анализ сегментов, триггеров, страхов и возражений.',
-    text: pickPromptText('NEW!! 🧬  ДНК Клиента (усиленный промпт для Анализа ЦА)', 'NEW!! 📝  Промпт: распаковщик экспертности')
-  },
-  {
-    title: 'Распаковка экспертности',
-    category: 'Упаковка',
-    value: '12 900 ₽',
-    description: 'Достаёт из эксперта опыт, сильные стороны и уникальность.',
-    text: pickPromptText('NEW!! 📝  Промпт: распаковщик экспертности', 'NEW!!   Reels-завод')
-  },
-  {
-    title: 'Reels-завод',
-    category: 'Контент',
-    value: '9 900 ₽',
-    description: 'Идеи и сценарии коротких видео для прогрева и охвата.',
-    text: pickPromptText('NEW!!   Reels-завод', 'NEW!! Маркетолог-сторителлер')
-  },
-  {
-    title: 'Маркетолог-сторителлер',
-    category: 'Сторителлинг',
-    value: '12 900 ₽',
-    description: 'Строит истории, которые ведут к продукту через эмоцию.',
-    text: pickPromptText('NEW!! Маркетолог-сторителлер', 'NEW!! Транскрипт и анализ видео')
-  },
-  {
-    title: 'Анализ видео YouTube',
-    category: 'Контент',
-    value: '7 900 ₽',
-    description: 'Разбирает видео, вытаскивает структуру, смыслы и идеи.',
-    text: pickPromptText('NEW!! Транскрипт и анализ видео с Youtube', 'NEW!!: Связка: Идеи для инфопродуктов')
-  },
-  {
-    title: 'Идеи для инфопродуктов',
-    category: 'Продукт',
-    value: '14 900 ₽',
-    description: 'Связка промптов для поиска идей платных и бесплатных продуктов.',
-    text: pickPromptText('NEW!!: Связка: Идеи для инфопродуктов', 'NEW !! Создание офферов')
-  },
-  {
-    title: 'Создание офферов',
-    category: 'Оффер',
-    value: '14 900 ₽',
-    description: 'Помогает сформулировать ценность, выгоды и упаковку предложения.',
-    text: pickPromptText('NEW !! Создание офферов', 'Специалист по прогревам в Stories')
-  },
-  {
-    title: 'Прогревы в Stories',
-    category: 'Прогрев',
-    value: '12 900 ₽',
-    description: 'Сценарии сторис-прогревов, которые подводят к продукту.',
-    text: pickPromptText('Специалист по прогревам в Stories', 'NEW!! Маркетинговые модели текстов')
-  },
-  {
-    title: 'Маркетинговые модели текстов',
-    category: 'Копирайтинг',
-    value: '9 900 ₽',
-    description: 'Набор моделей для продающих текстов и контентных связок.',
-    text: pickPromptText('NEW!! Маркетинговые модели текстов', 'Продающий вебинар')
-  },
-  {
-    title: 'Сценарий продающего вебинара',
-    category: 'Вебинар',
-    value: '19 900 ₽',
-    description: 'Помогает собрать структуру вебинара, который ведёт к продаже.',
-    text: pickPromptText('Продающий вебинар', 'Продуктовая линейка')
-  },
-  {
-    title: 'Продуктовая линейка',
-    category: 'Продукт',
-    value: '14 900 ₽',
-    description: 'Собирает лестницу продуктов и логику переходов между ними.',
-    text: pickPromptText('Продуктовая линейка', 'Цепляющие посты для соцсетей')
-  },
-  {
-    title: 'Цепляющие посты',
-    category: 'Контент',
-    value: '7 900 ₽',
-    description: 'Идеи и структуры постов, которые хочется читать и сохранять.',
-    text: pickPromptText('Цепляющие посты для соцсетей', 'Эмоциональная история')
-  },
-  {
-    title: 'Эмоциональная история',
-    category: 'Сторителлинг',
-    value: '9 900 ₽',
-    description: 'Помогает написать историю с эмоцией, конфликтом и выводом.',
-    text: pickPromptText('Эмоциональная история', 'NEW!! Структура образовательного курса')
-  },
-  {
-    title: 'Структура образовательного курса',
-    category: 'Обучение',
-    value: '12 900 ₽',
-    description: 'Собирает программу курса, уроки и логику результата.',
-    text: pickPromptText('NEW!! Структура образовательного курса', 'Еще промпты для исследования ЦА')
+async function fetchConstructorAccessStatus(pending) {
+  const params = new URLSearchParams({
+    request_id: pending?.requestId || '',
+    token: pending?.requestToken || ''
+  });
+  const response = await fetch(`/api/access-status?${params.toString()}`, { cache: 'no-store' });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.ok) {
+    throw new Error(data.message || data.error || 'Не удалось проверить статус.');
   }
-].filter(prompt => prompt.text);
+  return data;
+}
 
-const CREATIVE_GUIDE = [
+const CLIENT_ACCOUNTS = [
   {
-    title: 'Что собрать перед креативом',
-    items: [
-      'Финальный список заголовков из вкладки "Заголовки РСЯ".',
-      'Ссылку на предлендинг, чтобы сверять обещание креатива с первым экраном.',
-      'Продающую историю: из неё берём конфликт, эмоцию, персонажа и фразы боли.',
-      'Оффер: из него берём практикум, маршрут, цену 990Р и смысл следующего шага.',
-      'Медиаматериалы: живые фото, нейтральные рабочие сцены, скриншоты схемы воронки без банковских данных.'
-    ]
+    login: 'mihail',
+    password: '',
+    role: 'client',
+    label: 'Михаил Кузнецов',
+    clientId: 'client_101_mihail_kuznetsov',
+    metrikaId: '109150890',
+    metrikaToken: '',
+    getcourseLink: 'https://voronkapodkluch.getcourse.ru/page2?gcao=54688&gcpc=1b9f5',
+    partnerCode: '1b9f5',
+    limits: DEFAULT_CLIENT_LIMITS
   },
   {
-    title: 'Как связать заголовок и баннер',
-    items: [
-      'Главная фраза на картинке должна повторять или усиливать выбранный заголовок.',
-      'Если заголовок про BotHelp, на креативе показываем схему бота/мини-лендингов, а не абстрактную картинку.',
-      'Если заголовок про усталость от курсов, визуал показывает человека/хаос/список попыток, но без давления на долги.',
-      'Если заголовок про маршрут запуска, креатив показывает цепочку: РСЯ -> бот -> история -> оффер.',
-      'На одном креативе один смысл: не смешиваем боль, метод, цену и отзывы в одну кашу.'
-    ]
-  },
-  {
-    title: 'Что не писать и не показывать',
-    items: [
-      'Не писать "5000Р за 2 часа", "доход 200 000", "без рисков", "гарантированно", "быстрые деньги".',
-      'Не показывать банковские карты, платежи, переводы, кредиты, долги, интерфейсы банков и "выплаты".',
-      'Не использовать туман: "секретный способ", "новая схема", "метод заработка" без раскрытия метода.',
-      'Не обещать, что человек точно заработает. Можно говорить: "разбор", "практикум", "маршрут", "как устроено".',
-      'Не копировать продающую историю и оффер дословно в баннер: берём смысл, но пишем своими словами.'
-    ]
-  },
-  {
-    title: 'Рабочая формула креатива',
-    items: [
-      'Заголовок: конкретный метод или боль аудитории.',
-      'Подзаголовок: что человек увидит на разборе.',
-      'Визуал: реальный человек, схема маршрута или рабочий экран без чувствительных данных.',
-      'CTA: "Посмотреть разбор", "Разобрать воронку", "Перейти к практикуму".',
-      'Проверка: модератор за 3 секунды понимает, что продвигается.'
-    ]
+    login: 'admin',
+    password: '',
+    role: 'admin',
+    label: 'Администратор',
+    clientId: 'client_admin',
+    metrikaId: '',
+    metrikaToken: '',
+    getcourseLink: '',
+    partnerCode: '',
+    limits: { unlimited: true }
   }
 ];
 
-const DOC_TEMPLATES = {
-  privacy: {
-    title: 'Политика конфиденциальности',
-    filename: 'politika-konfidencialnosti.txt',
-    text: `ПОЛИТИКА КОНФИДЕНЦИАЛЬНОСТИ
-Политика в отношении обработки персональных данных
-Редакция от [ДАТА]
+const PUBLIC_ASSET_BASE = 'https://constructoratmosfera.com';
+function safeInlineJson(value) {
+  return JSON.stringify(value)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026');
+}
 
-Настоящая Политика в отношении обработки персональных данных, далее - Политика, действует в отношении всей информации, которую [ФИО ИП / самозанятого / юрлица], ИНН [ИНН], ОГРНИП / ОГРН [ОГРНИП / ОГРН, ЕСЛИ ЕСТЬ], зарегистрированный в качестве [ИП / самозанятого / ООО], email: [EMAIL], телефон: [ТЕЛЕФОН], далее - Оператор, может получить о пользователе при взаимодействии с мини-лендингами, чат-ботами, страницами с предложениями, офферами и иными связанными сервисами, используемыми Оператором для коммуникации, приёма заявок, предоставления информации о продуктах и организации продаж.
-
-1. Общие положения
-1.1. Настоящая Политика разработана в соответствии с законодательством Российской Федерации о персональных данных.
-1.2. Оператор обеспечивает защиту прав и свобод пользователя при обработке его персональных данных.
-1.3. Настоящая Политика применяется ко всем персональным данным, которые Оператор получает от пользователей при переходе по рекламным материалам, использовании мини-лендингов, взаимодействии с чат-ботами, заполнении форм, переходе на страницы с оффером и оформлении заявок или заказов.
-1.4. Актуальная версия Политики постоянно доступна пользователю по ссылке: [ССЫЛКА НА ЭТОТ ДОКУМЕНТ]
-
-2. Кто является оператором персональных данных
-Оператором персональных данных является:
-[ФИО ИП / самозанятого / юрлица]
-ИНН: [ИНН]
-ОГРНИП / ОГРН: [ОГРНИП / ОГРН, ЕСЛИ ЕСТЬ]
-Статус: [ИП / самозанятый / ООО]
-Email: [EMAIL]
-Телефон: [ТЕЛЕФОН]
-
-3. Какие персональные данные могут обрабатываться
-Оператор может обрабатывать следующие персональные данные пользователя: фамилия, имя, отчество; номер телефона; адрес электронной почты; никнейм, username, ID пользователя и иные данные аккаунта в мессенджерах; данные, которые пользователь сообщает в переписке с чат-ботом; данные, указанные пользователем в формах, заявках, анкетах, регистрационных и подписных формах; сведения о выбранных продуктах, заявках, заказах, статусе оплаты, доступах; иные данные, предоставленные пользователем добровольно.
-Оператор не обрабатывает специальные категории персональных данных, если иное прямо не предусмотрено законодательством Российской Федерации.
-
-4. Источники получения персональных данных
-Персональные данные могут поступать Оператору при переходе пользователя на мини-лендинги, в чат-боты в мессенджерах MAX и Telegram, при взаимодействии с чат-ботами и связанными страницами, при переходе на лендинги и страницы с офферами, при регистрации, оставлении заявки, оформлении заказа или передаче данных через сервис GetCourse, а также при добровольном направлении пользователем сообщений, заявок, обращений и иных данных.
-
-5. Цели обработки персональных данных
-Оператор обрабатывает персональные данные пользователя в целях установления и поддержания связи с пользователем; предоставления доступа к чат-ботам, материалам, продуктам, предложениям и услугам; обработки заявок, запросов, обращений и заказов; направления информационных и рекламных материалов; сопровождения пользователя на этапах заявки, консультации, продажи и последующего взаимодействия; оформления заказа, предоставления доступа к продуктам, услугам, обучающим материалам и иным предложениям Оператора; учёта пользователей, заявок, заказов, оплат и обращений; исполнения договорных обязательств; соблюдения требований законодательства Российской Федерации.
-
-6. Правовые основания обработки персональных данных
-Оператор обрабатывает персональные данные пользователя на основании согласия субъекта персональных данных, необходимости заключения и исполнения договора, стороной которого является пользователь, а также исполнения обязанностей, возложенных на Оператора законодательством Российской Федерации.
-
-7. Порядок обработки персональных данных
-7.1. Обработка персональных данных осуществляется как с использованием средств автоматизации, так и без их использования.
-7.2. Оператор принимает необходимые правовые, организационные и технические меры для защиты персональных данных пользователя.
-7.3. Обработка осуществляется только в объёме, необходимом для достижения заявленных целей.
-7.4. Персональные данные хранятся не дольше, чем этого требуют цели обработки, если иной срок не установлен законодательством Российской Федерации.
-
-8. Используемые сервисы и передача данных третьим лицам
-8.1. Для организации мини-лендингов, чат-ботов, переходов, коммуникации с пользователем, сбора заявок, фиксации обращений и автоматизации взаимодействия Оператор использует сервис https://bothelp.io
-8.2. Для оформления заявок, заказов, предоставления доступа к продуктам, фиксации данных о заказе, статусе оплаты, регистрации пользователей и организации продаж Оператор может использовать сервис https://getcourse.ru
-8.3. В связи с использованием указанных сервисов персональные данные пользователя могут обрабатываться и храниться с использованием инфраструктуры соответствующих сервисов в объёме, необходимом для работы Оператора.
-8.4. Оператор вправе передавать персональные данные третьим лицам при наличии согласия пользователя, если передача необходима для исполнения обязательств перед пользователем, если передача предусмотрена законодательством Российской Федерации, а также техническим платформам, подрядчикам и сервисам, используемым для автоматизации взаимодействия, продаж, сопровождения пользователя и предоставления доступа к продуктам.
-
-9. Распространение рекламной и информационной информации
-Оператор вправе направлять пользователю рекламные и информационные материалы только при наличии соответствующего согласия пользователя, если иное не вытекает из характера уже заключённых с пользователем отношений и требований законодательства Российской Федерации.
-
-10. Права пользователя
-Пользователь имеет право получать сведения об обработке его персональных данных; требовать уточнения, обновления, блокирования или удаления своих персональных данных; отозвать согласие на обработку персональных данных; отказаться от получения рекламных и информационных сообщений; защищать свои права и законные интересы способами, предусмотренными законодательством Российской Федерации.
-
-11. Отзыв согласия
-11.1. Пользователь вправе в любой момент отозвать согласие на обработку персональных данных, направив соответствующее уведомление Оператору по адресу электронной почты: [EMAIL]
-11.2. Пользователь вправе отказаться от получения рекламных и информационных сообщений, воспользовавшись способом отписки, указанным в сообщении, либо направив уведомление Оператору.
-11.3. После получения отзыва согласия Оператор прекращает обработку персональных данных пользователя, за исключением случаев, когда такая обработка допускается законодательством Российской Федерации без согласия субъекта персональных данных.
-
-12. Безопасность персональных данных
-Оператор принимает разумные и достаточные меры для защиты персональных данных пользователя от неправомерного доступа, изменения, раскрытия, уничтожения, блокирования, копирования и иных неправомерных действий.
-
-13. Заключительные положения
-13.1. Оператор вправе вносить изменения в настоящую Политику без предварительного согласования с пользователем.
-13.2. Новая редакция Политики вступает в силу с момента её размещения, если иное не предусмотрено новой редакцией.
-13.3. Актуальная версия Политики всегда доступна по адресу: [ССЫЛКА НА ЭТОТ ДОКУМЕНТ]`
-  },
-  personal: {
-    title: 'Согласие на обработку персональных данных',
-    filename: 'soglasie-na-obrabotku-personalnyh-dannyh.txt',
-    text: `СОГЛАСИЕ НА ОБРАБОТКУ ПЕРСОНАЛЬНЫХ ДАННЫХ
-Редакция от [ДАТА]
-
-Предоставляя свои персональные данные в ходе переписки в аккаунтах социальных сетей или мессенджерах, направляя данные на электронную почту, заполняя анкету предзаписи, направляя свои данные при регистрации на мероприятия, вебинары, мастер-классы и иные продукты, Пользователь, действуя свободно, своей волей и в своем интересе, а также подтверждая свою дееспособность, предоставляет свое согласие на обработку персональных данных [ФИО ИП / самозанятого / юрлица], ИНН [ИНН], ОГРНИП / ОГРН [ОГРНИП / ОГРН, ЕСЛИ ЕСТЬ], далее - Оператор, на условиях, указанных в настоящем согласии.
-
-Данное Согласие дается на обработку персональных данных смешанным способом, то есть как без использования средств автоматизации, так и с их использованием.
-
-Согласие дается на обработку следующих персональных данных:
-1) фамилия, имя, отчество;
-2) адрес проживания;
-3) номер контактного телефона;
-4) адрес электронной почты;
-5) фотография или видеоизображение;
-6) паспортные данные;
-7) аккаунты мессенджеров и социальных сетей;
-8) никнейм в мессенджере Telegram;
-9) никнейм в мессенджере MAX.
-
-Цели обработки персональных данных:
-1) заключение, исполнение, изменение и расторжение договора, стороной по которому является Оператор или уполномоченные лица, действующие от имени Оператора;
-2) организация и проведение мероприятий, вебинаров, обучающих курсов и иных продуктов;
-3) техническая поддержка и консультации Пользователя;
-4) регистрация личного кабинета на обучающей платформе для получения услуг Оператора;
-5) исполнение обязанностей, возложенных на Оператора в связи с необходимостью осуществления проверки контрагентов;
-6) осуществление информационных и рекламных рассылок;
-7) размещение в социальных сетях Оператора отзывов от клиентов и партнеров Оператора с целью увеличения лояльности клиентов и формирования позитивного отношения пользователей к продуктам Оператора;
-8) формирование и предоставление установленной законодательством отчетности, включая уплату установленных законодательством налогов и взносов;
-9) исполнение обязанностей, возложенных на Оператора в связи с правом уполномоченных органов получать запрашиваемую информацию от Оператора;
-10) ведение бухгалтерского и налогового учета;
-11) сбор персональных данных для статистических целей при входе на сайт, включая файлы cookies.
-
-В ходе обработки с персональными данными будут совершены следующие действия: сбор; запись; систематизация; накопление; хранение; уточнение, обновление, изменение; использование; обезличивание; блокирование; удаление; уничтожение.
-
-Оператор не поручает обработку персональных данных другим лицам, за исключением случаев, необходимых для работы используемых сервисов, платформ, чат-ботов, платёжных и обучающих систем, а также иных случаев, предусмотренных законодательством Российской Федерации.
-
-Персональные данные обрабатываются до завершения периода действия договора, либо до прекращения предпринимательской деятельности Оператора, либо до момента отзыва Согласия на обработку персональных данных, смотря какое из условий наступит раньше.
-
-Согласие может быть отозвано Пользователем или его представителем путем направления Оператору запроса по контактам, указанным в настоящем Согласии.
-
-В случае отзыва Пользователем или его представителем Согласия Оператор вправе продолжить обработку персональных данных без него при наличии оснований, указанных в Федеральном законе №152-ФЗ "О персональных данных" от 27.07.2006 г.
-
-Настоящее Согласие действует бессрочно до момента прекращения обработки персональных данных, указанных в Политике обработки персональных данных, размещенной по ссылке: [ССЫЛКА НА ПОЛИТИКУ КОНФИДЕНЦИАЛЬНОСТИ]
-
-РЕКВИЗИТЫ И КОНТАКТНАЯ ИНФОРМАЦИЯ ОПЕРАТОРА
-[ИП / самозанятый / ООО]
-[ФИО ИП / самозанятого / название юрлица]
-ИНН: [ИНН]
-ОГРНИП / ОГРН: [ОГРНИП / ОГРН, ЕСЛИ ЕСТЬ]
-Электронная почта: [EMAIL]
-Телефон: [ТЕЛЕФОН]`
-  },
-  ads: {
-    title: 'Согласие на рекламные и информационные сообщения',
-    filename: 'soglasie-na-reklamnye-soobsheniya.txt',
-    text: `СОГЛАСИЕ НА ПОЛУЧЕНИЕ РЕКЛАМНЫХ И ИНФОРМАЦИОННЫХ СООБЩЕНИЙ
-Редакция от [ДАТА]
-
-Я, оставляя свои данные и/или совершая действие, подтверждающее согласие на мини-лендингах, в чат-ботах, на страницах с офферами и в иных сервисах, используемых [ФИО ИП / самозанятого / юрлица], ИНН [ИНН], ОГРНИП / ОГРН [ОГРНИП / ОГРН, ЕСЛИ ЕСТЬ], зарегистрированным в качестве [ИП / самозанятого / ООО] (далее - Оператор), даю согласие на получение рекламных и информационных сообщений от Оператора на следующих условиях.
-
-1. На что распространяется согласие
-Настоящим я даю согласие на получение от Оператора сообщений о продуктах, услугах, материалах, консультациях, предложениях и специальных условиях; рекламных сообщений о запуске новых продуктов, программ, обучении, подписках, консультациях, акциях, скидках и бонусах; информационных сообщений о работе чат-ботов, мини-лендингов, этапах взаимодействия, обновлениях и доступах; сообщений в рамках воронок, авторассылок, цепочек прогрева и сопровождения пользователя.
-
-2. Способы направления сообщений
-Сообщения могут направляться пользователю через чат-боты и мессенджеры, включая MAX и Telegram; по номеру телефона, включая SMS и сообщения в мессенджерах; по электронной почте; иными способами связи, указанными пользователем при взаимодействии с Оператором.
-
-3. Каким действием предоставляется согласие
-Настоящее согласие считается предоставленным пользователем с момента совершения одного из следующих действий: нажатие кнопки, рядом с которой прямо указано, что пользователь соглашается на получение рекламных и информационных сообщений; проставление отметки в чекбоксе; переход в чат-бот, если до этого пользователю была предоставлена понятная формулировка согласия и ссылки на соответствующие документы; заполнение формы, отправка заявки или иное подтверждающее действие, при котором пользователю была предоставлена информация о согласии на получение рекламных и информационных сообщений.
-
-4. Для каких целей направляются сообщения
-Сообщения направляются в целях информирования пользователя о продуктах и услугах Оператора; предложения пользователю участия в программах, консультациях, обучении, подписках и иных продуктах; сопровождения пользователя в рамках его интереса к продуктам и предложениям Оператора; информирования о доступах, этапах заявки, запуске, оплате, условиях участия и обновлениях.
-
-5. Срок действия согласия
-Настоящее согласие действует с момента его предоставления и до момента его отзыва пользователем, и размещено по ссылке: [ССЫЛКА НА ЭТОТ ДОКУМЕНТ]
-
-6. Порядок отзыва согласия
-6.1. Пользователь вправе в любой момент отказаться от получения рекламных и информационных сообщений, направив уведомление на email: [EMAIL], написав Оператору по контактам, указанным в мини-лендинге, чат-боте или иных сервисах, либо воспользовавшись предусмотренным способом отписки, если такой способ предоставлен в конкретном сообщении или боте.
-6.2. После получения отказа Оператор прекращает направление рекламных сообщений пользователю в разумный срок.
-
-7. Дополнительные условия
-7.1. Отказ от получения рекламных сообщений не влияет на возможность получения пользователем сообщений, необходимых для исполнения обязательств перед ним, в том числе уведомлений о заказе, оплате, доступе, регистрации, технических уведомлений и иной сервисной информации.
-7.2. Настоящее согласие действует отдельно от согласия на обработку персональных данных и не заменяет его.
-
-8. Реквизиты Оператора
-Оператор: [ФИО ИП / самозанятого / юрлица]
-ИНН: [ИНН]
-ОГРНИП / ОГРН: [ОГРНИП / ОГРН, ЕСЛИ ЕСТЬ]
-Статус: [ИП / самозанятый / ООО]
-Email: [EMAIL]
-Телефон: [ТЕЛЕФОН]`
-  }
-};
-
-/* ================== 30+ СТИЛЕЙ ================== */
+/* ================== РАБОЧИЕ СТИЛИ ДЛЯ ПРЕДЛЕНДИНГА ================== */
 const STYLES = [
   ['glassmorphism', 'Glassmorphism', '🪟', 'Стекло, размытие, прозрачность'],
-  ['neumorphism', 'Neumorphism', '🫧', 'Мягкие выпуклые тени'],
-  ['brutalism', 'Neo-Brutalism', '🔨', 'Жёсткие чёрные рамки, яркие блоки'],
-  ['minimal', 'Минимализм', '⚪', 'Много воздуха, тонкая типографика'],
-  ['darkmode', 'Тёмный премиум', '🌑', 'Глубокий чёрный, неоновые акценты'],
-  ['gradient', 'Жидкие градиенты', '🌈', 'Анимированные mesh-градиенты'],
-  ['tinkoff', 'Финтех (Тинькофф)', '💛', 'Жёлтый бренд, чёрный текст'],
-  ['apple', 'Apple Style', '🍎', 'Огромная типографика, белое пространство'],
-  ['cyberpunk', 'Cyberpunk', '⚡', 'Неон, glitch-эффекты'],
-  ['y2k', 'Y2K Retro', '💿', 'Эстетика 2000-х, хром, голограммы'],
-  ['memphis', 'Memphis / Pop', '🎨', 'Геометрия, ярко, весело'],
-  ['magazine', 'Журнальный', '📰', 'Сетка как в Vogue, серифы'],
-  ['holographic', 'Голографический', '✨', 'Переливы радуги, металлика'],
-  ['cardflat', 'Карточный (Material)', '🃏', 'Чёткие карточки, мягкие тени'],
-  ['3d', '3D Иллюстрации', '🎲', '3D-объекты, изометрия'],
-  ['newspaper', 'Газетный', '🗞️', 'Имитация газеты, сенсация'],
-  ['organic', 'Органический', '🌿', 'Округлые формы, природные цвета'],
-  ['swiss', 'Swiss Design', '🇨🇭', 'Чёткая сетка, гротеск, минимум'],
-  ['retro80', 'Retro 80s Synth', '🌆', 'Закатные градиенты, неон, синтвейв'],
-  ['comic', 'Comic Book', '💥', 'Комиксы, halftone, BAM/POW'],
-  ['terminal', 'Hacker Terminal', '💻', 'Чёрный фон, зелёный моноширинный'],
-  ['paper', 'Paper Cut', '📄', 'Многослойная бумага, тени'],
-  ['claymorphism', 'Claymorphism', '🧱', 'Глиняные 3D-формы, мягкость'],
-  ['blueprint', 'Blueprint Tech', '📐', 'Синий чертёж, белые линии'],
-  ['handdrawn', 'Hand-Drawn', '✏️', 'Рисованные элементы, неровности'],
-  ['vaporwave', 'Vaporwave', '🌴', 'Розово-голубой, пальмы, статуи'],
-  ['kinfolk', 'Kinfolk', '🍃', 'Бежевые тона, серифы, скандинавия'],
-  ['blackgold', 'Black & Gold', '👑', 'Чёрный + золото, премиум'],
-  ['monochrome', 'Монохром', '⚫', 'Только оттенки одного цвета'],
-  ['risograph', 'Risograph', '🎭', 'Принтерные текстуры, наложения'],
-  ['gameui', 'Game UI', '🎮', 'Игровой интерфейс, HP-bars, иконки'],
-  ['liquid', 'Liquid Metal', '💧', 'Жидкий металл, текучесть, переливы'],
   ['saas', 'SaaS Dashboard', '📊', 'Чистый интерфейс, табличные блоки, бейджи'],
-  ['editorial', 'Editorial Story', '📚', 'Лонгрид, крупные цитаты, спокойная драматургия'],
-  ['telegram', 'Messenger Native', '💬', 'Похоже на чат и карточки сообщений'],
   ['planner', 'Launch Planner', '🗂️', 'Чек-листы, шаги, дорожная карта'],
   ['clean-ads', 'AdTech Clean', '🎯', 'Стиль рекламного кабинета, аккуратные метрики'],
   ['premium-light', 'Premium Light', '🤍', 'Светлый премиум, тонкие рамки, воздух'],
-  ['documentary', 'Documentary', '🎥', 'Живые фото, подписи, честный репортаж']
+  ['documentary', 'Documentary', '🎥', 'Живые фото, подписи, честный репортаж'],
+  ['banner-black-yellow', 'Баннерный чёрно-жёлтый', '🟡', 'Как сильный рекламный баннер: чёрный фон, жёлтый удар, крупная типографика'],
+  ['banner-black-red', 'Баннерный чёрно-красный', '🔴', 'Максимальный контраст, боль, разрыв шаблона'],
+  ['banner-green', 'Баннерный зелёный', '🟢', 'Система, спокойствие, понятный путь, но без вялости'],
+  ['banner-blue', 'Баннерный синий', '🔷', 'Доверие, ясная логика, аккуратный первый экран'],
+  ['banner-white-gold', 'Бело-золотой баннер', '🥇', 'Светлый премиум с крупной фразой и фото клиента'],
+  ['client-story', 'Живая история клиента', '👤', 'Первый экран от лица клиента: я нашёл/нашла способ у ребят']
 ];
 
 /* ================== ЭФФЕКТЫ ================== */
@@ -1023,23 +734,10 @@ const EFFECTS = [
   ['micro', '✨ Микроанимации при наведении'],
   ['fadein', '🪂 Плавное появление при скролле'],
   ['pulse', '💓 Пульсирующая главная кнопка'],
-  ['gradient-anim', '🌊 Анимированный градиент фона'],
-  ['parallax', '🏞️ Параллакс-скролл'],
-  ['particles', '⭐ Частицы / точки на фоне'],
   ['glow', '💡 Свечение элементов (glow)'],
-  ['tilt', '🎴 3D-наклон карточек'],
-  ['typewriter', '⌨️ Эффект печатной машинки'],
-  ['counter', '🔢 Анимированные счётчики'],
-  ['marquee', '📜 Бегущая строка с пилюлями'],
-  ['noise', '📺 Текстура шума (grain)'],
-  ['blob', '🫧 Анимированные blob-фигуры'],
-  ['emoji-rain', '🎉 Живые эмодзи'],
-  ['shake', '⚠️ Лёгкая тряска у красных триггеров'],
   ['sticky-cta', '📌 Липкий CTA-блок'],
   ['progress', '🧭 Прогресс по шагам'],
-  ['accordion', '🗂️ Раскрывающиеся вопросы'],
-  ['soft-reveal', '🌫️ Мягкое проявление карточек'],
-  ['magnet-hover', '🧲 Магнитный hover у кнопок']
+  ['soft-reveal', '🌫️ Мягкое проявление карточек']
 ];
 
 /* ================== ПАЛИТРЫ ================== */
@@ -1047,21 +745,15 @@ const PALETTES = [
   ['red-energy', 'Красная энергия', '🔴', ['#ef4444', '#f97316', '#fbbf24']],
   ['blue-trust', 'Синее доверие', '🔵', ['#2563eb', '#06b6d4', '#0ea5e9']],
   ['green-money', 'Зелёные деньги', '🟢', ['#10b981', '#22c55e', '#84cc16']],
-  ['tinkoff-yellow', 'Жёлтый финтех', '💛', ['#ffdd2d', '#222222', '#ffffff']],
-  ['purple-magic', 'Фиолетовая магия', '🟣', ['#a855f7', '#ec4899', '#8b5cf6']],
-  ['mono-noir', 'Чёрно-белый Noir', '⚫', ['#000', '#fff', '#737373']],
-  ['sunset', 'Закат', '🌅', ['#f43f5e', '#fb923c', '#fbbf24']],
   ['ocean', 'Океан', '🌊', ['#0c4a6e', '#0891b2', '#67e8f9']],
-  ['neon', 'Неон', '💜', ['#a3e635', '#22d3ee', '#e879f9']],
-  ['earth', 'Земляные тона', '🟫', ['#78350f', '#a16207', '#facc15']],
-  ['gold-black', 'Чёрно-золотой', '👑', ['#000', '#d4af37', '#fff']],
   ['mint-fresh', 'Мятная свежесть', '🌿', ['#14b8a6', '#22d3ee', '#fef3c7']],
-  ['rose-gold', 'Розовое золото', '🌸', ['#fb7185', '#fda4af', '#fef3c7']],
-  ['deep-space', 'Глубокий космос', '🌌', ['#020617', '#1e1b4b', '#7c3aed']],
-  ['graphite-lime', 'Графит и лайм', '🟩', ['#111827', '#84cc16', '#f8fafc']],
   ['trust-coral', 'Синий и коралл', '🪸', ['#1d4ed8', '#fb7185', '#f8fafc']],
-  ['soft-signal', 'Мягкий сигнал', '📡', ['#334155', '#38bdf8', '#facc15']],
-  ['clean-product', 'Чистый продукт', '🧊', ['#0f172a', '#e2e8f0', '#2563eb']]
+  ['clean-product', 'Чистый продукт', '🧊', ['#0f172a', '#e2e8f0', '#2563eb']],
+  ['black-red-ad', 'Чёрный и красный', '🔴', ['#ef111a', '#ffffff', '#050505']],
+  ['black-yellow-ad', 'Чёрный и жёлтый', '🟡', ['#ffd200', '#ffffff', '#050505']],
+  ['black-green-ad', 'Чёрный и зелёный', '🟢', ['#22c55e', '#ffffff', '#06130c']],
+  ['white-gold-ad', 'Белый и золото', '🥇', ['#b18a3d', '#061325', '#fffaf0']],
+  ['deep-blue-ad', 'Глубокий синий', '🔷', ['#2563eb', '#f8fafc', '#061325']]
 ];
 
 const TYPOS = [
@@ -1069,201 +761,71 @@ const TYPOS = [
   ['inter', 'Inter', 'Универсальный'],
   ['unbounded', 'Unbounded', 'Жирный, премиальный'],
   ['onest', 'Onest / Gilroy', 'Чистый, профессиональный'],
-  ['space-grotesk', 'Space Grotesk', 'Технологичный'],
-  ['playfair', 'Playfair + Inter', 'Журнальный микс'],
-  ['ibm-plex', 'IBM Plex Sans', 'Техничный, читаемый'],
-  ['montserrat', 'Montserrat', 'Рекламный, плотный'],
-  ['pt-root', 'PT Root UI', 'Нативный русский интерфейс']
+  ['playfair', 'Playfair + Inter', 'Журнальный премиум']
 ];
 
 const LAYOUTS = [
   ['classic', 'Классический', '📐 Hero → Пилюли → Боль → Ценность → CTA'],
   ['split', 'Split-screen', '⚔️ Текст слева, визуал справа'],
-  ['long', 'Длинный скролл', '📜 Каждый блок занимает экран'],
-  ['magazine', 'Журнальная сетка', '🗞️ Асимметричная сетка'],
   ['cards', 'Стопка карточек', '🃏 Все блоки карточками'],
-  ['timeline', 'Таймлайн', '🧭 Путь клиента по шагам'],
-  ['chat', 'Чат-лендинг', '💬 Подача как переписка'],
-  ['checklist', 'Чек-лист', '✅ Блоки как список действий']
+  ['timeline', 'Таймлайн', '🧭 Путь клиента по шагам']
 ];
 
 /* ================== ПРЕСЕТЫ (ОДИН КЛИК) ================== */
 const PRESETS = [
-  { id: 'fintech', name: 'Финтех (Тинькофф)', emoji: '💛', desc: 'Жёлтый, доверие, банковский', tpl: 2, style: 'tinkoff', palette: 'tinkoff-yellow', typo: 'manrope', layout: 'classic', effects: ['micro', 'fadein', 'pulse', 'glow'] },
-  { id: 'darkneon', name: 'Тёмный неон', emoji: '🌑', desc: 'Чёрный + неоновые акценты, хайп', tpl: 1, style: 'darkmode', palette: 'neon', typo: 'space-grotesk', layout: 'long', effects: ['micro', 'fadein', 'pulse', 'glow', 'particles', 'blob'] },
-  { id: 'magazine', name: 'Журнальный премиум', emoji: '📰', desc: 'Vogue-стиль, серифы, контраст', tpl: 3, style: 'magazine', palette: 'mono-noir', typo: 'playfair', layout: 'magazine', effects: ['fadein', 'tilt'] },
-  { id: 'brutal', name: 'Брутальный хайп', emoji: '🔨', desc: 'Жёсткие рамки, яркие блоки', tpl: 1, style: 'brutalism', palette: 'red-energy', typo: 'unbounded', layout: 'cards', effects: ['micro', 'shake', 'pulse', 'marquee'] },
-  { id: 'apple', name: 'Apple Style', emoji: '🍎', desc: 'Минимализм, премиум-типографика', tpl: 2, style: 'apple', palette: 'mono-noir', typo: 'inter', layout: 'long', effects: ['fadein', 'parallax', 'micro'] },
-  { id: 'glass', name: 'Стеклянный премиум', emoji: '🪟', desc: 'Glassmorphism, синий, доверие', tpl: 2, style: 'glassmorphism', palette: 'ocean', typo: 'manrope', layout: 'classic', effects: ['micro', 'fadein', 'glow', 'blob', 'gradient-anim'] },
-  { id: 'cyber', name: 'Cyberpunk Hype', emoji: '⚡', desc: 'Неон, глитч, киберпанк', tpl: 1, style: 'cyberpunk', palette: 'deep-space', typo: 'space-grotesk', layout: 'cards', effects: ['glow', 'particles', 'shake', 'noise', 'pulse'] },
-  { id: 'gold', name: 'Чёрно-золотой VIP', emoji: '👑', desc: 'Премиум, элита, статус', tpl: 3, style: 'blackgold', palette: 'gold-black', typo: 'playfair', layout: 'classic', effects: ['fadein', 'glow', 'micro', 'tilt'] },
-  { id: 'organic', name: 'Органический эко', emoji: '🌿', desc: 'Мягкий, природный, доверие', tpl: 3, style: 'organic', palette: 'mint-fresh', typo: 'onest', layout: 'classic', effects: ['fadein', 'micro', 'blob'] },
-  { id: 'memphis', name: 'Memphis Pop', emoji: '🎨', desc: 'Ярко, весело, привлекает', tpl: 1, style: 'memphis', palette: 'sunset', typo: 'unbounded', layout: 'magazine', effects: ['micro', 'shake', 'emoji-rain', 'pulse', 'tilt'] }
+  { id: 'bannerBlackYellow', name: 'Чёрно-жёлтый удар', emoji: '🟡', desc: 'Сильный контраст, крупная фраза, быстрый клик', tpl: 1, style: 'banner-black-yellow', palette: 'black-yellow-ad', typo: 'unbounded', layout: 'split', effects: ['fadein', 'pulse', 'glow'] },
+  { id: 'bannerBlackRed', name: 'Чёрно-красный напор', emoji: '🔴', desc: 'Жёсткий заход по боли курсов и денег', tpl: 1, style: 'banner-black-red', palette: 'black-red-ad', typo: 'unbounded', layout: 'split', effects: ['fadein', 'pulse'] },
+  { id: 'bannerGreen', name: 'Зелёная система', emoji: '🟢', desc: 'Система, спокойствие, понятный путь', tpl: 2, style: 'banner-green', palette: 'black-green-ad', typo: 'manrope', layout: 'classic', effects: ['fadein', 'micro', 'glow'] },
+  { id: 'bannerBlue', name: 'Синий доверительный', emoji: '🔷', desc: 'Для осторожной аудитории: чисто и понятно', tpl: 2, style: 'banner-blue', palette: 'deep-blue-ad', typo: 'manrope', layout: 'classic', effects: ['fadein', 'micro'] },
+  { id: 'bannerWhiteGold', name: 'Бело-золотой премиум', emoji: '🥇', desc: 'Светлый дорогой вид, фото и крупная фраза', tpl: 2, style: 'banner-white-gold', palette: 'white-gold-ad', typo: 'playfair', layout: 'split', effects: ['fadein', 'micro'] },
+  { id: 'clientStory', name: 'Живая история', emoji: '👤', desc: 'Честный тон от лица клиента, без лишнего пафоса', tpl: 1, style: 'client-story', palette: 'blue-trust', typo: 'manrope', layout: 'classic', effects: ['fadein', 'micro'] },
+  { id: 'plannerSteps', name: 'Пошаговая система', emoji: '🗂️', desc: 'Маршрут и понятные шаги вместо хаоса', tpl: 2, style: 'planner', palette: 'blue-trust', typo: 'inter', layout: 'timeline', effects: ['fadein', 'progress'] },
+  { id: 'adtechRoute', name: 'Чистый запуск', emoji: '🎯', desc: 'Рекламный кабинет, метки, предлендинг, оффер', tpl: 2, style: 'clean-ads', palette: 'trust-coral', typo: 'inter', layout: 'cards', effects: ['fadein', 'micro'] }
+];
+
+const HERO_BLOCKS_PRESETS = [
+  { id: 'heroSceneLive', name: 'Светлый первый шаг', emoji: '✨', desc: 'Большой hero, сильный заголовок, смысл заголовка и CTA сразу', tpl: 1, style: 'premium-light', palette: 'blue-trust', typo: 'manrope', layout: 'split', effects: ['fadein', 'micro'] },
+  { id: 'heroThreeBlocks', name: 'Цель → маршрут → действие', emoji: '🧩', desc: 'Первый экран, три офферные карточки и спокойный переход к действию', tpl: 1, style: 'clean-ads', palette: 'trust-coral', typo: 'inter', layout: 'classic', effects: ['fadein', 'micro'] },
+  { id: 'heroPremiumStory', name: 'Премиальный первый экран', emoji: '🥇', desc: 'Дорогой светлый вид: крупный оффер, фото и чистые блоки', tpl: 1, style: 'banner-white-gold', palette: 'white-gold-ad', typo: 'manrope', layout: 'cards', effects: ['fadein'] }
+];
+
+const NATURE_EDITORIAL_PRESETS = [
+  { id: 'natureSagePaper', name: 'Sage paper', emoji: '🌿', desc: 'Тёплый editorial: бумага, олива, спокойная премиальность', tpl: 1, style: 'nature-sage-paper', palette: 'white-gold-ad', typo: 'playfair', layout: 'split', effects: ['fadein', 'micro'] },
+  { id: 'natureTerraFocus', name: 'Terra focus', emoji: '🍂', desc: 'Бежево-терракотовый заход: личная история и первый шаг', tpl: 1, style: 'nature-terra-focus', palette: 'trust-coral', typo: 'playfair', layout: 'classic', effects: ['fadein'] },
+  { id: 'natureForestTrust', name: 'Forest trust', emoji: '🪴', desc: 'Доверительный зелёный маршрут: меньше шума, больше смысла', tpl: 1, style: 'nature-forest-trust', palette: 'green-money', typo: 'playfair', layout: 'cards', effects: ['fadein', 'micro'] }
+];
+
+const MINIMAL_COMPARE_PRESETS = [
+  { id: 'minimalNoir', name: 'Тихий noir', emoji: '⚫', desc: 'Тёмный минимализм: внутренний конфликт, воздух и две CTA-кнопки', tpl: 1, style: 'minimal-noir', palette: 'black-yellow-ad', typo: 'inter', layout: 'minimal', effects: ['fadein'] },
+  { id: 'minimalGraphite', name: 'Графит и белый', emoji: '◼️', desc: 'Строгий графитовый экран: честный текст без визуального шума', tpl: 1, style: 'minimal-graphite', palette: 'clean-product', typo: 'inter', layout: 'minimal', effects: ['fadein'] },
+  { id: 'minimalBlue', name: 'Синий полутон', emoji: '🔹', desc: 'Холодный доверительный вариант: спокойный контраст и короткий CTA', tpl: 1, style: 'minimal-blue', palette: 'deep-blue-ad', typo: 'inter', layout: 'minimal', effects: ['fadein'] }
+];
+
+const CORE_METHOD_PRESETS = [
+  { id: 'coreHardBreak', name: 'Откат назад', emoji: '🔥', desc: 'Яркий дизайн под боль: начинал, но снова возвращался назад', tpl: 1, style: 'heroBright', palette: 'red-energy', typo: 'manrope', layout: 'classic', effects: ['fadein', 'micro'] },
+  { id: 'coreBlueTrust', name: 'Цель без движения', emoji: '🔷', desc: 'Светлый синий дизайн: цель есть, но нужна система регулярности', tpl: 2, style: 'blueTrust', palette: 'blue-trust', typo: 'manrope', layout: 'classic', effects: ['fadein', 'micro'] },
+  { id: 'coreGreenClarity', name: 'Доверие и ясность', emoji: '🟢', desc: 'Зелёная системность: спокойный маршрут и понятный первый шаг', tpl: 3, style: 'greenSystem', palette: 'green-money', typo: 'manrope', layout: 'classic', effects: ['fadein'] }
+];
+
+const DIRECTION_QUIZ_PRESETS = [
+  { id: 'directionQuizNavy', name: 'Ночной синий маршрут', emoji: '🧭', desc: 'Честная диагностика и понятный первый шаг', tpl: 1, style: 'direction-quiz-navy', palette: 'deep-blue-ad', typo: 'manrope', layout: 'quiz', effects: ['fadein', 'micro'] },
+  { id: 'directionQuizGold', name: 'Тёмное золото', emoji: '✦', desc: 'Контрастный маршрут с тёплым акцентом', tpl: 1, style: 'direction-quiz-gold', palette: 'black-yellow-ad', typo: 'manrope', layout: 'quiz', effects: ['fadein'] },
+  { id: 'directionQuizForest', name: 'Лесная ясность', emoji: '🌿', desc: 'Спокойная зелёная точка опоры', tpl: 1, style: 'direction-quiz-forest', palette: 'green-money', typo: 'manrope', layout: 'quiz', effects: ['fadein', 'micro'] }
+];
+
+const PERSONAL_ROUTE_QUIZ_PRESETS = [
+  { id: 'personalRouteCoral', name: 'Коралл и ночь', emoji: '◉', desc: 'Живой личный маршрут без лишнего давления', tpl: 1, style: 'personal-route-coral', palette: 'trust-coral', typo: 'manrope', layout: 'quiz', effects: ['fadein', 'micro'] },
+  { id: 'personalRouteAmber', name: 'Янтарная точка', emoji: '◇', desc: 'Тёплая премиальная диагностика', tpl: 1, style: 'personal-route-amber', palette: 'white-gold-ad', typo: 'manrope', layout: 'quiz', effects: ['fadein'] },
+  { id: 'personalRouteViolet', name: 'Фиолетовый фокус', emoji: '◈', desc: 'Глубокий контраст и ясный следующий шаг', tpl: 1, style: 'personal-route-violet', palette: 'deep-blue-ad', typo: 'manrope', layout: 'quiz', effects: ['fadein', 'micro'] }
+];
+
+const BARRIER_PROFILE_QUIZ_PRESETS = [
+  { id: 'barrierProfileEmber', name: 'Тёплый разрыв', emoji: '◐', desc: 'Честный разбор повторяющегося сбоя с тёплым акцентом', tpl: 1, style: 'barrier-profile-ember', palette: 'trust-coral', typo: 'manrope', layout: 'quiz', effects: ['fadein', 'micro'] },
+  { id: 'barrierProfileTeal', name: 'Бирюзовая ясность', emoji: '◇', desc: 'Спокойная диагностика барьера и реалистичный первый шаг', tpl: 1, style: 'barrier-profile-teal', palette: 'green-money', typo: 'manrope', layout: 'quiz', effects: ['fadein'] },
+  { id: 'barrierProfileBlue', name: 'Глубокий синий', emoji: '◈', desc: 'Строгий премиальный профиль без давления и громких обещаний', tpl: 1, style: 'barrier-profile-blue', palette: 'deep-blue-ad', typo: 'manrope', layout: 'quiz', effects: ['fadein', 'micro'] }
 ];
 
 /* ================== ГЕНЕРАЦИЯ ПРОМТА ================== */
-function buildPrompt({ tpl, style, effects, palette, layout, typo }) {
-  const t = TPL.find(x => x.id === tpl);
-  const s = STYLES.find(x => x[0] === style);
-  const p = PALETTES.find(x => x[0] === palette);
-  const l = LAYOUTS.find(x => x[0] === layout);
-  const ty = TYPOS.find(x => x[0] === typo);
-  const ef = EFFECTS.filter(e => effects.includes(e[0]));
-  return `Ты — премиум веб-дизайнер и frontend-разработчик. Сгенерируй ОДНОСТРАНИЧНЫЙ ПРЕДЛЕНДИНГ для Яндекс.Директ (РСЯ), который вставляется в мини-лендинг BotHelp.
-
-═══════════════════════════════════════════
-🎯 ЦЕЛЬ
-═══════════════════════════════════════════
-Прогреть холодный трафик из РСЯ за 5–10 секунд и довести до клика по мессенджер-кнопкам (Telegram / MAX), которые BotHelp подставляет автоматически снизу страницы.
-
-═══════════════════════════════════════════
-📝 ТЕКСТ (ИСПОЛЬЗОВАТЬ ДОСЛОВНО, БЕЗ ИЗМЕНЕНИЙ!)
-═══════════════════════════════════════════
-${t.txt}
-
-⚠️ КРИТИЧНО:
-• Текст менять, переписывать, "улучшать" или сокращать ЗАПРЕЩЕНО
-• Каждое слово, каждая опечатка ("безрезультатано", "по-другому") сохраняются
-• Заголовок hook → главный h1
-• Список "без..." → пилюли/таблетки
-• Перечисление → буллеты с яркими иконками
-• Финальная фраза "СМОТРИТЕ КАК МОЖНО ПО-ДРУГОМУ" → крупный CTA-блок над кнопками BotHelp с пульсирующей стрелкой ↓
-
-═══════════════════════════════════════════
-🎨 ДИЗАЙН
-═══════════════════════════════════════════
-Стиль: ${s[1]} ${s[2]} — ${s[3]}
-Палитра: ${p[1]} ${p[2]} — ${p[3].join(', ')}
-Типографика: ${ty[1]} (${ty[2]}) — Google Fonts
-Структура: ${l[1]} — ${l[2]}
-
-═══════════════════════════════════════════
-⚡ ЭФФЕКТЫ
-═══════════════════════════════════════════
-${ef.map(e => e[1]).join('\n')}
-
-CSS @keyframes, transitions, transform. JS — минимум.
-
-═══════════════════════════════════════════
-🏗️ СТРУКТУРА БЛОКОВ
-═══════════════════════════════════════════
-1. Бейдж сверху ("Только для тех, кто устал от курсов")
-2. H1: огромный, контрастный, акцентное выделение ключевой фразы
-3. Пилюли "Без...": горизонтальные таблетки с крестиком/галочкой
-4. Блок боли: красный/оранжевый, пунктирная рамка, плашка "БОЛЬ"
-5. Блок доверия (если в тексте "не казино/не крипта/белый метод"): зелёная плашка ✅
-6. Блок ценности: тёмная карточка с жёлтым заголовком и списком
-7. CTA-арея + пульсирующая стрелка ↓ к кнопкам BotHelp
-
-═══════════════════════════════════════════
-📱 АДАПТИВНОСТЬ
-═══════════════════════════════════════════
-• max-width 760px, по центру
-• Полная адаптация под мобильные
-• Пилюли на мобайле: grid 2 колонки
-• Кнопки минимум 44px высотой
-
-═══════════════════════════════════════════
-🔧 ОБЁРТКА BOTHELP (ОБЯЗАТЕЛЬНО!)
-═══════════════════════════════════════════
-Это Body мини-лендинга. ПОД твоим контентом BotHelp САМ дорисует:
-- кнопки мессенджеров (Telegram, MAX)
-- блок политики с чекбоксом
-- подпись "Powered by BotHelp"
-
-Твой код ОБЯЗАН:
-1) padding-bottom ~120-140px у обёртки
-2) Стили под .wh-landing-buttons и .wh-mini-landing-policy в твоём дизайне
-3) Скрывать .wh-landing-powered-by через display:none !important
-4) НЕ скрывать .wh-mini-landing-policy
-5) Содержать скрипт автогалочки чекбокса:
-
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-  function autoCheck() {
-    var cb = document.querySelector('.wh-checkbox, .wh-mini-landing-policy input[type="checkbox"]');
-    if (cb && !cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change', {bubbles: true})); }
-  }
-  autoCheck();
-  var obs = new MutationObserver(autoCheck);
-  obs.observe(document.body, {childList: true, subtree: true});
-  setTimeout(function(){ obs.disconnect(); }, 5000);
-});
-</script>
-
-6) .wh-landing-buttons: margin-top:-100px (десктоп) / -80px (мобайл), background:#fff, border-radius:32px 32px 0 0, padding:24px, кнопки внутри border-radius:16px min-height:56px font-weight:800
-7) .wh-mini-landing-policy: background:#fff, border-radius:0 0 32px 32px, padding:0 24px 24px, текст 13px серый
-
-═══════════════════════════════════════════
-📤 ФОРМАТ ОТВЕТА
-═══════════════════════════════════════════
-Выдай ОДИН цельный HTML-документ от <!DOCTYPE html> до </html>. Никаких placeholder'ов, никаких комментариев — только финальный код.`;
-}
-
-/* ================== ЭТАЛОННЫЕ HTML-ШАБЛОНЫ ================== */
-const SALE_DEFAULTS = {
-  male: {
-    name: 'Павел Андрюшенков',
-    agePhrase: 'мне 60 лет',
-    shortName: 'Паша',
-    photo: 'https://storage2.bothelp.io/pashan6/f3/f3ea/f3eaf53f619618eb977e1bdee57a0208/photo_5425044698948113664_m.jpg',
-    offer: 'https://onl-ine.ru/4',
-  },
-  female: {
-    name: 'Оксана Корчагина',
-    agePhrase: 'мне 44 года',
-    shortName: 'Оксана',
-    photo: 'https://storage2.bothelp.io/oksanakor/d9/d9e1/d9e1f33c1658a3e2ff84848fd156142b/photo_5779345239913991706_y.jpg',
-    offer: 'https://oksanakorchagina.ru/3',
-  },
-};
-
-const OFFER_DEFAULTS = {
-  pay: 'https://voronkapodkluch.getcourse.ru/page2?gcao=54688&gcpc=421e3',
-  tg: 'https://t.me/oksanakor',
-  max: 'https://iimax.ru/oksanakor',
-};
-
-function replaceIfFilled(html, from, to) {
-  return to ? html.split(from).join(to) : html;
-}
-
-function agePhrase(age, fallback) {
-  if (!age) return fallback;
-  const n = Number.parseInt(String(age).trim(), 10);
-  if (!Number.isFinite(n)) return `мне ${age} лет`;
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  const word = mod10 === 1 && mod100 !== 11 ? 'год' : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14) ? 'года' : 'лет';
-  return `мне ${age} ${word}`;
-}
-
-function genSale({ name, age, shortName, photo, offer, gender }) {
-  const currentGender = gender === 'female' ? 'female' : 'male';
-  const defaults = SALE_DEFAULTS[currentGender];
-  let html = currentGender === 'female' ? saleFemaleTemplate : saleMaleTemplate;
-
-  html = replaceIfFilled(html, defaults.name, name);
-  html = replaceIfFilled(html, defaults.agePhrase, agePhrase(age, defaults.agePhrase));
-  if (shortName) {
-    html = currentGender === 'female'
-      ? html.split(`Просто ${defaults.shortName}`).join(`Просто ${shortName}`)
-      : html.split(defaults.shortName).join(shortName);
-  }
-  html = replaceIfFilled(html, defaults.photo, photo);
-  html = replaceIfFilled(html, defaults.offer, offer);
-
-  return html;
-}
-
-function genOffer({ pay, tg, max }) {
-  let html = offerTemplate;
-  html = replaceIfFilled(html, OFFER_DEFAULTS.pay, pay);
-  html = replaceIfFilled(html, OFFER_DEFAULTS.tg, tg);
-  html = replaceIfFilled(html, OFFER_DEFAULTS.max, max);
-  return html;
-}
-
 function esc(value) {
   return String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -1272,135 +834,4250 @@ function esc(value) {
     .replaceAll('"', '&quot;');
 }
 
-function renderPrelandingHtml({ tpl, style, palette }) {
-  const content = PRELANDING_CONTENT[tpl];
-  const paletteData = PALETTES.find(x => x[0] === palette);
-  if (!content || !style || !paletteData) return '';
-
-  const [accent, second] = paletteData[3];
-  const danger = ['green-money', 'mint-fresh'].includes(palette) ? '#ef4444' : accent;
-  const trustBg = palette === 'mono-noir' ? '#f8fafc' : `${second}18`;
-  const pills = content.pills.map(item => `<div class="bh-pill"><span>✕</span> ${esc(item)}</div>`).join('\n        ');
-  const painItems = content.painItems.map((item, i) => `<li><span>${i + 1}.</span> ${esc(item)}</li>`).join('\n          ');
-  const valueItems = content.valueItems.map(item => `<li><span>✓</span> ${esc(item)}</li>`).join('\n          ');
-  const trust = `<div class="bh-trust-item">
-          <div class="icon">✅</div>
-          <div class="text">${esc(content.trustTitle)}<small>${esc(content.trustSmall)}</small></div>
-        </div>`;
-
-  let html = prelandingTemplate
-    .replace('{{BADGE}}', esc(content.badge))
-    .replace('{{TITLE_HTML}}', content.titleHtml)
-    .replace('{{PILLS_HTML}}', pills)
-    .replace('{{PAIN_TITLE}}', esc(content.painTitle))
-    .replace('{{PAIN_ITEMS_HTML}}', painItems)
-    .replace('{{PAIN_ALERT}}', esc(content.painAlert))
-    .replace('{{TRUST_HTML}}', trust)
-    .replace('{{VALUE_TITLE}}', esc(content.valueTitle))
-    .replace('{{VALUE_ITEMS_HTML}}', valueItems)
-    .replace('{{ACTION_TITLE}}', esc(content.actionTitle))
-    .replace('{{ACTION_SUBTITLE}}', esc(content.actionSubtitle))
-    .replace('class="bh-mini-custom"', `class="bh-mini-custom bh-style-${style}"`);
-
-  const darkStyles = ['darkmode', 'cyberpunk', 'terminal', 'blackgold', 'retro80', 'vaporwave'];
-  const isDarkStyle = darkStyles.includes(style);
-  const customCss = `
-  <style>
-    .bh-mini-custom {
-      --accent-blue: ${accent};
-      --accent-blue-dark: ${accent};
-      --accent-yellow: ${second};
-      --danger-red: ${danger};
-      --success-green: ${second};
-      --shadow-glow: 0 24px 54px -16px ${accent}55;
-    }
-    .bh-mini-custom__wrap {
-      background-image:
-        radial-gradient(circle at 100% 0%, ${accent}1f 0%, transparent 42%),
-        radial-gradient(circle at 0% 100%, ${second}24 0%, transparent 42%);
-    }
-    .bh-trust-item { background: ${trustBg}; border-color: ${second}66; }
-    .bh-pulsing-arrow { background: ${accent}; }
-    .bh-style-${style} .bh-badge { background: ${isDarkStyle ? second : '#0f172a'}; color: ${isDarkStyle ? '#0f172a' : second}; }
-    ${isDarkStyle ? `
-    .bh-style-${style} { --card-bg: #020617; --text-dark: #f8fafc; --text-muted: #cbd5e1; --line-soft: rgba(255,255,255,.16); }
-    .bh-style-${style} .bh-mini-custom__wrap { background-color: #020617; box-shadow: 0 24px 70px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.08) inset; }
-    .bh-style-${style} .bh-pill { background: rgba(255,255,255,.08); color: #f8fafc; border-color: rgba(255,255,255,.14); }
-    .bh-style-${style} .bh-pain-card { background: rgba(239,68,68,.12); border-color: rgba(248,113,113,.45); }
-    .bh-style-${style} .bh-pain-list li { color: #fecaca; }
-    .bh-style-${style} .bh-trust-item { background: rgba(16,185,129,.12); border-color: rgba(74,222,128,.35); }
-    .bh-style-${style} .bh-trust-item .text { color: #d1fae5; }
-    .bh-style-${style} .bh-trust-item .text small { color: #a7f3d0; }
-    .bh-style-${style} .bh-value-card { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); }
-    .bh-style-${style} .bh-action-area { background: rgba(37,99,235,.13); border-color: rgba(96,165,250,.38); }
-    .bh-style-${style} .bh-action-title { color: #bfdbfe; }
-    ` : ''}
-    ${style === 'brutalism' ? `
-    .bh-style-brutalism .bh-mini-custom__wrap,
-    .bh-style-brutalism .bh-pain-card,
-    .bh-style-brutalism .bh-value-card,
-    .bh-style-brutalism .bh-action-area,
-    .bh-style-brutalism .bh-pill { border: 3px solid #111827; box-shadow: 8px 8px 0 ${second}; border-radius: 18px; }
-    .bh-style-brutalism .bh-title { text-transform: uppercase; }
-    ` : ''}
-    ${style === 'minimal' || style === 'apple' || style === 'swiss' ? `
-    .bh-style-${style} .bh-mini-custom__wrap { box-shadow: none; border-color: #e5e7eb; }
-    .bh-style-${style} .bh-title { letter-spacing: -0.04em; }
-    .bh-style-${style} .bh-pill,
-    .bh-style-${style} .bh-pain-card,
-    .bh-style-${style} .bh-value-card,
-    .bh-style-${style} .bh-action-area { box-shadow: none; }
-    ` : ''}
-    ${style === 'glassmorphism' || style === 'holographic' ? `
-    .bh-style-${style} .bh-mini-custom__wrap { background-color: rgba(255,255,255,.72); backdrop-filter: blur(18px); }
-    .bh-style-${style} .bh-pill,
-    .bh-style-${style} .bh-action-area { background: rgba(255,255,255,.56); backdrop-filter: blur(12px); }
-    ` : ''}
-    ${style === 'tinkoff' ? `
-    .bh-style-tinkoff .bh-mini-custom { --accent-blue: #111111; --accent-yellow: #ffdd2d; --danger-red: #ef4444; }
-    .bh-style-tinkoff .bh-mini-custom__wrap { background: #ffdd2d; border: none; box-shadow: 0 24px 54px rgba(17,17,17,.16); }
-    .bh-style-tinkoff .bh-pill, .bh-style-tinkoff .bh-action-area { background: rgba(255,255,255,.72); }
-    .bh-style-tinkoff .bh-value-card { background: #111111; }
-    ` : ''}
-  </style>`;
-
-  return html.replace('</head>', `${customCss}\n</head>`);
-}
-
-function applyDocVars(template, values, currentDocUrl) {
-  const replacements = [
-    ['[ДАТА]', values.docDate || '[ДАТА]'],
-    ['[ФИО ИП / самозанятого / юрлица]', values.operatorName || '[ФИО ИП / самозанятого / юрлица]'],
-    ['[ФИО ИП / самозанятого / название юрлица]', values.operatorName || '[ФИО ИП / самозанятого / название юрлица]'],
-    ['[ИНН]', values.inn || '[ИНН]'],
-    ['[ОГРНИП / ОГРН, ЕСЛИ ЕСТЬ]', values.ogrn || '[ОГРНИП / ОГРН, ЕСЛИ ЕСТЬ]'],
-    ['[ИП / самозанятого / ООО]', values.status || '[ИП / самозанятого / ООО]'],
-    ['[ИП / самозанятый / ООО]', values.status || '[ИП / самозанятый / ООО]'],
-    ['[EMAIL]', values.email || '[EMAIL]'],
-    ['[ТЕЛЕФОН]', values.phone || '[ТЕЛЕФОН]'],
-    ['[ССЫЛКА НА ЭТОТ ДОКУМЕНТ]', currentDocUrl || '[ССЫЛКА НА ЭТОТ ДОКУМЕНТ]'],
-    ['[ССЫЛКА НА ПОЛИТИКУ КОНФИДЕНЦИАЛЬНОСТИ]', values.privacyUrl || '[ССЫЛКА НА ПОЛИТИКУ КОНФИДЕНЦИАЛЬНОСТИ]']
-  ];
-
-  return replacements.reduce((text, [from, to]) => text.split(from).join(to), template);
-}
-
-function makeLegalDocs(values) {
+function mergePrelandingContent(content, overrides = {}) {
+  if (!content) return null;
+  if (overrides?.lockTemplateCopy && !overrides?.fromBanner) {
+    return { ...content };
+  }
+  const hasOverride = (key) => Object.prototype.hasOwnProperty.call(overrides, key);
   return {
-    privacy: applyDocVars(DOC_TEMPLATES.privacy.text, values, values.privacyUrl),
-    personal: applyDocVars(DOC_TEMPLATES.personal.text, values, values.personalUrl),
-    ads: applyDocVars(DOC_TEMPLATES.ads.text, values, values.adsUrl)
+    ...content,
+    ...overrides,
+    badge: overrides.badge || content.badge,
+    title: overrides.title || content.title,
+    titleHtml: overrides.titleHtml || (overrides.title ? esc(overrides.title) : content.titleHtml),
+    pills: hasOverride('pills') ? (Array.isArray(overrides.pills) ? overrides.pills : []) : content.pills,
+    painTitle: overrides.painTitle || content.painTitle,
+    painItems: hasOverride('painItems') ? (Array.isArray(overrides.painItems) ? overrides.painItems : []) : content.painItems,
+    painAlert: overrides.painAlert || content.painAlert,
+    trustTitle: hasOverride('trustTitle') ? overrides.trustTitle : content.trustTitle,
+    trustSmall: hasOverride('trustSmall') ? overrides.trustSmall : content.trustSmall,
+    valueTitle: overrides.valueTitle || content.valueTitle,
+    valueItems: hasOverride('valueItems') ? (Array.isArray(overrides.valueItems) ? overrides.valueItems : []) : content.valueItems,
+    actionTitle: overrides.actionTitle || content.actionTitle,
+    actionSubtitle: hasOverride('actionSubtitle') ? overrides.actionSubtitle : content.actionSubtitle,
+    methodName: hasOverride('methodName') ? overrides.methodName : content.methodName,
+    cards: hasOverride('cards') ? (Array.isArray(overrides.cards) ? overrides.cards : []) : content.cards,
+    proofItems: hasOverride('proofItems') ? (Array.isArray(overrides.proofItems) ? overrides.proofItems : []) : content.proofItems,
+    liveNote: hasOverride('liveNote') ? overrides.liveNote : content.liveNote,
+    ctaLead: hasOverride('ctaLead') ? overrides.ctaLead : content.ctaLead
   };
 }
 
-function makePolicyLabel(values) {
-  const parts = [
-    values.privacyUrl ? `Политикой конфиденциальности (${values.privacyUrl})` : 'Политикой конфиденциальности',
-    values.personalUrl ? `Согласием на обработку персональных данных (${values.personalUrl})` : 'Согласием на обработку персональных данных',
-    values.adsUrl ? `Согласием на получение рекламных и информационных сообщений (${values.adsUrl})` : 'Согласием на получение рекламных и информационных сообщений'
-  ];
-  return `Нажимая кнопку, я принимаю ${parts.join(', ')}.`;
+function detectClientGender(name = '') {
+  const value = String(name).trim().toLowerCase();
+  if (!value) return 'neutral';
+  const first = value.split(/\s+/)[0] || '';
+  const femaleNames = ['людмила', 'марина', 'наталья', 'ольга', 'елена', 'светлана', 'ирина', 'татьяна', 'оксана', 'анна', 'екатерина', 'юлия', 'галина', 'лариса', 'надежда', 'валентина', 'нина', 'любовь'];
+  const maleNames = ['павел', 'михаил', 'сергей', 'андрей', 'антон', 'иван', 'алексей', 'дмитрий', 'владимир', 'николай', 'евгений', 'александр', 'игорь', 'олег', 'юрий'];
+  if (femaleNames.includes(first) || /(ова|ева|ёва|ина|ская|цкая|ая)$/.test(first) || /(овна|евна|ична)$/.test(value)) return 'female';
+  if (maleNames.includes(first) || /(ов|ев|ёв|ин|ский|цкий|ой)$/.test(first) || /(ович|евич|ич)$/.test(value)) return 'male';
+  return 'neutral';
 }
+
+function getClientFirstName(name = '') {
+  return String(name).trim().split(/\s+/).filter(Boolean)[0] || 'герой';
+}
+
+function buildAtmospaceLandingConfig({ projectData, ...fallback } = {}) {
+  const publicLandingKey = String(fallback.publicLandingKey || '').trim();
+  const counterId = String(fallback.counterId || fallback.metrikaCounterId || projectData?.metrikaId || '').trim();
+  const landingName = String(fallback.landingName || projectData?.clientDisplayName || projectData?.clientName || 'Лендинг').trim();
+  const landingCode = String(fallback.landingCode || projectData?.partnerCode || '').trim();
+  return {
+    runtimeVersion: ATMOSPACE_GENERATED_RUNTIME_VERSION,
+    apiBaseUrl: ATMOSPACE_PUBLIC_API_BASE_URL,
+    initEndpoint: ATMOSPACE_INIT_ENDPOINT,
+    clickEndpoint: ATMOSPACE_CLICK_ENDPOINT,
+    publicLandingKey,
+    counterId,
+    landingName,
+    landingCode
+  };
+}
+
+function renderAtmospaceMessengerButton(messenger, className, label) {
+  const safeMessenger = messenger === 'max' ? 'max' : 'telegram';
+  return `<a href="#" data-atmospace-messenger="${safeMessenger}" data-atmospace-state="loading" aria-disabled="true" target="_blank" rel="noopener noreferrer" class="${esc(className)}"><span>${esc(label)}</span></a>`;
+}
+
+function buildAtmospaceHeadConfig({ projectData, ...fallback } = {}) {
+  const config = buildAtmospaceLandingConfig({ projectData, ...fallback });
+  return `<script>
+window.ATMOSPACE_LANDING_CONFIG = Object.freeze(${safeInlineJson(config)});
+</script>`;
+}
+
+function buildAtmospacePrelandingTrackingScript() {
+  return `<script>
+(function () {
+  'use strict';
+
+  var cfg = window.ATMOSPACE_LANDING_CONFIG || {};
+  var runtimeVersion = cfg.runtimeVersion || ${JSON.stringify(ATMOSPACE_GENERATED_RUNTIME_VERSION)};
+  var initEndpoint = cfg.initEndpoint || ${JSON.stringify(ATMOSPACE_INIT_ENDPOINT)};
+  var clickEndpoint = cfg.clickEndpoint || ${JSON.stringify(ATMOSPACE_CLICK_ENDPOINT)};
+  var DIRECT_PARAM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
+  var CLICK_ID_KEYS = ['yclid', 'gclid', 'fbclid', 'msclkid', 'dclid'];
+  var readyLinks = {};
+  var landingOpenedSent = false;
+  var RUNTIME_ERROR_MESSAGE = 'Сейчас переход временно недоступен. Попробуйте ещё раз чуть позже.';
+
+  function getParam(name) {
+    try {
+      return new URL(window.location.href).searchParams.get(name) || '';
+    } catch (error) {
+      return '';
+    }
+  }
+
+  function makePageInstanceId() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+      return window.crypto.randomUUID();
+    }
+    return 'page_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
+  }
+  var pageInstanceId = makePageInstanceId();
+
+  function collectUtm() {
+    var result = {};
+    DIRECT_PARAM_KEYS.forEach(function (key) {
+      result[key] = getParam(key) || null;
+    });
+    return result;
+  }
+
+  function collectClickIds() {
+    var result = {};
+    CLICK_ID_KEYS.forEach(function (key) {
+      var value = getParam(key);
+      if (value) result[key] = value;
+    });
+    return result;
+  }
+
+  function isLocalPreview() {
+    return window.location.protocol === 'file:'
+      || window.location.hostname === 'localhost'
+      || window.location.hostname === '127.0.0.1';
+  }
+
+  function getButtons() {
+    return Array.prototype.slice.call(document.querySelectorAll('[data-atmospace-messenger]'));
+  }
+
+  function setButtonsState(state) {
+    getButtons().forEach(function (button) {
+      button.setAttribute('target', '_blank');
+      button.setAttribute('rel', 'noopener noreferrer');
+      button.setAttribute('data-atmospace-state', state);
+      if (state === 'ready') {
+        button.removeAttribute('aria-disabled');
+      } else {
+        button.setAttribute('aria-disabled', 'true');
+        button.setAttribute('href', '#');
+      }
+    });
+  }
+
+  function getRuntimeMessageNode() {
+    var existing = document.querySelector('[data-atmospace-runtime-message]');
+    if (existing) return existing;
+    var firstButton = getButtons()[0];
+    if (!firstButton) return null;
+    var node = document.createElement('p');
+    node.setAttribute('data-atmospace-runtime-message', '');
+    node.hidden = true;
+    node.style.cssText = 'display:none;margin:12px 0 0;color:#b91c1c;font-size:14px;line-height:1.45;font-weight:800;text-align:center;';
+    var container = firstButton.parentElement || firstButton;
+    container.insertAdjacentElement('afterend', node);
+    return node;
+  }
+
+  function setRuntimeMessage(message) {
+    var node = getRuntimeMessageNode();
+    if (!node) return;
+    node.textContent = message || '';
+    node.hidden = !message;
+    node.style.display = message ? 'block' : 'none';
+  }
+
+  function showRuntimeError() {
+    setButtonsState('error');
+    setRuntimeMessage(RUNTIME_ERROR_MESSAGE);
+  }
+
+  function getPolicyCheckbox() {
+    return document.getElementById('atmospace-policy-consent');
+  }
+
+  function setPolicyError(isVisible) {
+    var error = document.getElementById('atmospace-policy-error');
+    if (!error) return;
+    error.hidden = !isVisible;
+    error.style.display = isVisible ? 'block' : 'none';
+  }
+
+  function hasPolicyConsent() {
+    var checkbox = getPolicyCheckbox();
+    if (!checkbox) {
+      setPolicyError(false);
+      return true;
+    }
+    if (checkbox.checked) {
+      setPolicyError(false);
+      return true;
+    }
+    setPolicyError(true);
+    if (typeof checkbox.focus === 'function') checkbox.focus();
+    return false;
+  }
+
+  function applyLinks(links) {
+    readyLinks = {
+      telegram: String(links && links.telegram ? links.telegram : ''),
+      max: String(links && links.max ? links.max : '')
+    };
+    setRuntimeMessage('');
+    getButtons().forEach(function (button) {
+      var messenger = button.getAttribute('data-atmospace-messenger') === 'max' ? 'max' : 'telegram';
+      var url = readyLinks[messenger] || '';
+      if (url) {
+        button.href = url;
+        button.removeAttribute('aria-disabled');
+        button.setAttribute('data-atmospace-state', 'ready');
+      }
+    });
+  }
+
+  function buildBasePayload() {
+    var utm = collectUtm();
+    return {
+      public_landing_key: cfg.publicLandingKey || '',
+      counter_id: cfg.counterId || '',
+      landing_variant_code: cfg.landingCode || '',
+      landing_variant_name: cfg.landingName || '',
+      page_instance_id: pageInstanceId,
+      page_url: window.location.href,
+      referrer: document.referrer || null,
+      runtime_version: runtimeVersion,
+      browser_language: navigator.language || null,
+      browser_client_time: new Date().toISOString(),
+      advertising_click_ids: collectClickIds(),
+      utm_source: utm.utm_source,
+      utm_medium: utm.utm_medium,
+      utm_campaign: utm.utm_campaign,
+      utm_content: utm.utm_content,
+      utm_term: utm.utm_term
+    };
+  }
+
+  function postJson(url, payload, keepalive) {
+    if (!url || typeof fetch !== 'function') return Promise.resolve(null);
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+      keepalive: Boolean(keepalive)
+    }).then(function (response) {
+      return response.json().catch(function () { return null; }).then(function (body) {
+        return { ok: response.ok, body: body };
+      });
+    }).catch(function () {
+      return null;
+    });
+  }
+
+  function sendEvent(eventType, messenger) {
+    var payload = {
+      public_landing_key: cfg.publicLandingKey || '',
+      counter_id: cfg.counterId || '',
+      event_type: eventType,
+      messenger: messenger || null,
+      page_instance_id: pageInstanceId,
+      page_url: window.location.href,
+      referrer: document.referrer || null,
+      runtime_version: runtimeVersion,
+      client_time: new Date().toISOString()
+    };
+    var body = JSON.stringify(payload);
+
+    if (navigator.sendBeacon) {
+      try {
+        var blob = new Blob([body], { type: 'application/json' });
+        if (navigator.sendBeacon(clickEndpoint, blob)) return;
+      } catch (error) {
+        // A fetch fallback below keeps analytics from blocking navigation.
+      }
+    }
+    postJson(clickEndpoint, payload, true);
+  }
+
+  function sendLandingOpenedOnce() {
+    if (landingOpenedSent) return;
+    landingOpenedSent = true;
+    sendEvent('landing_opened', null);
+  }
+
+  function initRuntime() {
+    if (!cfg.publicLandingKey || !cfg.counterId) {
+      showRuntimeError();
+      console.error('[Atmospace] publicLandingKey/counterId missing');
+      return;
+    }
+    setButtonsState(isLocalPreview() ? 'preview' : 'loading');
+    if (isLocalPreview()) {
+      setRuntimeMessage('');
+      console.info('[Atmospace] Local preview: runtime API calls disabled.');
+      return;
+    }
+    postJson(initEndpoint, buildBasePayload(), false).then(function (result) {
+      var responseBody = result && result.body ? result.body : null;
+      var data = responseBody && responseBody.ok && responseBody.data ? responseBody.data : null;
+      var links = data && data.links ? data.links : null;
+      if (!result || !result.ok || !links || !links.telegram || !links.max) {
+        showRuntimeError();
+        return;
+      }
+      applyLinks(links);
+      sendLandingOpenedOnce();
+    });
+  }
+
+  document.addEventListener('click', function (event) {
+    var button = event.target && event.target.closest ? event.target.closest('[data-atmospace-messenger]') : null;
+    if (!button) return;
+    var messenger = button.getAttribute('data-atmospace-messenger') === 'max' ? 'max' : 'telegram';
+    if (button.getAttribute('aria-disabled') === 'true' || !readyLinks[messenger]) {
+      event.preventDefault();
+      return;
+    }
+    if (!hasPolicyConsent()) {
+      event.preventDefault();
+      return;
+    }
+    sendEvent('messenger_button_clicked', messenger);
+  }, true);
+
+  var consent = getPolicyCheckbox();
+  if (consent) {
+    consent.addEventListener('change', function () {
+      if (consent.checked) setPolicyError(false);
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initRuntime);
+  } else {
+    initRuntime();
+  }
+})();
+</script>`;
+}
+
+function stripHtml(text) {
+  return String(text || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function hashText(value = '') {
+  return Array.from(String(value)).reduce((hash, char) => {
+    hash ^= char.charCodeAt(0);
+    return Math.imul(hash, 16777619);
+  }, 2166136261) >>> 0;
+}
+
+function pickHashed(value, options) {
+  if (!options?.length) return undefined;
+  return options[Math.abs(hashText(value)) % options.length] || options[0];
+}
+
+function cleanVariantToken(value = '') {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9а-яё_-]+/gi, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 64) || 'variant';
+}
+
+function prelandingModeTitle(mode = '') {
+  if (mode === 'heroBlocks') return 'Формат 2 / Hero-картинка + блоки';
+  if (mode === 'natureEditorial') return 'Формат 3 / Nature editorial';
+  if (mode === 'minimalCompare') return 'Формат 4 / Тихое сравнение';
+  return 'Формат 1 / Метод + 3 блока';
+}
+
+function makePrelandingVariantMeta({ projectData = {}, mode = '', templateId = 1, style = '', palette = '', title = '', text = '', routeId = '' } = {}) {
+  const clientId = cleanVariantToken(projectData.clientCode || 'client_unknown');
+  const now = new Date();
+  const stamp = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'),
+    String(now.getHours()).padStart(2, '0'),
+    String(now.getMinutes()).padStart(2, '0'),
+    String(now.getSeconds()).padStart(2, '0')
+  ].join('');
+  const random = Math.random().toString(36).slice(2, 8);
+  const modeToken = cleanVariantToken(mode || 'individual');
+  const routeToken = cleanVariantToken(routeId || style || palette || `tpl_${templateId}`);
+  const hash = hashText(`${title}|${text}|${templateId}|${style}|${palette}|${stamp}|${random}`).toString(36).slice(0, 5);
+  return {
+    landingVariant: `${clientId}__${modeToken}__${routeToken}__${stamp}_${hash}_${random}`,
+    landingName: `${prelandingModeTitle(mode)} / шаблон ${templateId} / ${routeId || style || palette || 'design'}`,
+    generatorBuild: ATMOSPACE_GENERATED_RUNTIME_VERSION
+  };
+}
+
+const PRELANDING_FALLBACK_IMAGES = [];
+
+function pickStaticPrelandingFallback(seed, offset = 0) {
+  if (!PRELANDING_FALLBACK_IMAGES.length) return '';
+  const index = (hashText(seed) + offset) % PRELANDING_FALLBACK_IMAGES.length;
+  return PRELANDING_FALLBACK_IMAGES[index] || PRELANDING_FALLBACK_IMAGES[0];
+}
+
+function normalizeImageUrl(value) {
+  const raw = String(value || '')
+    .trim()
+    .replace(/^["'«]+|["'»]+$/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/\s+/g, '');
+
+  if (!raw) return '';
+  if (raw.startsWith('data:image/')) return raw;
+  if (!/^https?:\/\//i.test(raw)) return raw;
+
+  try {
+    return encodeURI(raw).replace(/%25([0-9A-F]{2})/gi, '%$1');
+  } catch {
+    return raw;
+  }
+}
+
+function bothelpImageSrc(value) {
+  const normalized = normalizeImageUrl(value);
+  if (!normalized || normalized.startsWith('data:image/')) return normalized;
+  if (!/^https?:\/\//i.test(normalized)) return normalized;
+  try {
+    const parsed = new URL(normalized);
+    if (/\/api\/image-proxy/i.test(parsed.pathname)) {
+      const inner = normalizeImageUrl(parsed.searchParams.get('url') || '');
+      if (/\/api\/published-image/i.test(inner)) return inner;
+    }
+  } catch {
+    // Keep the normalized value below.
+  }
+  if (/\/api\/image-proxy/i.test(normalized)) return normalized;
+  if (/\/api\/published-image/i.test(normalized)) return normalized;
+  if (/storage\d*\.bothelp\.io/i.test(normalized) || /\.(png|jpe?g|webp|gif|avif)(?:[?#].*)?$/i.test(normalized)) return normalized;
+  return `https://constructoratmosfera.com/api/image-proxy?url=${encodeURIComponent(normalized)}&v=${Date.now()}`;
+}
+
+function isProbablyImageUrl(value) {
+  const normalized = normalizeImageUrl(value);
+  if (!normalized) return false;
+  if (normalized.startsWith('data:image/')) return normalized.length < 6000000;
+  if (!/^https?:\/\//i.test(normalized)) return false;
+  return true;
+}
+
+function pickPrelandingImageUrl(...values) {
+  for (const value of values) {
+    const normalized = normalizeImageUrl(value);
+    if (isProbablyImageUrl(normalized)) return normalized;
+  }
+  return '';
+}
+
+function comparableImageUrl(value) {
+  const normalized = normalizeImageUrl(value);
+  if (!normalized) return '';
+  try {
+    const parsed = new URL(normalized);
+    if (/\/api\/image-proxy/i.test(parsed.pathname)) {
+      return comparableImageUrl(parsed.searchParams.get('url') || '');
+    }
+    parsed.hash = '';
+    if (/images\.unsplash\.com/i.test(parsed.hostname)) {
+      parsed.search = '';
+    }
+    return parsed.toString().toLowerCase();
+  } catch {
+    return normalized.toLowerCase();
+  }
+}
+
+function pickDistinctPrelandingImage(seed, offsets = [0], used = new Set(), ...values) {
+  for (const value of values) {
+    const picked = pickPrelandingImageUrl(value);
+    const key = comparableImageUrl(picked);
+    if (picked && key && !used.has(key)) {
+      used.add(key);
+      return picked;
+    }
+  }
+  const safeOffsets = offsets.length ? offsets : [0];
+  for (const offset of safeOffsets) {
+    const picked = pickStaticPrelandingFallback(seed, offset);
+    const key = comparableImageUrl(picked);
+    if (picked && key && !used.has(key)) {
+      used.add(key);
+      return picked;
+    }
+  }
+  const fallback = pickStaticPrelandingFallback(seed, safeOffsets[0] || 0);
+  const key = comparableImageUrl(fallback);
+  if (key) used.add(key);
+  return fallback;
+}
+
+async function postJsonWithTimeout(url, body, options = {}) {
+  const timeoutMs = options.timeoutMs || 0;
+  const timeoutLabel = options.timeoutLabel || 'Сервис';
+  const controller = timeoutMs ? new AbortController() : null;
+  const timeoutId = timeoutMs
+    ? window.setTimeout(() => controller.abort(), timeoutMs)
+    : null;
+
+  let response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller?.signal
+    });
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error(`${timeoutLabel} отвечает дольше обычного. Конструктор перезапустит попытку.`, { cause: error });
+    }
+    throw error;
+  } finally {
+    if (timeoutId) window.clearTimeout(timeoutId);
+  }
+
+  const contentType = response.headers.get('content-type') || '';
+  const raw = await response.text();
+  let data = null;
+  if (contentType.includes('application/json') && raw) {
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      data = null;
+    }
+  }
+  if (!response.ok) {
+    const rawFallback = raw.includes('<html') || raw.includes('<!DOCTYPE')
+      ? 'Сервис вернул HTML-ошибку Cloudflare. Попробуйте повторить генерацию.'
+      : raw.slice(0, 300);
+    const friendly = url === ATMOSPACE_GENERATE_ENDPOINT
+      ? getAtmospaceGenerateErrorMessage(data?.error, response.status, data?.message || rawFallback)
+      : data?.message || data?.error || rawFallback;
+    const requestRef = String(data?.requestId || data?.request_id || '').trim();
+    const error = new Error(requestRef ? `${friendly} Номер проверки: ${requestRef}.` : friendly);
+    error.code = String(data?.error || 'request_failed');
+    error.status = response.status;
+    error.requestId = requestRef;
+    throw error;
+  }
+  if (data) return data;
+  try {
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    throw new Error('Сервис вернул не JSON. Попробуйте повторить действие.');
+  }
+}
+
+function normalizeAtmospaceGenerateResult(response = {}, fallback = {}) {
+  const data = response?.data && typeof response.data === 'object' ? response.data : response;
+  const publicLandingKey = String(data?.publicLandingKey || data?.public_landing_key || '').trim();
+  if (!publicLandingKey) {
+    throw new Error('Сервер Atmospace не вернул publicLandingKey. Генерация остановлена.');
+  }
+  const landingName = String(data?.landingName || data?.landing_name || fallback.landingName || '').trim();
+  const landingCode = String(fallback.landingCode || '').trim();
+  const counterId = String(data?.counterId || data?.counter_id || fallback.counterId || '').trim();
+  const inputKey = buildAtmospaceRuntimeInputKey({ landingName, landingCode, counterId });
+
+  return {
+    artifactId: `${publicLandingKey}:${Date.now()}`,
+    inputKey,
+    landingName,
+    landingCode,
+    counterId,
+    publicLandingKey,
+    embedCode: String(data?.embedCode || data?.embed_code || ''),
+    status: String(data?.status || 'generated'),
+    runtimeStatus: String(data?.status || 'generated'),
+    generatedAt: new Date().toISOString()
+  };
+}
+
+function isRetryablePrelandingImageIssue(message = '') {
+  const text = String(message || '').toLowerCase();
+  return !text
+    || text.includes('429')
+    || text.includes('1015')
+    || text.includes('503')
+    || text.includes('504')
+    || text.includes('rate')
+    || text.includes('tempor')
+    || text.includes('timeout')
+    || text.includes('gateway')
+    || text.includes('service unavailable')
+    || text.includes('network')
+    || text.includes('abort')
+    || text.includes('failed to fetch')
+    || text.includes('no image')
+    || text.includes('не успел')
+    || text.includes('дольше обычного')
+    || text.includes('перезапуст')
+    || text.includes('отдать картинку')
+    || text.includes('не вернул')
+    || text.includes('не загруз')
+    || text.includes('не открывается')
+    || text.includes('временно');
+}
+
+const PRELANDING_IMAGE_ATTEMPTS = 3;
+const PRELANDING_IMAGE_TIMEOUT_MS = 300000;
+const PRELANDING_IMAGE_RETRY_DELAY_MS = 5000;
+const PRELANDING_PUBLISH_TIMEOUT_MS = 90000;
+const PRELANDING_IMAGE_LOAD_TIMEOUT_MS = 18000;
+
+function waitForImageLoad(src, timeoutMs = 12000) {
+  return new Promise((resolve, reject) => {
+    if (!src || typeof Image === 'undefined') {
+      resolve();
+      return;
+    }
+    const img = new Image();
+    let done = false;
+    const finish = (error) => {
+      if (done) return;
+      done = true;
+      window.clearTimeout(timer);
+      if (error) reject(error);
+      else resolve();
+    };
+    const timer = window.setTimeout(() => finish(new Error('Опубликованная AI-картинка не загрузилась за контрольное время.')), timeoutMs);
+    img.onload = () => finish();
+    img.onerror = () => finish(new Error('Опубликованная AI-картинка не открывается. Генерация остановлена, чтобы не выдать пустой блок.'));
+    img.src = src;
+  });
+}
+
+async function generatePrelandingImage(spec, options = {}) {
+  const maxAttempts = options.maxAttempts || PRELANDING_IMAGE_ATTEMPTS;
+  const retryDelayMs = options.retryDelayMs || PRELANDING_IMAGE_RETRY_DELAY_MS;
+  const onAttempt = typeof options.onAttempt === 'function' ? options.onAttempt : null;
+  let lastError = '';
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      onAttempt?.({ spec, attempt, maxAttempts, phase: 'generate' });
+      const data = await postJsonWithTimeout('/api/generate-image', {
+        visualPrompt: spec.visualPrompt,
+        headline: spec.headline || '',
+        methodName: spec.methodName || '',
+        fullBanner: false,
+        stylePreset: spec.stylePreset || 'whiteGoldPremium',
+        persona: spec.persona || 'mixed',
+        visualMode: spec.visualMode || 'generatedPerson',
+        imagePurpose: 'prelandingHero',
+        imageSize: spec.imageSize || '1536x1024',
+        imageQuality: spec.imageQuality || 'high',
+        variationKey: spec.variationKey || ''
+      }, {
+        timeoutMs: options.timeoutMs || PRELANDING_IMAGE_TIMEOUT_MS,
+        timeoutLabel: 'OpenAI'
+      });
+
+      if (!data?.image) {
+        const warning = data?.warning || 'AI не вернул картинку.';
+        if (attempt < maxAttempts && isRetryablePrelandingImageIssue(warning)) {
+          lastError = warning;
+          onAttempt?.({ spec, attempt, maxAttempts, phase: 'retry', error: warning });
+          await new Promise((resolve) => window.setTimeout(resolve, retryDelayMs));
+          continue;
+        }
+        throw new Error(warning);
+      }
+
+      const published = await postJsonWithTimeout('/api/publish-image', {
+        imageDataUrl: data.image
+      }, {
+        timeoutMs: options.publishTimeoutMs || PRELANDING_PUBLISH_TIMEOUT_MS,
+        timeoutLabel: 'Публикация картинки'
+      });
+
+      if (!published?.imageUrl) {
+        throw new Error('Сервис не вернул ссылку на AI-картинку для Tilda.');
+      }
+
+      await waitForImageLoad(published.imageUrl, options.imageLoadTimeoutMs || PRELANDING_IMAGE_LOAD_TIMEOUT_MS);
+
+      return published.imageUrl;
+    } catch (error) {
+      lastError = String(error?.message || error);
+      if (attempt >= maxAttempts || !isRetryablePrelandingImageIssue(lastError)) {
+        throw new Error(lastError, { cause: error });
+      }
+      onAttempt?.({ spec, attempt, maxAttempts, phase: 'retry', error: lastError });
+      await new Promise((resolve) => window.setTimeout(resolve, retryDelayMs));
+    }
+  }
+  throw new Error(lastError || 'OpenAI долго не возвращает AI-картинку. Запустите генерацию ещё раз, конструктор продолжит дожимать кадры.');
+}
+
+function prelandingImageStylePreset(style, palette) {
+  const key = `${style || ''} ${palette || ''}`.toLowerCase();
+  if (key.includes('gold') || key.includes('premium') || key.includes('white')) return 'whiteGoldPremium';
+  if (key.includes('green') || key.includes('mint')) return 'greenSystem';
+  if (key.includes('red') || key.includes('coral')) return 'redWhite';
+  if (key.includes('clean') || key.includes('adtech') || key.includes('saas') || key.includes('blue')) return 'blueTrust';
+  if (key.includes('story') || key.includes('documentary')) return 'editorialGold';
+  return 'whiteGoldPremium';
+}
+
+const PRELANDING_DESIGN_ROTATION_KEY = 'constructorPrelandingDesignRotationIndexV2';
+const PRELANDING_VISUAL_ROTATION_KEY = 'constructorPrelandingVisualRotationIndexV2';
+const PRELANDING_VISUAL_MEMORY_KEY = 'constructorPrelandingVisualMemoryV2';
+
+const HERO_BLOCKS_DESIGN_ROUTES = [
+  { id: 'hero-air-blue', label: 'Светлый синий hero', style: 'premium-light', palette: 'blue-trust', layout: 'split', typo: 'manrope', effects: ['fadein', 'micro'], imageStylePreset: 'blueTrust', visualMood: 'clean bright blue trust, white cards, clear CTA, not dark' },
+  { id: 'hero-white-gold', label: 'Бело-золотой премиум', style: 'banner-white-gold', palette: 'white-gold-ad', layout: 'cards', typo: 'manrope', effects: ['fadein', 'micro'], imageStylePreset: 'whiteGoldPremium', visualMood: 'warm premium white and gold, editorial lifestyle, expensive but not luxury cliche' },
+  { id: 'hero-mint-system', label: 'Мятная система', style: 'client-story', palette: 'mint-fresh', layout: 'classic', typo: 'inter', effects: ['fadein'], imageStylePreset: 'greenSystem', visualMood: 'fresh mint-green clarity, system and route feeling, calm confident first screen' },
+  { id: 'hero-coral-action', label: 'Синий и коралл', style: 'clean-ads', palette: 'trust-coral', layout: 'split', typo: 'manrope', effects: ['fadein', 'micro'], imageStylePreset: 'redWhite', visualMood: 'white background with coral energy accents, short punchy offer blocks, strong ad-like CTA' }
+];
+
+const NATURE_EDITORIAL_DESIGN_ROUTES = [
+  { id: 'nature-sage-paper', label: 'Nature sage paper', style: 'nature-sage-paper', palette: 'white-gold-ad', layout: 'split', typo: 'playfair', effects: ['fadein', 'micro'], imageStylePreset: 'whiteGoldPremium', visualMood: 'warm paper editorial, sage olive accents, soft premium nature-inspired composition, airy magazine landing' },
+  { id: 'nature-terra-focus', label: 'Nature terra focus', style: 'nature-terra-focus', palette: 'trust-coral', layout: 'classic', typo: 'playfair', effects: ['fadein'], imageStylePreset: 'editorialGold', visualMood: 'beige and terracotta editorial story, human warmth, calm focused premium prelanding' },
+  { id: 'nature-forest-trust', label: 'Nature forest trust', style: 'nature-forest-trust', palette: 'green-money', layout: 'cards', typo: 'playfair', effects: ['fadein', 'micro'], imageStylePreset: 'greenSystem', visualMood: 'olive forest trust, natural daylight, paper cards, practical route and first step, no dark colors' }
+];
+
+const MINIMAL_COMPARE_DESIGN_ROUTES = [
+  { id: 'minimal-noir-signal', label: 'Noir signal', style: 'minimal-noir', palette: 'black-yellow-ad', layout: 'minimal', typo: 'inter', effects: ['fadein'], visualMood: 'dark premium text-first quiet comparison landing, no photo, minimal lines and high contrast' },
+  { id: 'minimal-graphite-white', label: 'Graphite white', style: 'minimal-graphite', palette: 'clean-product', layout: 'minimal', typo: 'inter', effects: ['fadein'], visualMood: 'graphite and white strict minimal landing, calm comparison, lots of negative space, no photo' },
+  { id: 'minimal-blue-quiet', label: 'Blue quiet', style: 'minimal-blue', palette: 'deep-blue-ad', layout: 'minimal', typo: 'inter', effects: ['fadein'], visualMood: 'dark blue quiet premium landing, internal comparison and first step, no photo' }
+];
+
+const CORE_METHOD_DESIGN_ROUTES = [
+  { id: 'core-orange-break', label: 'Жёсткий разрыв', coreDesignClass: 'fh-theme-ember', themeStyle: 'heroBright', palette: 'red-energy', typo: 'manrope', effects: ['fadein', 'micro'], imageStylePreset: 'redWhite', visualMood: 'bright warm orange-red accent, clean white cards, feeling of breaking old course habits' },
+  { id: 'core-blue-proof', label: 'Снятие возражений', coreDesignClass: 'fh-theme-sky', themeStyle: 'blueTrust', palette: 'blue-trust', typo: 'manrope', effects: ['fadein', 'micro'], imageStylePreset: 'blueTrust', visualMood: 'trusted blue, clean premium, calm proof and clear route' },
+  { id: 'core-green-route', label: 'Доверие и ясность', coreDesignClass: 'fh-theme-lime', themeStyle: 'greenSystem', palette: 'green-money', typo: 'manrope', effects: ['fadein'], imageStylePreset: 'greenSystem', visualMood: 'green route/system clarity, safe entry, less pressure, more step-by-step logic' }
+];
+
+const DIRECTION_QUIZ_DESIGN_ROUTES = [
+  { id: 'direction-quiz-navy', label: 'Ночной синий маршрут', style: 'direction-quiz-navy', palette: 'deep-blue-ad', layout: 'quiz', typo: 'manrope', effects: ['fadein', 'micro'], imageStylePreset: 'blueTrust', visualMood: 'deep navy editorial quiz, restrained blue signal, premium honest diagnostic' },
+  { id: 'direction-quiz-gold', label: 'Тёмное золото', style: 'direction-quiz-gold', palette: 'black-yellow-ad', layout: 'quiz', typo: 'manrope', effects: ['fadein'], imageStylePreset: 'whiteGoldPremium', visualMood: 'dark premium quiz with warm gold signal, honest route and calm confidence' },
+  { id: 'direction-quiz-forest', label: 'Лесная ясность', style: 'direction-quiz-forest', palette: 'green-money', layout: 'quiz', typo: 'manrope', effects: ['fadein', 'micro'], imageStylePreset: 'greenSystem', visualMood: 'deep green editorial quiz, natural clarity and a realistic first step' }
+];
+
+const PERSONAL_ROUTE_QUIZ_DESIGN_ROUTES = [
+  { id: 'personal-route-coral', label: 'Коралл и ночь', style: 'personal-route-coral', palette: 'trust-coral', layout: 'quiz', typo: 'manrope', effects: ['fadein', 'micro'], imageStylePreset: 'redWhite', visualMood: 'deep plum and coral personal route quiz, human warmth, restrained cinematic contrast' },
+  { id: 'personal-route-amber', label: 'Янтарная точка', style: 'personal-route-amber', palette: 'white-gold-ad', layout: 'quiz', typo: 'manrope', effects: ['fadein'], imageStylePreset: 'whiteGoldPremium', visualMood: 'dark amber premium personal route quiz, warm light and honest self-reflection' },
+  { id: 'personal-route-violet', label: 'Фиолетовый фокус', style: 'personal-route-violet', palette: 'deep-blue-ad', layout: 'quiz', typo: 'manrope', effects: ['fadein', 'micro'], imageStylePreset: 'blueTrust', visualMood: 'dark violet and blue diagnostic quiz, clear focus and modern premium mood' }
+];
+
+const BARRIER_PROFILE_QUIZ_DESIGN_ROUTES = [
+  { id: 'barrier-profile-ember', label: 'Тёплый разрыв', style: 'barrier-profile-ember', palette: 'trust-coral', layout: 'quiz', typo: 'manrope', effects: ['fadein', 'micro'], imageStylePreset: 'redWhite', visualMood: 'deep graphite and restrained coral barrier profile quiz, honest self-observation, cinematic human tension without melodrama' },
+  { id: 'barrier-profile-teal', label: 'Бирюзовая ясность', style: 'barrier-profile-teal', palette: 'green-money', layout: 'quiz', typo: 'manrope', effects: ['fadein'], imageStylePreset: 'greenSystem', visualMood: 'dark teal premium diagnostic, calm clarity, realistic pace and a concrete first step' },
+  { id: 'barrier-profile-blue', label: 'Глубокий синий', style: 'barrier-profile-blue', palette: 'deep-blue-ad', layout: 'quiz', typo: 'manrope', effects: ['fadein', 'micro'], imageStylePreset: 'blueTrust', visualMood: 'deep navy barrier profile quiz, precise editorial contrast, focus and measured confidence' }
+];
+
+const PRELANDING_VISUAL_ROUTES = [
+  {
+    id: 'woman-terrace-coral',
+    label: 'женщина на светлой террасе',
+    personas: ['woman', 'man', 'mixed'],
+    scenes: [
+      'confident woman 38-46 in a coral or soft peach shirt, bright terrace or modern balcony workspace, plants and city light, natural smile, not the same brunette office portrait',
+      'different adult man 35-48 planning at a wooden table with notebook and phone, warm daylight, cafe terrace depth, no readable screens',
+      'mixed working scene with two adults discussing a simple route on paper in a bright room, hands and faces natural, no corporate stock pose'
+    ],
+    negative: 'avoid blue blouse by window, avoid close-up hands under chin, avoid identical brunette face, avoid sterile white wall'
+  },
+  {
+    id: 'man-cafe-blue',
+    label: 'мужчина в кафе',
+    personas: ['man', 'woman', 'man'],
+    scenes: [
+      'confident man 36-50 in navy jacket and white t-shirt sitting in a bright modern cafe, phone on table, relaxed direct gaze, clean blue trust mood',
+      'different woman 35-48 reviewing a simple checklist on paper near a large window, visible room depth, calm professional expression',
+      'same general campaign mood but different male person with phone near cafe window, ready for next step, no logos'
+    ],
+    negative: 'avoid female portrait dominating every generation, avoid laptop-only empty office, avoid dark background'
+  },
+  {
+    id: 'woman-short-hair-mint',
+    label: 'короткая стрижка и мятный свет',
+    personas: ['woman', 'mixed', 'woman'],
+    scenes: [
+      'woman 42-55 with short hair in a mint shirt, bright kitchen or home office, real daylight, laptop closed or aside, open space for text',
+      'two adults looking at a simple route diagram on a table, mint-green details, practical calm atmosphere',
+      'different woman using smartphone in a bright home workspace, friendly messenger feeling without logos, clear face but not a close-up'
+    ],
+    negative: 'avoid same long-haired model, avoid overexposed white background, avoid empty staged stock photo'
+  },
+  {
+    id: 'standing-office-gold',
+    label: 'премиальный светлый офис',
+    personas: ['woman', 'man', 'woman'],
+    scenes: [
+      'confident woman 35-47 standing in a bright premium office or studio, beige/white blazer, warm gold accents, visible depth, not luxury cliche',
+      'different man 40-52 near planning board with notebook, warm white-gold editorial light, no readable text',
+      'woman 38-50 with phone at a clean desk, soft gold daylight, decision moment, calm smile'
+    ],
+    negative: 'avoid repeated sofa/window portrait, avoid washed-out face, avoid banking symbols or money'
+  },
+  {
+    id: 'no-portrait-route',
+    label: 'маршрут без портретного клише',
+    personas: ['mixed', 'woman', 'man'],
+    scenes: [
+      'wide lifestyle scene with a person seen naturally in a bright coworking space, not a centered portrait, route/checklist objects in foreground, plenty of text space',
+      'close editorial scene of notebook, phone, coffee and hands drawing a simple path, no readable words, warm daylight, human presence but no face focus',
+      'adult person walking out of a bright cafe with phone in hand, sense of next step, airy city background'
+    ],
+    negative: 'avoid single centered smiling woman, avoid identical face, avoid generic stock business handshake'
+  },
+  {
+    id: 'family-table-trust',
+    label: 'домашняя доверительная сцена',
+    personas: ['woman', 'man', 'mixed'],
+    scenes: [
+      'adult woman 40-52 at a bright dining table with phone and notebook, home comfort, honest trust mood, not glamorous',
+      'adult man 38-50 in a cozy home office reviewing a short plan, plant and daylight, no dark screen',
+      'mixed family-like but professional table scene, two adults reviewing a simple path, no children focus, no private data'
+    ],
+    negative: 'avoid corporate boardroom, avoid dark neon, avoid the same woman model'
+  }
+];
+
+function readRotationIndex(key) {
+  try {
+    return Number(localStorage.getItem(key) || '0') || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function bumpRotationIndex(key, next) {
+  try {
+    localStorage.setItem(key, String(next));
+  } catch {
+    // Rotation still works for the current click through Math.random fallback.
+  }
+}
+
+function nextFromRotation(key, items) {
+  if (!items.length) return null;
+  const index = readRotationIndex(key);
+  bumpRotationIndex(key, index + 1);
+  return items[index % items.length];
+}
+
+function nextPrelandingDesignRoute(mode) {
+  const routes = mode === 'heroBlocks'
+    ? HERO_BLOCKS_DESIGN_ROUTES
+    : mode === 'natureEditorial'
+      ? NATURE_EDITORIAL_DESIGN_ROUTES
+      : mode === 'minimalCompare'
+        ? MINIMAL_COMPARE_DESIGN_ROUTES
+        : mode === 'directionQuiz'
+          ? DIRECTION_QUIZ_DESIGN_ROUTES
+          : mode === 'personalRouteQuiz'
+            ? PERSONAL_ROUTE_QUIZ_DESIGN_ROUTES
+            : mode === 'barrierProfileQuiz'
+              ? BARRIER_PROFILE_QUIZ_DESIGN_ROUTES
+            : CORE_METHOD_DESIGN_ROUTES;
+  return nextFromRotation(PRELANDING_DESIGN_ROTATION_KEY, routes) || routes[0];
+}
+
+function readPrelandingVisualMemory() {
+  try {
+    const raw = localStorage.getItem(PRELANDING_VISUAL_MEMORY_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.slice(-8) : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberPrelandingVisualRoute(route) {
+  if (!route?.id) return;
+  try {
+    const memory = readPrelandingVisualMemory();
+    const next = [...memory, {
+      id: route.id,
+      label: route.label,
+      at: new Date().toISOString()
+    }].slice(-8);
+    localStorage.setItem(PRELANDING_VISUAL_MEMORY_KEY, JSON.stringify(next));
+  } catch {
+    // Visual memory is a nice-to-have; generation continues without storage.
+  }
+}
+
+function nextPrelandingVisualRoute() {
+  const route = nextFromRotation(PRELANDING_VISUAL_ROTATION_KEY, PRELANDING_VISUAL_ROUTES) || PRELANDING_VISUAL_ROUTES[0];
+  rememberPrelandingVisualRoute(route);
+  return route;
+}
+
+function buildPrelandingMemoryLine(memory = []) {
+  if (!memory.length) return 'No previous visual memory yet; still make this generation visually unique.';
+  const labels = memory.map(item => item.label || item.id).filter(Boolean).join(', ');
+  return `Recent generated visual routes: ${labels}. Do not repeat their dominant person type, hair/clothes, place, pose, camera angle or color mood.`;
+}
+
+function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline, text, projectData, designRoute, visualRoute, visualMemory }) {
+  const content = PRELANDING_CONTENT[templateId] || PRELANDING_CONTENT[1];
+  const title = stripHtml(headline || content.titleHtml || 'Откройте короткий разбор и первый понятный шаг');
+  const subtitle = stripHtml(text || content.trustTitle || content.valueTitle || 'Короткий разбор показывает механику и следующий шаг без долгой подготовки');
+  const landingLogic = resolveClientPrelandingLogic(title, subtitle, mode);
+  const clientName = projectData?.clientDisplayName || projectData?.clientName || '';
+  const route = visualRoute || PRELANDING_VISUAL_ROUTES[0];
+  const memoryLine = buildPrelandingMemoryLine(visualMemory || readPrelandingVisualMemory());
+  const semanticPersonas = landingLogic.bannerPersonas?.length
+    ? landingLogic.bannerPersonas
+    : route.personas || ['woman', 'man', 'mixed'];
+  const semanticRotation = Math.abs(hashText(`${route.id || ''}|${designRoute?.id || ''}|${title}|${Date.now()}|${Math.random()}`));
+  const rotateItems = (items, offset) => items.map((_, index) => items[(index + offset) % items.length]);
+  const semanticSceneSets = Array.isArray(landingLogic.prelandingVisualSceneSets)
+    ? landingLogic.prelandingVisualSceneSets.filter(set => Array.isArray(set) && set.length >= 3)
+    : [];
+  const selectedSceneSet = semanticSceneSets.length
+    ? semanticSceneSets[semanticRotation % semanticSceneSets.length]
+    : null;
+  const semanticScenes = selectedSceneSet || (landingLogic.prelandingVisualScenes?.length
+    ? landingLogic.prelandingVisualScenes
+    : []);
+  const fallbackRouteScenes = route.scenes || [];
+  const routeScenes = semanticScenes.length
+    ? semanticScenes.slice(0, 3)
+    : rotateItems(fallbackRouteScenes, fallbackRouteScenes.length ? semanticRotation % fallbackRouteScenes.length : 0).slice(0, 3);
+  const routePersonas = rotateItems(semanticPersonas, semanticPersonas.length ? semanticRotation % semanticPersonas.length : 0);
+  const designMood = designRoute?.visualMood || 'clean premium light prelanding design';
+  const modeDescription = mode === 'heroBlocks'
+    ? 'client prelanding from headline and subtitle, bright hero scene with white blocks'
+    : mode === 'natureEditorial'
+      ? 'Nature editorial prelanding, warm paper/sage/olive visual language, magazine-like premium layout with collage and calm first step'
+      : 'client prelanding, light premium product page';
+  const baseContext = [
+    `Landing headline: ${title}`,
+    `Landing subtitle / meaning: ${subtitle}`,
+    `Marketing semantic: ${landingLogic.semanticId || 'problem-route'}; angle: ${landingLogic.label}`,
+    `Bot transition logic: ${landingLogic.actionSubtitle}`,
+    `Core offer cards: ${landingLogic.cards.map(item => `${item.title}: ${item.text}`).join(' | ')}`,
+    `Client context: ${clientName || 'generic client'}`,
+    `Mode: ${modeDescription}`,
+    `Design route: ${designRoute?.label || style || 'clean premium'}; palette: ${palette || 'soft bright'}; visual mood: ${designMood}`,
+    `Current visual route: ${route.label || route.id || 'new route'}.`,
+    memoryLine,
+    'No text, no letters, no numbers, no logos, no UI screenshots, no bank cards, no money stacks.',
+    `Landing rules: ${CLIENT_PRELANDING_RULES.join('; ')}.`,
+    'Visual story must literally support the exact problem in the landing headline and subtitle. Do not replace a salary problem, family choice, overwork or broken appliance with a generic successful person walking in a city.',
+    'Do not add any brand, internal product name, readable UI or unrelated mythology.',
+    'Bright clean premium lifestyle photography for a modern Russian ad landing, not gloomy, not dark, not stock-like.',
+    'The person must look alive and modern, age 32-50, visible face and natural emotion, not elderly, not tired, not overexposed.',
+    'Avoid washed-out white backgrounds and blown highlights: keep readable skin tone, natural contrast, real room/cafe/city depth, vivid daylight, crisp focus.',
+    'Keep the face and upper body comfortably framed, never cropped at the edge; leave safe negative space for text without making the whole image empty white.',
+    'Every image must be a different scene, different camera angle, different background, different clothes and different composition.',
+    'Three-image story contract: hero shows one concrete triggering event; value shows its consequence or changed choice in another location; CTA shows relief, direction and the next step after the problem.',
+    'Across all three images never repeat the same person, room, focal object, problem object, pose, clothes, camera angle or narrative moment. A different person beside the same appliance still counts as repetition and is forbidden.',
+    'Only the hero may feature the broken object. The value and CTA images must not contain that object, its room, a repair counter, repair tools or another version of the same breakdown.',
+    route.negative ? `Negative visual repetition: ${route.negative}.` : ''
+  ].join('\n');
+  const imageStylePreset = designRoute?.imageStylePreset || prelandingImageStylePreset(style, palette);
+  const variantSeed = `${mode}|${templateId}|${style}|${palette}|${title}|${subtitle}|${Date.now()}|${Math.random().toString(36).slice(2, 8)}`;
+  if (mode === 'directionQuiz' || mode === 'personalRouteQuiz' || mode === 'barrierProfileQuiz') {
+    const quizLabel = mode === 'directionQuiz'
+      ? 'four-question direction diagnostic'
+      : mode === 'personalRouteQuiz'
+        ? 'five-question personal route diagnostic'
+        : 'five-question barrier profile diagnostic about a repeating failure pattern and a realistic first step';
+    const semanticScene = routeScenes[0]
+      || 'one meaningful editorial scene or visual metaphor that directly expresses the headline, with a real person only when the story needs one';
+    const quizContext = [
+      `Landing headline: ${title}`,
+      `Landing subtitle / meaning: ${subtitle}`,
+      `Quiz format: ${quizLabel}`,
+      `Marketing semantic: ${landingLogic.semanticId || 'problem-route'}; angle: ${landingLogic.label}`,
+      `Client context: ${clientName || 'generic client'}`,
+      `Design route: ${designRoute?.label || style || 'premium quiz'}; palette: ${palette || 'deep restrained'}; visual mood: ${designMood}`,
+      memoryLine,
+      `Semantic scene: ${semanticScene}`,
+      'Create one premium cinematic editorial hero photo that literally supports the headline and the self-diagnostic journey.',
+      'Use a person only when the headline needs a person; otherwise use a concrete place, object, route, doorway, map, desk, road, landscape or another clear metaphor.',
+      'Place the main visual subject on the right half and leave calm, textured negative space on the left for HTML text.',
+      'No text, no letters, no numbers, no logos, no UI, no split poster, no blank white studio, no generic stock success pose.',
+      'Natural contrast, deep but readable shadows, crisp focus, realistic materials and modern premium Russian advertising mood.'
+    ].join('\n');
+    return [{
+      slot: 'hero',
+      headline: title,
+      methodName: subtitle,
+      persona: 'semantic',
+      visualMode: 'generatedPerson',
+      stylePreset: imageStylePreset,
+      variationKey: `${variantSeed}|quiz-hero`,
+      visualPrompt: quizContext
+    }];
+  }
+  const heroSubject = mode === 'natureEditorial'
+    ? `hero collage image: ${routeScenes[0] || 'one thoughtful adult person in a warm bright home studio, books/notebook/plant details, natural premium editorial mood'}, enough negative space for a serif headline, soft paper colors, no stock cliche`
+    : mode === 'heroBlocks'
+    ? `hero image: ${routeScenes[0] || 'one confident adult person in a bright modern apartment, cafe terrace or city workspace'}, face clearly visible, expressive but calm, subject on the right third, clean open space on the left for headline, premium ad photography, feeling of a person ready to return to action`
+    : `hero image: ${routeScenes[0] || 'ordinary confident adult person 35-55 in a bright modern home office or city cafe'}, calm but energetic, open white/blue/pastel atmosphere, subtle sense of route and first step`;
+  const valueSubject = mode === 'natureEditorial'
+    ? `story section image: ${routeScenes[1] || 'different editorial scene with books, notebook, tea/coffee and a person making a simple plan'}, warm beige/sage palette, tactile paper feeling, no readable text`
+    : mode === 'heroBlocks'
+    ? `middle section image: ${routeScenes[1] || 'different live scene with a person and simple planning objects'}, laptop/phone/notebook as details only, warm daylight, visible depth, no blank white wall, no readable screens, atmosphere of testing and movement map`
+    : `middle section image: ${routeScenes[1] || 'different scene, practical route/system metaphor, desk with notebook and phone, person reviewing a simple path'}, high-key editorial light, first-step mood without text`;
+  const ctaSubject = mode === 'natureEditorial'
+    ? `final CTA image: ${routeScenes[2] || 'different adult person with phone near plants or a bright cafe window, ready to open messenger'}, warm natural light, premium calm trust, no logos`
+    : mode === 'heroBlocks'
+    ? `CTA image: ${routeScenes[2] || 'different scene, person choosing next step on phone in a bright cafe/city/home environment'}, friendly messenger-like feeling without logos, clear face or hands, energetic but trustworthy`
+    : `CTA image: ${routeScenes[2] || 'different scene, confident person after decision, phone in hand, airy premium room'}, energetic but trustworthy, no luxury cliches`;
+
+  return [
+    {
+      slot: 'hero',
+      headline: title,
+      methodName: subtitle,
+      persona: routePersonas[0] || 'woman',
+      visualMode: 'generatedPerson',
+      stylePreset: imageStylePreset,
+      variationKey: `${variantSeed}|hero`,
+      visualPrompt: `${baseContext}\n\nROLE 1 — TRIGGERING EVENT. ${heroSubject}\nShow one clear focal problem object only. Composition: wide horizontal premium hero photo, cinematic 35mm lifestyle look, subject on the right side, generous clean space on the left, no text.`
+    },
+    {
+      slot: 'value',
+      headline: title,
+      methodName: subtitle,
+      persona: routePersonas[1] || 'man',
+      visualMode: 'generatedPerson',
+      stylePreset: imageStylePreset,
+      variationKey: `${variantSeed}|value`,
+      visualPrompt: `${baseContext}\n\nROLE 2 — CONSEQUENCE OR CHANGED CHOICE. ${valueSubject}\nHard exclusion: do not show the hero problem object, washing machine, laundry room, broken appliance, repair counter, repair tools or repair estimate. Composition: horizontal editorial photo for a white rounded content section, different person, location, focal object and camera angle from hero, no text.`
+    },
+    {
+      slot: 'cta',
+      headline: title,
+      methodName: subtitle,
+      persona: routePersonas[2] || 'mixed',
+      visualMode: 'generatedPerson',
+      stylePreset: imageStylePreset,
+      variationKey: `${variantSeed}|cta`,
+      visualPrompt: `${baseContext}\n\nROLE 3 — RELIEF AND NEXT STEP. ${ctaSubject}\nHard exclusion: no broken object, no washing machine, no laundry room, no appliance, no car breakdown, no repair counter, no repair tools and no location used in hero or value. Composition: horizontal CTA photo, close but uncluttered, different person, place, action and camera angle from hero and value, no text.`
+    }
+  ];
+}
+
+function prelandingThemeForStyle(style, palette) {
+  const key = `${style || ''} ${palette || ''}`.toLowerCase();
+  if (key.includes('premium-light') || key.includes('white-gold') || key.includes('banner-white-gold')) {
+    return {
+      cls: 'pl-theme-luxe-light',
+      accent: '#b18a3d',
+      accent2: '#2563eb',
+      bg: 'radial-gradient(circle at 78% 12%,rgba(177,138,61,.18),transparent 28%),radial-gradient(circle at 18% 86%,rgba(37,99,235,.10),transparent 32%),linear-gradient(135deg,#fffdf7 0%,#f8fbff 52%,#f1f5fb 100%)',
+      light: true,
+      btnMain1: '#d8b15a',
+      btnMain2: '#f8d26a',
+      btnAlt1: '#061325',
+      btnAlt2: '#2563eb'
+    };
+  }
+  if (key.includes('client-story') || key.includes('documentary')) {
+    return {
+      cls: 'pl-theme-story-light',
+      accent: '#0f766e',
+      accent2: '#2563eb',
+      bg: 'radial-gradient(circle at 80% 12%,rgba(15,118,110,.15),transparent 28%),radial-gradient(circle at 14% 86%,rgba(37,99,235,.12),transparent 30%),linear-gradient(135deg,#f9fffd 0%,#f3f8ff 52%,#eef7f3 100%)',
+      light: true,
+      btnMain1: '#0f766e',
+      btnMain2: '#22c55e',
+      btnAlt1: '#2563eb',
+      btnAlt2: '#7c3aed'
+    };
+  }
+  if (key.includes('planner')) {
+    return {
+      cls: 'pl-theme-planner-light',
+      accent: '#2563eb',
+      accent2: '#14b8a6',
+      bg: 'radial-gradient(circle at 80% 12%,rgba(37,99,235,.16),transparent 28%),radial-gradient(circle at 16% 88%,rgba(20,184,166,.14),transparent 32%),linear-gradient(135deg,#f8fbff 0%,#eef7ff 52%,#f7fffb 100%)',
+      light: true,
+      btnMain1: '#2563eb',
+      btnMain2: '#14b8a6',
+      btnAlt1: '#111827',
+      btnAlt2: '#0f766e'
+    };
+  }
+  if (key.includes('terminal') || key.includes('trading') || key.includes('lime') || key.includes('mint')) {
+    return {
+      cls: 'pl-theme-terminal',
+      accent: '#31f58b',
+      accent2: '#b8ff4d',
+      bg: 'radial-gradient(circle at 78% 14%,rgba(49,245,139,.22),transparent 30%),radial-gradient(circle at 18% 86%,rgba(56,189,248,.16),transparent 28%),linear-gradient(135deg,#010807 0%,#031411 48%,#071f18 100%)',
+      btnMain1: '#31f58b',
+      btnMain2: '#b8ff4d',
+      btnAlt1: '#07111f',
+      btnAlt2: '#00a3ff'
+    };
+  }
+  if (key.includes('blueprint') || key.includes('blueprinttech') || key.includes('schema')) {
+    return {
+      cls: 'pl-theme-blueprint',
+      accent: '#38bdf8',
+      accent2: '#facc15',
+      bg: 'radial-gradient(circle at 82% 12%,rgba(56,189,248,.24),transparent 28%),radial-gradient(circle at 18% 84%,rgba(250,204,21,.12),transparent 30%),linear-gradient(135deg,#020617 0%,#07152d 50%,#0b1f3a 100%)',
+      btnMain1: '#38bdf8',
+      btnMain2: '#facc15',
+      btnAlt1: '#0f172a',
+      btnAlt2: '#1d4ed8'
+    };
+  }
+  if (key.includes('fomo') || key.includes('urgency') || key.includes('heat')) {
+    return {
+      cls: 'pl-theme-fomo',
+      accent: '#ff7a18',
+      accent2: '#ffdd35',
+      bg: 'radial-gradient(circle at 82% 12%,rgba(255,122,24,.3),transparent 28%),radial-gradient(circle at 18% 78%,rgba(239,68,68,.22),transparent 28%),linear-gradient(135deg,#090302 0%,#1b0705 48%,#341007 100%)',
+      btnMain1: '#ff7a18',
+      btnMain2: '#ffdd35',
+      btnAlt1: '#7f1d1d',
+      btnAlt2: '#ef4444'
+    };
+  }
+  if (key.includes('editorialshock') || key.includes('newspapershock')) {
+    return {
+      cls: 'pl-theme-editorial-shock',
+      accent: '#111827',
+      accent2: '#ffde3b',
+      bg: 'radial-gradient(circle at 82% 12%,rgba(255,222,59,.2),transparent 28%),linear-gradient(135deg,#fffdf5 0%,#f8fafc 48%,#ffe2e2 100%)',
+      light: true,
+      btnMain1: '#111827',
+      btnMain2: '#ffde3b',
+      btnAlt1: '#7f1d1d',
+      btnAlt2: '#ef4444'
+    };
+  }
+  if (key.includes('brutal') || key.includes('shock') || key.includes('impact')) {
+    return {
+      cls: 'pl-theme-brutal',
+      accent: '#ff2d2d',
+      accent2: '#ffde3b',
+      bg: 'radial-gradient(circle at 82% 12%,rgba(255,45,45,.22),transparent 28%),linear-gradient(135deg,#050505 0%,#120506 48%,#220708 100%)',
+      btnMain1: '#ff2d2d',
+      btnMain2: '#ffde3b',
+      btnAlt1: '#050505',
+      btnAlt2: '#2563eb'
+    };
+  }
+  if (key.includes('native') || key.includes('messenger') || key.includes('telegram')) {
+    return {
+      cls: 'pl-theme-native',
+      accent: '#2dd4bf',
+      accent2: '#53d5ff',
+      bg: 'radial-gradient(circle at 82% 12%,rgba(45,212,191,.22),transparent 28%),radial-gradient(circle at 18% 84%,rgba(79,70,229,.18),transparent 30%),linear-gradient(135deg,#020617 0%,#07132a 48%,#122348 100%)',
+      btnMain1: '#2dd4bf',
+      btnMain2: '#53d5ff',
+      btnAlt1: '#172554',
+      btnAlt2: '#4f46e5'
+    };
+  }
+  if (key.includes('calm') || key.includes('luxe')) {
+    return {
+      cls: 'pl-theme-luxe',
+      accent: '#d8b15a',
+      accent2: '#fff7de',
+      bg: 'radial-gradient(circle at 78% 12%,rgba(216,177,90,.2),transparent 28%),linear-gradient(135deg,#fbfaf6 0%,#f6f0df 52%,#e6d2a4 100%)',
+      light: true,
+      btnMain1: '#f8d26a',
+      btnMain2: '#ffffff',
+      btnAlt1: '#061325',
+      btnAlt2: '#c79b3f'
+    };
+  }
+  if (key.includes('herobright') || key.includes('brightmint') || key.includes('lightblocks')) {
+    return {
+      cls: 'pl-theme-hero-bright',
+      accent: '#10b981',
+      accent2: '#2563eb',
+      bg: 'radial-gradient(circle at 82% 12%,rgba(16,185,129,.18),transparent 28%),radial-gradient(circle at 12% 88%,rgba(37,99,235,.14),transparent 30%),linear-gradient(135deg,#fbfffd 0%,#f3fbff 48%,#eef7f0 100%)',
+      light: true,
+      btnMain1: '#22d3ee',
+      btnMain2: '#2563eb',
+      btnAlt1: '#8b5cf6',
+      btnAlt2: '#db2777'
+    };
+  }
+  if (key.includes('cosmic') || key.includes('purple') || key.includes('cyber')) {
+    return {
+      cls: 'pl-theme-cosmic',
+      accent: '#a855f7',
+      accent2: '#facc15',
+      bg: 'radial-gradient(circle at 74% 16%,rgba(168,85,247,.34),transparent 30%),radial-gradient(circle at 24% 72%,rgba(250,204,21,.18),transparent 28%),linear-gradient(135deg,#05030f 0%,#12091f 48%,#2a0f3f 100%)',
+      btnMain1: '#f97316',
+      btnMain2: '#facc15',
+      btnAlt1: '#4c1d95',
+      btnAlt2: '#db2777'
+    };
+  }
+  if (key.includes('newspaper') || key.includes('editorial')) {
+    return {
+      cls: 'pl-theme-editorial',
+      accent: '#111827',
+      accent2: '#facc15',
+      bg: 'radial-gradient(circle at 82% 12%,rgba(250,204,21,.18),transparent 28%),linear-gradient(135deg,#fffdf5 0%,#f6efe0 48%,#e8d7aa 100%)',
+      light: true,
+      btnMain1: '#111827',
+      btnMain2: '#facc15',
+      btnAlt1: '#7f1d1d',
+      btnAlt2: '#ef4444'
+    };
+  }
+  if (key.includes('outdoor') || key.includes('nature') || key.includes('travel')) {
+    return {
+      cls: 'pl-theme-outdoor',
+      accent: '#0f766e',
+      accent2: '#f59e0b',
+      bg: 'radial-gradient(circle at 78% 10%,rgba(15,118,110,.18),transparent 28%),radial-gradient(circle at 18% 88%,rgba(245,158,11,.2),transparent 34%),linear-gradient(135deg,#f7fbf5 0%,#eaf3dd 48%,#cfe2b0 100%)',
+      light: true,
+      btnMain1: '#f59e0b',
+      btnMain2: '#ef4444',
+      btnAlt1: '#0f766e',
+      btnAlt2: '#111827'
+    };
+  }
+  if (key.includes('darkorange') || key.includes('orange') || key.includes('darkyellow') || key.includes('yellow')) {
+    return {
+      cls: 'pl-theme-orange',
+      accent: '#f97316',
+      accent2: '#facc15',
+      bg: 'radial-gradient(circle at 78% 14%,rgba(249,115,22,.3),transparent 28%),linear-gradient(135deg,#080403 0%,#1b0b04 46%,#341407 100%)',
+      btnMain1: '#f97316',
+      btnMain2: '#facc15',
+      btnAlt1: '#111827',
+      btnAlt2: '#ef4444'
+    };
+  }
+  if (key.includes('redwhite') || key.includes('clean')) {
+    return {
+      cls: 'pl-theme-clean-red',
+      accent: '#ef4444',
+      accent2: '#111827',
+      bg: 'radial-gradient(circle at 82% 12%,rgba(239,68,68,.16),transparent 28%),linear-gradient(135deg,#ffffff 0%,#f8fafc 50%,#fee2e2 100%)',
+      light: true,
+      btnMain1: '#ef4444',
+      btnMain2: '#f97316',
+      btnAlt1: '#111827',
+      btnAlt2: '#374151'
+    };
+  }
+  if (key.includes('green')) {
+    return {
+      cls: 'pl-theme-green',
+      accent: '#31a24c',
+      accent2: '#b7f36b',
+      bg: 'radial-gradient(circle at 82% 12%,rgba(49,162,76,.26),transparent 28%),linear-gradient(135deg,#04130b 0%,#07140d 46%,#132316 100%)',
+      btnMain1: '#22c55e',
+      btnMain2: '#a3e635',
+      btnAlt1: '#111827',
+      btnAlt2: '#f59e0b'
+    };
+  }
+  if (key.includes('blue') || key.includes('glass') || key.includes('saas')) {
+    return {
+      cls: 'pl-theme-blue',
+      accent: '#38bdf8',
+      accent2: '#1d4ed8',
+      bg: 'radial-gradient(circle at 82% 12%,rgba(56,189,248,.22),transparent 28%),linear-gradient(135deg,#020617 0%,#07132a 48%,#0f2547 100%)',
+      btnMain1: '#38bdf8',
+      btnMain2: '#facc15',
+      btnAlt1: '#111827',
+      btnAlt2: '#8b5cf6'
+    };
+  }
+  if (key.includes('red') || key.includes('brutal')) {
+    return {
+      cls: 'pl-theme-red',
+      accent: '#ef111a',
+      accent2: '#ff8a00',
+      bg: 'radial-gradient(circle at 82% 12%,rgba(239,17,26,.24),transparent 28%),linear-gradient(135deg,#070707 0%,#130607 46%,#24080a 100%)',
+      btnMain1: '#ef4444',
+      btnMain2: '#f97316',
+      btnAlt1: '#111827',
+      btnAlt2: '#facc15'
+    };
+  }
+  if (key.includes('white') || key.includes('gold') || key.includes('premium') || key.includes('outdoor')) {
+    return {
+      cls: 'pl-theme-gold',
+      accent: '#c79b3f',
+      accent2: '#061325',
+      bg: 'radial-gradient(circle at 82% 12%,rgba(199,155,63,.22),transparent 28%),linear-gradient(135deg,#fbfaf6 0%,#f6f0df 48%,#e8d7aa 100%)',
+      light: true,
+      btnMain1: '#c79b3f',
+      btnMain2: '#f8d26a',
+      btnAlt1: '#111827',
+      btnAlt2: '#ef4444'
+    };
+  }
+  return {
+    cls: 'pl-theme-yellow',
+    accent: '#ffd200',
+    accent2: '#f6b400',
+    bg: 'radial-gradient(circle at 82% 12%,rgba(255,210,0,.22),transparent 28%),linear-gradient(135deg,#050505 0%,#15120a 48%,#2d2103 100%)',
+    btnMain1: '#ffd200',
+    btnMain2: '#f97316',
+    btnAlt1: '#0f172a',
+    btnAlt2: '#2563eb'
+  };
+}
+
+function prelandingHexToRgb(value) {
+  const hex = String(value || '').trim().replace(/^#/, '');
+  if (!/^[\da-f]{3}$|^[\da-f]{6}$/i.test(hex)) return null;
+  const normalized = hex.length === 3
+    ? hex.split('').map((char) => char + char).join('')
+    : hex;
+  const int = Number.parseInt(normalized, 16);
+  return {
+    r: (int >> 16) & 255,
+    g: (int >> 8) & 255,
+    b: int & 255
+  };
+}
+
+function prelandingColorLuminance(value) {
+  const rgb = prelandingHexToRgb(value);
+  if (!rgb) return 0;
+  const toLinear = (channel) => {
+    const srgb = channel / 255;
+    return srgb <= 0.03928
+      ? srgb / 12.92
+      : ((srgb + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * toLinear(rgb.r) + 0.7152 * toLinear(rgb.g) + 0.0722 * toLinear(rgb.b);
+}
+
+function readablePrelandingTitleAccent(theme) {
+  const candidates = [
+    theme?.accent,
+    theme?.accent2,
+    theme?.btnMain1,
+    theme?.btnMain2,
+    '#facc15',
+    '#38bdf8',
+    '#ffffff'
+  ].filter(Boolean);
+  const seen = new Set();
+  const unique = candidates.filter((color) => {
+    const key = String(color).toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return unique.find((color) => prelandingColorLuminance(color) >= 0.34) || '#facc15';
+}
+
+function renderPersonalBannerPrelanding({ style, palette, photo, overrides, projectData }) {
+  const content = mergePrelandingContent(PRELANDING_CONTENT[1], overrides);
+  const theme = prelandingThemeForStyle(style, palette);
+  const title = stripHtml(content.titleHtml || overrides?.painTitle || 'Постоянно учились, а жизнь так и не менялась?');
+  const words = title.split(/\s+/).filter(Boolean);
+  const first = words.slice(0, Math.max(1, Math.ceil(words.length / 2))).join(' ');
+  const second = words.slice(Math.max(1, Math.ceil(words.length / 2))).join(' ');
+  const cleanPhoto = pickPrelandingImageUrl(overrides?.bannerImage, overrides?.heroImage, photo);
+  const bothelpPhoto = bothelpImageSrc(cleanPhoto);
+  const isBannerVisual = overrides?.visualSource === 'banner';
+  const method = content.methodName || content.actionTitle || 'Среда движения без очередного курса и давления';
+  const clientName = projectData?.clientDisplayName || projectData?.clientName || 'Герой этой истории';
+  const clientGender = detectClientGender(clientName);
+  const selfSaw = clientGender === 'female' ? 'увидела' : clientGender === 'male' ? 'увидел' : 'увидел(а)';
+  const selfUnderstood = clientGender === 'female' ? 'поняла' : clientGender === 'male' ? 'понял' : 'понял(а)';
+  const selfFound = clientGender === 'female' ? 'нашла' : clientGender === 'male' ? 'нашёл' : 'нашёл(ла)';
+  const selfTried = clientGender === 'female' ? 'пыталась' : clientGender === 'male' ? 'пытался' : 'пытался(лась)';
+  const aloneWord = clientGender === 'female' ? 'одной' : 'одному';
+  const personRole = 'человек нашёл другой подход';
+  const preloadPhoto = cleanPhoto ? `<link rel="preload" as="image" href="${esc(bothelpPhoto)}">` : '';
+  const photoHtml = cleanPhoto
+    ? `<div class="pl-person-card ${isBannerVisual ? 'pl-person-card--banner' : ''}">
+        <img src="${esc(bothelpPhoto)}" alt="${isBannerVisual ? 'Баннер креатива' : 'Фото героя'}" referrerpolicy="no-referrer" loading="eager" decoding="sync" fetchpriority="high" style="width:100%;height:100%;object-fit:cover;object-position:center center;display:block;border:0;margin:0;padding:0;">
+      </div>`
+    : `<div class="pl-person-card pl-person-card--empty"><div>Визуал баннера<br>появится после генерации</div></div>`;
+  const pills = (content.pills || ['Без долгой раскачки', 'С понятным разбором', 'По шагам'])
+    .slice(0, 3)
+    .map((item, index) => `<div class="pl-point"><b>0${index + 1}</b><span>${esc(item)}</span></div>`)
+    .join('');
+
+  return `${preloadPhoto}<style>
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Russo+One&display=swap');
+.wh-landing-powered-by{display:none!important;height:0!important;min-height:0!important;margin:0!important;padding:0!important;overflow:hidden!important}
+.wh-landing-buttons{width:min(720px,calc(100% - 26px))!important;margin:0 auto 34px!important;padding:18px!important;border-radius:28px!important;background:${theme.light ? '#ffffff' : '#111'}!important;border:1px solid rgba(255,210,0,.32)!important;box-shadow:0 24px 70px rgba(0,0,0,.35)!important}
+.wh-landing-buttons a,.wh-landing-buttons button{min-height:62px!important;border-radius:18px!important;font-family:Oswald,Arial,sans-serif!important;font-size:20px!important;font-weight:700!important;text-transform:uppercase!important;letter-spacing:.03em!important}
+.wh-mini-landing-policy{width:min(720px,calc(100% - 26px))!important;margin:14px auto 34px!important;padding:18px!important;border-radius:22px!important;background:rgba(255,255,255,.06)!important;border:1px solid rgba(255,255,255,.12)!important}
+body{margin:0!important;background:${theme.light ? '#fbfaf6' : '#050505'}!important;overflow-x:hidden!important}
+.pavel-system-landing,.pavel-system-landing *{box-sizing:border-box}
+.pavel-system-landing{--pl-yellow:${theme.accent};--pl-yellow-2:${theme.accent2};--pl-white:${theme.light ? '#07111f' : '#fff'};--pl-muted:${theme.light ? 'rgba(6,19,37,.72)' : 'rgba(255,255,255,.74)'};width:100vw;margin-left:calc(50% - 50vw);margin-right:calc(50% - 50vw);position:relative;overflow:hidden;color:var(--pl-white);background:${theme.bg};font-family:Oswald,Impact,'Arial Narrow',Arial,sans-serif;letter-spacing:.01em}
+.pavel-system-landing:before{content:'';position:absolute;inset:0;opacity:.14;background-image:linear-gradient(rgba(255,255,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.08) 1px,transparent 1px);background-size:42px 42px;pointer-events:none}
+.pl-wrap{width:min(1120px,calc(100% - 32px));margin:0 auto}
+.pl-hero{min-height:760px;padding:42px 0 58px;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(320px,.95fr);gap:34px;align-items:center;position:relative}
+.pl-tag{display:inline-flex;padding:9px 14px;border:1px solid rgba(255,210,0,.28);border-radius:999px;background:rgba(255,210,0,.08);color:var(--pl-yellow);font-size:14px;font-weight:700;text-transform:uppercase;margin-bottom:20px}
+.pl-title{margin:0;max-width:680px;text-transform:uppercase;line-height:1.02;font-size:clamp(38px,5.2vw,76px);font-weight:700;text-shadow:0 10px 28px rgba(0,0,0,.45);overflow-wrap:anywhere}
+.pl-title .yellow{display:block;color:var(--pl-yellow)}
+.pl-subline{margin:22px 0 0;width:fit-content;max-width:650px;padding:14px 20px 16px;transform:rotate(-1.2deg);background:linear-gradient(90deg,var(--pl-yellow),var(--pl-yellow-2));color:#050505;text-transform:uppercase;font-size:clamp(24px,3.3vw,42px);line-height:.98;font-weight:700;box-shadow:12px 14px 0 rgba(0,0,0,.42)}
+.pl-hero-points{margin:34px 0 0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;max-width:690px}
+.pl-point{min-height:94px;padding:15px 14px;border:1px solid rgba(255,210,0,.24);background:rgba(255,255,255,.055);border-radius:18px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.035),0 18px 36px rgba(0,0,0,.22)}
+.pl-point b{display:block;color:var(--pl-yellow);font-size:29px;line-height:1;margin-bottom:8px}.pl-point span{display:block;font-size:18px;line-height:1.08;text-transform:uppercase;font-weight:700}
+.pl-person-zone{position:relative;min-height:650px}.pl-yellow-wall{position:absolute;top:22px;right:0;width:74%;height:330px;border-radius:26px;overflow:hidden;background:linear-gradient(rgba(0,0,0,.09) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.08) 1px,transparent 1px),linear-gradient(135deg,#f8d400,#b88900);background-size:34px 34px,34px 34px,auto;box-shadow:inset 0 0 70px rgba(0,0,0,.22),0 24px 70px rgba(0,0,0,.45)}
+.pl-yellow-wall:after{content:'ОЧЕРЕДНОЙ\\A КУРС';white-space:pre;position:absolute;top:42px;right:44px;color:rgba(0,0,0,.75);font-size:25px;line-height:.9;transform:rotate(-10deg);font-family:Russo One,Arial,sans-serif}
+.pl-person-card{position:absolute;right:22px;bottom:126px;width:min(400px,82%);height:494px;border-radius:32px;overflow:hidden;background:#111;border:2px solid rgba(255,210,0,.25);box-shadow:0 30px 90px rgba(0,0,0,.72);transform:rotate(.8deg)}
+.pl-person-card img{width:100%;height:100%;object-fit:cover;object-position:50% 35%;display:block;filter:contrast(1.04) saturate(.94) brightness(.96);transform:scale(1.03)}
+.pl-person-card--banner{width:min(456px,90%);border-color:rgba(255,210,0,.42)}
+.pl-person-card--banner img{object-position:50% 50%;filter:contrast(1.02) saturate(1);transform:none}
+.pl-person-card--empty{display:grid;place-items:center;text-align:center;color:rgba(255,255,255,.72);font-size:22px;font-weight:700;text-transform:uppercase;padding:24px}
+.pl-name-plate{position:absolute;left:50%;right:auto;bottom:0;z-index:8;width:min(760px,100%);transform:translateX(-50%);display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;align-items:center;padding:18px 24px;border-radius:24px;background:linear-gradient(90deg,var(--pl-yellow),#f4ba00);color:#050505;box-shadow:0 24px 60px rgba(0,0,0,.58);overflow:hidden}
+.pl-logo-line,.pl-person-line{display:flex;align-items:center;gap:14px;min-width:0}.pl-logo-mark{width:60px;height:60px;flex:0 0 auto;display:grid;place-items:center;border:5px solid #0a0a0a;border-radius:18px;font-family:Russo One,Arial,sans-serif;font-size:34px}.pl-logo-text,.pl-person-text{text-transform:uppercase;line-height:.98;font-weight:700;min-width:0}.pl-logo-text strong,.pl-person-text strong{display:block;font-size:clamp(20px,2.45vw,31px);letter-spacing:.04em;white-space:normal;overflow-wrap:anywhere;word-break:break-word}.pl-logo-text span,.pl-person-text span{display:block;margin-top:5px;font-size:14px;letter-spacing:.01em}.pl-person-line{border-left:1px solid rgba(0,0,0,.35);padding-left:20px}
+.pl-section{padding:48px 0;position:relative}.pl-section-title{margin:0 0 26px;text-transform:uppercase;line-height:.95;font-size:clamp(38px,5.4vw,74px);font-weight:700}.pl-section-title .yellow{color:var(--pl-yellow)}.pl-section-lead{margin:-8px 0 30px;max-width:780px;color:var(--pl-muted);font-family:Arial,sans-serif;font-size:20px;line-height:1.42}
+.pl-problems,.pl-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.pl-steps{grid-template-columns:repeat(3,minmax(0,1fr))}
+.pl-card{position:relative;min-height:220px;overflow:hidden;padding:24px 18px 20px;border-radius:24px;background:linear-gradient(160deg,rgba(255,255,255,.075),rgba(255,255,255,.025));border:1px solid rgba(255,255,255,.1);box-shadow:0 24px 48px rgba(0,0,0,.22)}.pl-card b{display:inline-grid;place-items:center;width:54px;height:54px;margin-bottom:18px;border-radius:16px;background:var(--pl-yellow);color:#050505;font-size:26px}.pl-card h3{margin:0 0 10px;text-transform:uppercase;font-size:25px;line-height:1.03}.pl-card p{margin:0;color:var(--pl-muted);font-family:Arial,sans-serif;font-size:16px;line-height:1.35}
+.pl-big-switch{margin-top:42px;position:relative;overflow:hidden;border-radius:34px;background:linear-gradient(135deg,rgba(255,210,0,.96),rgba(241,170,0,.96));color:#050505;padding:34px clamp(24px,4vw,54px);box-shadow:0 34px 80px rgba(0,0,0,.48)}.pl-big-switch h2{margin:0;max-width:860px;text-transform:uppercase;font-size:clamp(38px,5.2vw,74px);line-height:.94;font-weight:700}.pl-big-switch p{margin:18px 0 0;max-width:760px;font-family:Arial,sans-serif;font-size:21px;line-height:1.36;font-weight:700}
+.pl-final{padding:54px 0 66px;text-align:center}.pl-final-box{position:relative;overflow:hidden;padding:clamp(30px,5vw,62px) 22px;border-radius:36px;background:linear-gradient(rgba(0,0,0,.18) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.14) 1px,transparent 1px),linear-gradient(135deg,var(--pl-yellow),#f3ad00);background-size:34px 34px,34px 34px,auto;color:#050505;box-shadow:0 36px 90px rgba(0,0,0,.5)}.pl-final-box h2{margin:0 auto;max-width:880px;text-transform:uppercase;font-size:clamp(38px,5.7vw,82px);line-height:.9;font-weight:700}.pl-final-box p{margin:20px auto 0;max-width:720px;font-family:Arial,sans-serif;font-size:22px;line-height:1.34;font-weight:700}
+@media(max-width:980px){.pl-hero{grid-template-columns:1fr;min-height:auto}.pl-person-zone{min-height:610px}.pl-person-card{right:50%;transform:translateX(50%) rotate(.6deg)}.pl-yellow-wall{right:50%;transform:translateX(50%);width:min(520px,92%)}.pl-name-plate{width:min(620px,100%)}.pl-problems{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:640px){.pl-wrap{width:min(100% - 22px,1120px)}.pl-title{font-size:clamp(34px,11.2vw,54px)}.pl-hero-points,.pl-problems,.pl-steps{grid-template-columns:1fr}.pl-person-zone{min-height:580px}.pl-person-card{width:min(332px,88%);height:410px}.pl-name-plate{grid-template-columns:1fr;width:min(340px,100%);padding:15px 16px}.pl-person-line{border-left:0;border-top:1px solid rgba(0,0,0,.32);padding:12px 0 0}.pl-section{padding:34px 0}}
+</style>
+<div class="pavel-system-landing ${theme.cls}">
+  <section class="pl-hero pl-wrap">
+    <div>
+      <div class="pl-tag">не очередной курс — среда движения</div>
+      <h1 class="pl-title">
+        <span>${esc(first)}</span>
+        ${second ? `<span class="yellow">${esc(second)}</span>` : ''}
+      </h1>
+      <div class="pl-subline">${esc(method)}</div>
+      <div class="pl-hero-points">${pills}</div>
+    </div>
+    <div class="pl-person-zone">
+      <div class="pl-yellow-wall"></div>
+      ${photoHtml}
+      <div class="pl-name-plate">
+        <div class="pl-logo-line">
+          <div class="pl-logo-mark">S</div>
+          <div class="pl-logo-text"><strong>Система</strong><span>проверена на практике</span></div>
+        </div>
+        <div class="pl-person-line">
+        <div class="pl-person-text"><strong>Личный опыт</strong><span>${esc(personRole)}</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section class="pl-section pl-wrap">
+    <h2 class="pl-section-title">Я тоже <span class="yellow">${esc(selfTried)} разобраться</span></h2>
+    <p class="pl-section-lead">Это не история про волшебный рывок и не красивая картинка ради картинки. Ситуация знакомая: решения, планы, попытки всё удержать ${aloneWord}, а движение всё время срывается.</p>
+    <div class="pl-problems">
+      <div class="pl-card"><b>1</b><h3>Много планов</h3><p>Есть цели, списки и решения, но они не превращаются в регулярное действие.</p></div>
+      <div class="pl-card"><b>2</b><h3>Всё на силе воли</h3><p>Пока хватает эмоции - движение есть. Потом обычная неделя всё сбивает.</p></div>
+      <div class="pl-card"><b>3</b><h3>Нет маршрута</h3><p>Когда нет ясного следующего шага, человек снова остаётся один на один с хаосом.</p></div>
+      <div class="pl-card"><b>4</b><h3>Нет первого шага</h3><p>Главная проблема не интерес, а понятное действие после первого клика.</p></div>
+    </div>
+    <div class="pl-big-switch">
+      <h2>Потом я ${esc(selfFound)} формат, где движение держится не на мотивации.</h2>
+      <p>Не ещё одна длинная теория, где снова нужно всё додумывать самому. А короткий разбор: что мешает, какой маршрут выбрать и какой первый шаг сделать дальше.</p>
+    </div>
+  </section>
+  <section class="pl-section pl-wrap">
+    <h2 class="pl-section-title">Что я ${selfUnderstood}, когда ${selfSaw} <span class="yellow">понятный маршрут</span></h2>
+    <div class="pl-steps">
+      <div class="pl-card"><b>✓</b><h3>Ситуация</h3><p>Сначала понятно, какая проблема или желание ведёт человека на разбор.</p></div>
+      <div class="pl-card"><b>✓</b><h3>Маршрут</h3><p>Понятно, какой смысл раскрыть и куда вести человека дальше.</p></div>
+      <div class="pl-card"><b>✓</b><h3>Первый шаг</h3><p>Без лишней подготовки: человек переходит к короткому разбору в мессенджере.</p></div>
+    </div>
+  </section>
+  <section class="pl-final pl-wrap">
+    <div class="pl-final-box">
+      <h2>${esc(title)}</h2>
+      <p>${esc(method)}.</p>
+    </div>
+  </section>
+</div>
+`;
+}
+
+function resolveClientPrelandingAngle(title, method = '') {
+  return resolveCampaignSemanticProfile(title, method) || CLIENT_PRELANDING_MARKETING_ANGLES[0];
+}
+
+function resolveClientPrelandingLogic(title, method = '', mode = 'templateStage') {
+  const profile = resolveClientPrelandingAngle(title, method);
+  const angle = buildCampaignLandingLogic({ title, text: method, mode });
+  return {
+    ...profile,
+    ...angle,
+    titleHtml: esc(angle.title)
+  };
+}
+
+function buildTildaStoryCards(title, method = '', mode = 'templateStage') {
+  return resolveClientPrelandingLogic(title, method, mode).cards;
+}
+
+function buildTildaCtaLead(title, method, mode = 'templateStage') {
+  return resolveClientPrelandingLogic(title, method, mode).ctaLead;
+}
+
+const CORE_PRELANDING_THEME_STYLES = {
+  1: 'heroBright',
+  2: 'whiteGoldPremium',
+  3: 'greenSystem'
+};
+
+const CORE_PRELANDING_VARIANTS = {
+  1: 'tf-v-spotlight',
+  2: 'tf-v-editorial',
+  3: 'tf-v-motion'
+};
+
+const MANUAL_PRELANDING_MODES = [
+  {
+    id: 'templateStage',
+    title: 'Формат 1 / Метод + 3 блока',
+    desc: 'Компактный Tilda-блок: сильный первый экран, три смысловых блока и кнопки перехода.'
+  },
+  {
+    id: 'heroBlocks',
+    title: 'Формат 2 / Hero-картинка + блоки',
+    desc: 'Большая hero-сцена по заголовку и тексту, офферные карточки и заметные CTA.'
+  },
+  {
+    id: 'natureEditorial',
+    title: 'Формат 3 / Nature editorial',
+    desc: 'Мягкий editorial-лендинг: тёплая бумажная палитра, коллаж фото, сценарий, механика и финальный CTA.'
+  },
+  {
+    id: 'minimalCompare',
+    title: 'Формат 4 / Тихое сравнение',
+    desc: 'Тёмный минималистичный Tilda-блок без фото: внутренний конфликт, 3 микро-смысла и Telegram/MAX.'
+  },
+  {
+    id: 'directionQuiz',
+    title: 'Формат 5 / Квиз-направление',
+    desc: 'Интерактивный разбор из 4 вопросов: человек видит свою точку опоры и переходит в Telegram/MAX.'
+  },
+  {
+    id: 'personalRouteQuiz',
+    title: 'Формат 6 / Личный маршрут',
+    desc: 'Пять честных вопросов, персональный итог и единый безопасный переход в Telegram/MAX.'
+  },
+  {
+    id: 'barrierProfileQuiz',
+    title: 'Формат 7 / Профиль барьера',
+    desc: 'Пять вопросов о повторяющемся сбое, персональный профиль и первый реалистичный шаг.'
+  }
+];
+
+function prelandingClassToken(value = '') {
+  return String(value || 'default')
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'default';
+}
+
+function renderHeroSceneBlocksPrelanding({
+  content,
+  projectData,
+  landingMeta,
+  sceneImage,
+  valueImage,
+  ctaImage,
+  style,
+  palette,
+  layout,
+  typo,
+  effects,
+  theme,
+  accent,
+  accent2
+}) {
+  const selectedStyle = style || 'premium-light';
+  const selectedPalette = PALETTES.find(item => item[0] === palette) || PALETTES.find(item => item[0] === 'blue-trust') || PALETTES[0];
+  const paletteColors = selectedPalette?.[3] || ['#2563eb', '#06b6d4', '#f8fafc'];
+  const themeData = theme || prelandingThemeForStyle(selectedStyle, selectedPalette?.[0]);
+  const primary = accent || themeData?.accent || paletteColors[0] || '#2563eb';
+  const secondary = accent2 || themeData?.accent2 || paletteColors[1] || '#7c3aed';
+  const soft = paletteColors[2] || '#f8fafc';
+  const titleText = stripHtml(content.titleHtml || content.title || 'Откройте короткий разбор и посмотрите, как это работает');
+  const titleWords = titleText.split(/\s+/).filter(Boolean);
+  const accentWord = titleWords.length > 1 ? titleWords[titleWords.length - 1] : '';
+  const titleMain = accentWord ? titleWords.slice(0, -1).join(' ') : titleText;
+  const titleHtml = /<span[\s>]/i.test(content.titleHtml || '')
+    ? content.titleHtml
+    : accentWord
+      ? `${esc(titleMain)} <span>${esc(accentWord)}</span>`
+      : esc(titleText);
+  const leadText = content.trustTitle || content.valueTitle || 'Короткий разбор покажет, что делать дальше без перегруза, долгого запуска и продаж в лоб.';
+  const methodText = content.methodName || '';
+  const badge = content.badge || 'Короткий практический разбор';
+  const cards = (content.cards?.length ? content.cards : buildTildaStoryCards(titleText)).slice(0, 3);
+  const valueItems = (content.valueItems?.length ? content.valueItems : [
+    'как понять механику без длинной теории и лишних шагов',
+    'почему первый контакт лучше вести через короткий разбор',
+    'что открыть человеку дальше, чтобы он не потерялся после клика'
+  ]).slice(0, 3);
+  const proofItems = (content.proofItems?.length ? content.proofItems : [])
+    .slice(0, 3)
+    .map(item => typeof item === 'string' ? item : item?.value || item?.title || item?.label || 'Без лишнего шага');
+  const images = [
+    bothelpImageSrc(sceneImage || PRELANDING_FALLBACK_IMAGES[0]),
+    bothelpImageSrc(valueImage || PRELANDING_FALLBACK_IMAGES[1]),
+    bothelpImageSrc(ctaImage || PRELANDING_FALLBACK_IMAGES[2])
+  ];
+  const safeLayout = ['classic', 'split', 'cards', 'timeline'].includes(layout) ? layout : 'split';
+  const safeTypo = ['manrope', 'inter', 'unbounded', 'onest', 'playfair'].includes(typo) ? typo : 'unbounded';
+  const effectList = Array.isArray(effects) ? effects : [];
+  const rootClass = [
+    'fh-hero-blocks',
+    'fh-hb-scene-poster',
+    `fh-hb-style-${prelandingClassToken(selectedStyle)}`,
+    `fh-hb-palette-${prelandingClassToken(selectedPalette?.[0])}`,
+    `fh-hb-layout-${safeLayout}`,
+    `fh-hb-typo-${safeTypo}`,
+    ...effectList.map(item => `fh-hb-effect-${prelandingClassToken(item)}`)
+  ].filter(Boolean).join(' ');
+  const rootStyle = [
+    `--hb-accent:${primary}`,
+    `--hb-accent2:${secondary}`,
+    `--hb-soft:${soft}`,
+    `--hb-btn1:${themeData?.btnMain1 || primary}`,
+    `--hb-btn2:${themeData?.btnMain2 || secondary}`,
+    `--hb-alt1:${themeData?.btnAlt1 || secondary}`,
+    `--hb-alt2:${themeData?.btnAlt2 || primary}`
+  ].join(';');
+  const cardsHtml = cards.map((item, index) => {
+    const title = item?.title || proofItems[index] || `Шаг ${index + 1}`;
+    const text = item?.text || item || valueItems[index] || 'Понятный следующий шаг без лишней теории.';
+    return `<article class="fh-hb-story-card">
+      <div class="fh-hb-card-check">${safeLayout === 'timeline' ? index + 1 : '✓'}</div>
+      <h3>${esc(title)}</h3>
+      <p>${esc(text)}</p>
+    </article>`;
+  }).join('');
+  const proofHtml = proofItems.map(item => `<li>${esc(item)}</li>`).join('');
+  const methodHtml = methodText ? `<div class="fh-hb-method">${esc(methodText)}</div>` : '';
+  const proofListHtml = proofHtml ? `<ul class="fh-hb-proof" aria-label="Короткие условия">${proofHtml}</ul>` : '';
+  const valueHtml = valueItems.map((item, index) => `<article class="fh-hb-value-card">
+    <b>${String(index + 1).padStart(2, '0')}</b>
+    <p>${esc(item)}</p>
+  </article>`).join('');
+  const actionNote = content.liveNote || '';
+  const actionNoteHtml = actionNote ? `<div class="fh-hb-action-note">${esc(actionNote)}</div>` : '';
+  const ctaTitle = content.actionTitle || 'Откройте разбор и заберите первый шаг';
+  const ctaSubtitle = content.actionSubtitle || content.ctaLead || 'Выберите удобный мессенджер. Разбор откроется в новой вкладке, а страница останется доступной.';
+  const heroImageHtml = images[0]
+    ? `<img src="${esc(images[0])}" alt="" loading="eager" decoding="async" fetchpriority="high" onerror="var c=this.closest('.fh-hb-scene');if(c)c.classList.add('fh-image-failed');this.remove();">`
+    : '';
+  const valueMediaClass = images[1] ? 'fh-hb-media-card' : 'fh-hb-media-card fh-image-failed';
+  const ctaMediaClass = images[2] ? 'fh-hb-media-card' : 'fh-hb-media-card fh-image-failed';
+  const valueImageHtml = images[1]
+    ? `<img src="${esc(images[1])}" alt="" loading="lazy" decoding="async" onerror="var c=this.closest('.fh-hb-media-card');if(c){c.classList.add('fh-image-failed');c.style.display='none';}this.remove();">`
+    : '';
+  const ctaImageHtml = images[2]
+    ? `<img src="${esc(images[2])}" alt="" loading="lazy" decoding="async" onerror="var c=this.closest('.fh-hb-media-card');if(c){c.classList.add('fh-image-failed');c.style.display='none';}this.remove();">`
+    : '';
+
+  return `${buildAtmospaceHeadConfig({
+  projectData,
+  ...(landingMeta || {})
+})}
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Manrope:wght@500;600;700;800;900&family=Onest:wght@500;600;700;800;900&family=Playfair+Display:wght@700;800;900&family=Unbounded:wght@600;700;800;900&display=swap');
+#fh-preland-root.fh-hb-scene-poster,
+#fh-preland-root.fh-hb-scene-poster *{box-sizing:border-box}
+#fh-preland-root.fh-hb-scene-poster{
+  --hb-ink:#070d1f;
+  --hb-muted:#536178;
+  --hb-line:rgba(22,34,57,.10);
+  --hb-card:rgba(255,255,255,.72);
+  --hb-font:'Unbounded','Manrope',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  width:100vw;
+  min-height:100vh;
+  margin-left:calc(50% - 50vw);
+  margin-right:calc(50% - 50vw);
+  color:var(--hb-ink);
+  font-family:var(--hb-font);
+  background:
+    radial-gradient(circle at 8% 8%, color-mix(in srgb, var(--hb-accent) 20%, transparent), transparent 28vw),
+    radial-gradient(circle at 92% 12%, color-mix(in srgb, var(--hb-accent2) 14%, transparent), transparent 30vw),
+    linear-gradient(135deg,#f9fcff 0%,#f3f9ff 52%,color-mix(in srgb,var(--hb-soft) 44%,#ffffff) 100%);
+  overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+#fh-preland-root.fh-hb-typo-manrope{--hb-font:'Manrope',system-ui,sans-serif}
+#fh-preland-root.fh-hb-typo-inter{--hb-font:'Inter',system-ui,sans-serif}
+#fh-preland-root.fh-hb-typo-onest{--hb-font:'Onest',system-ui,sans-serif}
+#fh-preland-root.fh-hb-typo-unbounded{--hb-font:'Unbounded','Manrope',system-ui,sans-serif}
+#fh-preland-root.fh-hb-typo-playfair{--hb-font:'Inter',system-ui,sans-serif}
+#fh-preland-root.fh-hb-typo-playfair .fh-hb-title,
+#fh-preland-root.fh-hb-typo-playfair .fh-hb-section-title,
+#fh-preland-root.fh-hb-typo-playfair .fh-hb-cta-title{font-family:'Playfair Display','Inter',serif;letter-spacing:-.04em;text-transform:none}
+#fh-preland-root .fh-hb-stage{
+  position:relative;
+  min-height:100svh;
+  overflow:hidden;
+  isolation:isolate;
+}
+#fh-preland-root .fh-hb-stage:before{
+  content:"";
+  position:absolute;
+  inset:0;
+  z-index:1;
+  pointer-events:none;
+  background:
+    linear-gradient(90deg,rgba(249,252,255,.96) 0%,rgba(249,252,255,.88) 25%,rgba(249,252,255,.38) 48%,rgba(249,252,255,.05) 64%,rgba(249,252,255,0) 100%),
+    radial-gradient(circle at 18% 18%, color-mix(in srgb,var(--hb-accent) 12%, transparent), transparent 30%),
+    linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.12));
+}
+#fh-preland-root.fh-hb-layout-classic .fh-hb-stage:before,
+#fh-preland-root.fh-hb-layout-cards .fh-hb-stage:before{
+  background:
+    linear-gradient(90deg,rgba(249,252,255,.96) 0%,rgba(249,252,255,.84) 30%,rgba(249,252,255,.28) 56%,rgba(249,252,255,0) 100%),
+    radial-gradient(circle at 22% 18%, color-mix(in srgb,var(--hb-accent) 13%, transparent), transparent 34%),
+    linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.12));
+}
+#fh-preland-root .fh-hb-scene{
+  position:absolute;
+  inset:0;
+  z-index:0;
+  overflow:hidden;
+  background:
+    radial-gradient(circle at 76% 22%, color-mix(in srgb,var(--hb-accent2) 18%, transparent), transparent 24%),
+    linear-gradient(135deg,#f8fbff,#eef7ff);
+}
+#fh-preland-root .fh-hb-scene img{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  object-position:72% 44%;
+  display:block;
+  filter:saturate(1.12) contrast(1.08) brightness(.96);
+  transform:scale(1.012);
+}
+#fh-preland-root .fh-hb-scene:after{
+  content:"";
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  opacity:.34;
+  background-image:
+    linear-gradient(rgba(79,96,130,.08) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(79,96,130,.08) 1px,transparent 1px);
+  background-size:42px 42px;
+  mask-image:linear-gradient(90deg,#000 0%,rgba(0,0,0,.78) 48%,transparent 100%);
+}
+#fh-preland-root .fh-hb-wrap{
+  position:relative;
+  z-index:2;
+  width:min(1320px,calc(100% - 48px));
+  margin:0 auto;
+}
+#fh-preland-root .fh-hb-hero{
+  min-height:100svh;
+  display:grid;
+  grid-template-columns:minmax(0,.88fr) minmax(380px,1.12fr);
+  grid-template-rows:1fr auto;
+  gap:22px;
+  align-items:center;
+  padding:clamp(30px,5vh,64px) 0 28px;
+  min-width:0;
+}
+#fh-preland-root.fh-hb-layout-classic .fh-hb-hero{grid-template-columns:minmax(0,.95fr) minmax(420px,1.05fr)}
+#fh-preland-root.fh-hb-layout-cards .fh-hb-hero{grid-template-columns:minmax(0,1fr) minmax(360px,.82fr)}
+#fh-preland-root.fh-hb-layout-timeline .fh-hb-hero{grid-template-columns:minmax(0,.88fr) minmax(420px,1.12fr)}
+#fh-preland-root .fh-hb-copy{
+  grid-column:1;
+  width:100%;
+  max-width:760px;
+  min-width:0;
+  padding:clamp(12px,1.6vw,22px) 0;
+}
+#fh-preland-root .fh-hb-kicker{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  max-width:min(620px,100%);
+  padding:10px 16px;
+  border-radius:999px;
+  background:rgba(255,255,255,.70);
+  border:1px solid color-mix(in srgb,var(--hb-accent) 26%,rgba(255,255,255,.5));
+  color:color-mix(in srgb,var(--hb-accent) 72%,#102033);
+  font:900 12px/1 var(--hb-font);
+  text-transform:uppercase;
+  letter-spacing:.05em;
+  box-shadow:0 18px 42px rgba(30,54,92,.08);
+  backdrop-filter:blur(12px);
+}
+#fh-preland-root .fh-hb-kicker:before{
+  content:"";
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  background:linear-gradient(135deg,var(--hb-accent),var(--hb-accent2));
+  box-shadow:0 0 0 7px color-mix(in srgb,var(--hb-accent) 12%,transparent);
+}
+#fh-preland-root .fh-hb-title{
+  margin:clamp(22px,3.2vh,34px) 0 18px;
+  width:100%;
+  max-width:780px;
+  min-width:0;
+  color:var(--hb-ink);
+  font-family:var(--hb-font);
+  font-size:clamp(40px,4.75vw,78px);
+  line-height:.96;
+  font-weight:950;
+  letter-spacing:-.045em;
+  text-transform:uppercase;
+  text-wrap:balance;
+  overflow-wrap:break-word;
+  word-break:normal;
+}
+#fh-preland-root.fh-hb-typo-manrope .fh-hb-title,
+#fh-preland-root.fh-hb-typo-inter .fh-hb-title,
+#fh-preland-root.fh-hb-typo-onest .fh-hb-title{letter-spacing:-.045em}
+#fh-preland-root .fh-hb-title span{
+  color:transparent;
+  background:linear-gradient(112deg,var(--hb-accent),var(--hb-accent2));
+  -webkit-background-clip:text;
+  background-clip:text;
+}
+#fh-preland-root .fh-hb-lead{
+  margin:0;
+  width:100%;
+  max-width:650px;
+  min-width:0;
+  color:#172033;
+  font:850 clamp(17px,1.45vw,23px)/1.35 'Inter','Manrope',system-ui,sans-serif;
+  letter-spacing:-.02em;
+}
+#fh-preland-root .fh-hb-method{
+  display:inline-flex;
+  min-width:0;
+  max-width:min(690px,100%);
+  margin-top:22px;
+  padding:12px 16px;
+  border-radius:999px;
+  background:linear-gradient(100deg,var(--hb-btn1),var(--hb-btn2));
+  color:#ffffff;
+  font:950 clamp(12px,1vw,16px)/1.1 'Inter','Manrope',system-ui,sans-serif;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+  box-shadow:0 16px 40px color-mix(in srgb,var(--hb-accent) 14%,rgba(30,54,92,.12)), inset 0 1px 0 rgba(255,255,255,.24);
+  text-shadow:0 12px 28px rgba(0,0,0,.20);
+  overflow-wrap:break-word;
+}
+#fh-preland-root .fh-hb-proof{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin:22px 0 0;
+  padding:0;
+  list-style:none;
+}
+#fh-preland-root .fh-hb-proof li{
+  min-height:42px;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:10px 14px;
+  border-radius:999px;
+  background:rgba(255,255,255,.78);
+  border:1px solid rgba(22,34,57,.10);
+  color:#121a2d;
+  box-shadow:0 14px 32px rgba(30,54,92,.06);
+  font:900 13px/1.1 'Inter','Manrope',system-ui,sans-serif;
+}
+#fh-preland-root .fh-hb-proof li:before{
+  content:"×";
+  display:grid;
+  place-items:center;
+  width:22px;
+  height:22px;
+  border-radius:50%;
+  color:#fff;
+  background:linear-gradient(135deg,var(--hb-accent),var(--hb-accent2));
+}
+#fh-preland-root .fh-hb-bottom{
+  grid-column:1 / 3;
+  width:min(1120px,88vw);
+  min-width:0;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(330px,.72fr);
+  gap:14px;
+  align-items:end;
+}
+#fh-preland-root .fh-hb-story-row{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:10px;
+  min-width:0;
+}
+#fh-preland-root .fh-hb-story-card{
+  min-height:112px;
+  display:flex;
+  flex-direction:column;
+  justify-content:flex-start;
+  gap:8px;
+  padding:16px;
+  border-radius:20px;
+  background:rgba(255,255,255,.74);
+  border:1px solid rgba(22,34,57,.12);
+  box-shadow:0 22px 58px rgba(30,54,92,.12), inset 0 1px 0 rgba(255,255,255,.42);
+  backdrop-filter:blur(14px) saturate(1.1);
+}
+#fh-preland-root .fh-hb-card-check{
+  display:grid;
+  place-items:center;
+  width:30px;
+  height:30px;
+  border-radius:11px;
+  background:linear-gradient(135deg,var(--hb-accent),var(--hb-accent2));
+  color:#fff;
+  font:950 16px/1 'Inter',system-ui,sans-serif;
+}
+#fh-preland-root .fh-hb-story-card h3{
+  margin:0;
+  color:#0d1629;
+  font:950 clamp(14px,1.12vw,18px)/1.05 var(--hb-font);
+  text-transform:uppercase;
+  letter-spacing:-.025em;
+}
+#fh-preland-root .fh-hb-story-card p{
+  margin:0;
+  color:#5a667a;
+  font:700 12px/1.35 'Inter','Manrope',system-ui,sans-serif;
+}
+#fh-preland-root .fh-hb-actions{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+#fh-preland-root .fh-hb-action-note{
+  display:inline-flex;
+  width:max-content;
+  max-width:100%;
+  padding:9px 12px;
+  border-radius:999px;
+  background:rgba(255,255,255,.74);
+  border:1px solid rgba(22,34,57,.10);
+  color:#526176;
+  font:900 12px/1.25 'Inter','Manrope',system-ui,sans-serif;
+  text-transform:uppercase;
+  letter-spacing:.03em;
+}
+#fh-preland-root .fh-hb-buttons{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+#fh-preland-root .fh-hb-btn{
+  position:relative;
+  min-height:76px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:16px 20px;
+  border-radius:20px;
+  overflow:hidden;
+  text-decoration:none!important;
+  color:#fff!important;
+  -webkit-text-fill-color:#fff!important;
+  background:linear-gradient(135deg,#21c7ff,#2563eb);
+  box-shadow:0 24px 64px rgba(30,54,92,.18), inset 0 1px 0 rgba(255,255,255,.25);
+  font:950 clamp(15px,1.35vw,20px)/1 var(--hb-font);
+  text-transform:uppercase;
+  text-shadow:0 12px 30px rgba(0,0,0,.28);
+  transition:transform .16s ease,filter .16s ease;
+}
+#fh-preland-root .fh-hb-btn:before{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:linear-gradient(120deg,rgba(255,255,255,.30),transparent 42%);
+  pointer-events:none;
+}
+#fh-preland-root .fh-hb-btn:hover{transform:translateY(-2px);filter:brightness(1.04)}
+#fh-preland-root .fh-hb-btn span{position:relative;z-index:1}
+#fh-preland-root .fh-hb-btn-max{background:linear-gradient(135deg,var(--hb-alt1),var(--hb-alt2))}
+#fh-preland-root .fh-hb-section{
+  position:relative;
+  z-index:2;
+  width:min(1320px,calc(100% - 48px));
+  margin:28px auto 0;
+  border-radius:38px;
+  background:linear-gradient(180deg,rgba(255,255,255,.92),rgba(255,255,255,.78));
+  border:1px solid rgba(255,255,255,.76);
+  box-shadow:0 28px 86px rgba(30,54,92,.10);
+  overflow:hidden;
+}
+#fh-preland-root .fh-hb-section-grid{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(360px,520px);
+  gap:clamp(24px,4vw,58px);
+  align-items:center;
+  padding:clamp(28px,4vw,56px);
+}
+#fh-preland-root .fh-hb-section-label{
+  display:inline-flex;
+  align-items:center;
+  gap:9px;
+  min-height:38px;
+  margin-bottom:18px;
+  padding:9px 14px;
+  border-radius:999px;
+  background:color-mix(in srgb,var(--hb-accent) 10%,#ffffff);
+  border:1px solid color-mix(in srgb,var(--hb-accent) 18%,transparent);
+  color:color-mix(in srgb,var(--hb-accent) 72%,#111827);
+  font:950 12px/1 'Inter',system-ui,sans-serif;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+#fh-preland-root .fh-hb-section-title,
+#fh-preland-root .fh-hb-cta-title{
+  margin:0;
+  color:#07111f;
+  font-family:var(--hb-font);
+  font-size:clamp(34px,4.5vw,68px);
+  line-height:.98;
+  font-weight:950;
+  letter-spacing:-.055em;
+  text-transform:uppercase;
+}
+#fh-preland-root .fh-hb-value-grid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:14px;
+  padding:0 clamp(28px,4vw,56px) clamp(28px,4vw,56px);
+}
+#fh-preland-root .fh-hb-value-card{
+  min-height:154px;
+  padding:20px;
+  border-radius:24px;
+  background:rgba(255,255,255,.72);
+  border:1px solid rgba(22,34,57,.10);
+  box-shadow:0 18px 50px rgba(30,54,92,.07);
+}
+#fh-preland-root .fh-hb-value-card b{
+  display:inline-flex;
+  margin-bottom:16px;
+  color:var(--hb-accent);
+  font:950 32px/1 var(--hb-font);
+}
+#fh-preland-root .fh-hb-value-card p{
+  margin:0;
+  color:#536178;
+  font:750 15px/1.48 'Inter','Manrope',system-ui,sans-serif;
+}
+#fh-preland-root .fh-hb-media-card{
+  position:relative;
+  overflow:hidden;
+  min-height:320px;
+  border-radius:30px;
+  background:#fff;
+  border:1px solid rgba(255,255,255,.82);
+  box-shadow:0 26px 70px rgba(30,54,92,.13);
+}
+#fh-preland-root .fh-hb-media-card img{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
+}
+#fh-preland-root .fh-hb-media-card.fh-image-failed{display:none}
+#fh-preland-root .fh-hb-section-grid:has(.fh-hb-media-card.fh-image-failed){grid-template-columns:1fr}
+#fh-preland-root .fh-hb-cta{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(300px,420px);
+  gap:24px;
+  align-items:center;
+  padding:clamp(28px,4vw,56px);
+  background:
+    radial-gradient(circle at 0 0,color-mix(in srgb,var(--hb-accent) 14%,transparent),transparent 32%),
+    radial-gradient(circle at 100% 0,color-mix(in srgb,var(--hb-accent2) 12%,transparent),transparent 30%),
+    rgba(255,255,255,.86);
+}
+#fh-preland-root .fh-hb-cta-sub{
+  max-width:720px;
+  margin:18px 0 26px;
+  color:#536178;
+  font:700 18px/1.55 'Inter','Manrope',system-ui,sans-serif;
+}
+#fh-preland-root .fh-hb-legal,
+#fh-preland-root .fh-hb-policy,
+#fh-preland-root .fh-hb-policy-error{
+  position:relative;
+  z-index:2;
+  width:min(920px,calc(100% - 48px));
+  margin:18px auto 0;
+}
+#fh-preland-root .fh-hb-legal{color:rgba(83,97,120,.76);font:600 12px/1.5 'Inter',system-ui,sans-serif;text-align:center}
+#fh-preland-root .fh-hb-policy{
+  display:flex;
+  gap:12px;
+  align-items:flex-start;
+  padding:16px 18px;
+  border-radius:20px;
+  background:rgba(255,255,255,.74);
+  border:1px solid rgba(22,34,57,.10);
+  box-shadow:0 14px 34px rgba(30,54,92,.06);
+  color:#536178;
+  font:650 13px/1.55 'Inter',system-ui,sans-serif;
+}
+#fh-preland-root .fh-hb-policy input{width:18px;height:18px;margin:2px 0 0;flex:0 0 18px;accent-color:var(--hb-accent)}
+#fh-preland-root .fh-hb-policy a{color:#1d4ed8;font-weight:850;text-decoration:underline;text-underline-offset:2px}
+#fh-preland-root .fh-hb-policy-error{display:none;color:#b91c1c;font:850 13px/1.4 'Inter',system-ui,sans-serif;text-align:center}
+#fh-preland-root.fh-hb-style-banner-black-yellow .fh-hb-title,
+#fh-preland-root.fh-hb-style-banner-black-red .fh-hb-title{letter-spacing:-.035em}
+#fh-preland-root.fh-hb-style-banner-black-yellow .fh-hb-method{color:#07111f;text-shadow:none}
+#fh-preland-root.fh-hb-style-banner-black-yellow .fh-hb-kicker{background:#07111f;color:#facc15;border-color:rgba(7,17,31,.16)}
+#fh-preland-root.fh-hb-style-banner-black-red .fh-hb-kicker{background:#07111f;color:#fff;border-color:rgba(239,68,68,.20)}
+#fh-preland-root.fh-hb-style-banner-black-red .fh-hb-method{background:linear-gradient(100deg,#ef4444,#111827)}
+#fh-preland-root.fh-hb-style-banner-white-gold .fh-hb-stage:before,
+#fh-preland-root.fh-hb-style-premium-light .fh-hb-stage:before{background:linear-gradient(90deg,rgba(255,253,247,.96) 0%,rgba(255,253,247,.84) 30%,rgba(255,253,247,.24) 56%,rgba(255,253,247,0) 100%),radial-gradient(circle at 20% 18%,rgba(177,138,61,.14),transparent 34%),linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,.10))}
+#fh-preland-root.fh-hb-style-clean-ads .fh-hb-story-card,
+#fh-preland-root.fh-hb-style-saas .fh-hb-story-card{border-radius:14px}
+#fh-preland-root.fh-hb-style-planner .fh-hb-story-card,
+#fh-preland-root.fh-hb-layout-timeline .fh-hb-story-card{border-left:5px solid var(--hb-accent);border-radius:16px}
+#fh-preland-root.fh-hb-layout-cards .fh-hb-bottom{grid-template-columns:1fr}
+#fh-preland-root.fh-hb-layout-cards .fh-hb-actions{max-width:720px}
+#fh-preland-root.fh-hb-effect-glow .fh-hb-btn,
+#fh-preland-root.fh-hb-effect-glow .fh-hb-story-card,
+#fh-preland-root.fh-hb-effect-glow .fh-hb-media-card{box-shadow:0 28px 76px color-mix(in srgb,var(--hb-accent) 16%,rgba(30,54,92,.12))}
+#fh-preland-root.fh-hb-effect-pulse .fh-hb-btn-tg{animation:fhHbScenePulse 2.3s ease-in-out infinite}
+#fh-preland-root.fh-hb-effect-fadein .fh-hb-copy,
+#fh-preland-root.fh-hb-effect-fadein .fh-hb-bottom,
+#fh-preland-root.fh-hb-effect-fadein .fh-hb-section{animation:fhHbSceneIn .55s ease both}
+#fh-preland-root.fh-hb-effect-micro .fh-hb-story-card,
+#fh-preland-root.fh-hb-effect-micro .fh-hb-value-card{transition:transform .2s ease,box-shadow .2s ease}
+#fh-preland-root.fh-hb-effect-micro .fh-hb-story-card:hover,
+#fh-preland-root.fh-hb-effect-micro .fh-hb-value-card:hover{transform:translateY(-3px)}
+@keyframes fhHbScenePulse{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+@keyframes fhHbSceneIn{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+.wh-landing-buttons,.wh-widget{display:none!important}
+@media(max-width:1100px){
+  #fh-preland-root .fh-hb-hero,
+  #fh-preland-root.fh-hb-layout-classic .fh-hb-hero,
+  #fh-preland-root.fh-hb-layout-cards .fh-hb-hero,
+  #fh-preland-root.fh-hb-layout-timeline .fh-hb-hero{grid-template-columns:1fr}
+  #fh-preland-root .fh-hb-stage{min-height:auto;padding-top:clamp(270px,58vw,430px);background:linear-gradient(180deg,#f9fcff 0%,#f4f9ff 100%)}
+  #fh-preland-root .fh-hb-stage:before{background:linear-gradient(180deg,rgba(249,252,255,.04) 0%,rgba(249,252,255,.50) 46%,rgba(249,252,255,.98) 100%)}
+  #fh-preland-root .fh-hb-scene{bottom:auto;height:clamp(300px,64vw,480px);border-radius:0 0 28px 28px}
+  #fh-preland-root .fh-hb-scene img{object-position:center 24%;filter:saturate(1.08) contrast(1.04) brightness(.98)}
+  #fh-preland-root .fh-hb-scene:after{opacity:.16;mask-image:linear-gradient(180deg,#000 0%,rgba(0,0,0,.62) 48%,transparent 100%)}
+  #fh-preland-root .fh-hb-bottom{grid-column:1;width:100%;grid-template-columns:1fr}
+  #fh-preland-root .fh-hb-section-grid,
+  #fh-preland-root .fh-hb-cta{grid-template-columns:1fr}
+}
+@media(max-width:820px){
+  #fh-preland-root .fh-hb-wrap,
+  #fh-preland-root .fh-hb-section,
+  #fh-preland-root .fh-hb-legal,
+  #fh-preland-root .fh-hb-policy,
+  #fh-preland-root .fh-hb-policy-error{width:calc(100% - 24px)}
+  #fh-preland-root .fh-hb-hero{padding:16px 0 18px;gap:12px}
+  #fh-preland-root .fh-hb-copy{width:100%;max-width:100%;min-width:0;padding:16px;border-radius:24px;background:rgba(255,255,255,.86);border:1px solid rgba(22,34,57,.10);box-shadow:0 20px 54px rgba(30,54,92,.12);backdrop-filter:blur(10px)}
+  #fh-preland-root .fh-hb-title{max-width:100%;font-size:clamp(28px,7.8vw,42px);line-height:1.02;letter-spacing:-.025em;overflow-wrap:anywhere;word-break:normal;text-wrap:wrap}
+  #fh-preland-root .fh-hb-lead{max-width:100%;font-size:15px;overflow-wrap:anywhere}
+  #fh-preland-root .fh-hb-method{width:100%;font-size:14px;border-radius:16px}
+  #fh-preland-root .fh-hb-proof{display:grid;grid-template-columns:1fr;gap:7px}
+  #fh-preland-root .fh-hb-proof li{width:100%;font-size:11px;padding:8px 10px}
+  #fh-preland-root .fh-hb-story-row,
+  #fh-preland-root .fh-hb-value-grid,
+  #fh-preland-root .fh-hb-buttons{grid-template-columns:1fr}
+  #fh-preland-root .fh-hb-story-card{min-height:auto}
+  #fh-preland-root .fh-hb-section{border-radius:28px;margin-top:18px}
+  #fh-preland-root .fh-hb-section-grid,
+  #fh-preland-root .fh-hb-cta{padding:22px}
+  #fh-preland-root .fh-hb-value-grid{padding:0 22px 22px}
+  #fh-preland-root .fh-hb-section-title,
+  #fh-preland-root .fh-hb-cta-title{font-size:clamp(32px,9vw,50px)}
+  #fh-preland-root .fh-hb-media-card{min-height:260px}
+  #fh-preland-root .fh-hb-btn{min-height:66px}
+}
+@media(max-width:520px){
+  #fh-preland-root .fh-hb-stage{padding-top:clamp(250px,76vw,340px)}
+  #fh-preland-root .fh-hb-scene{height:clamp(270px,84vw,360px)}
+  #fh-preland-root .fh-hb-scene img{object-position:center 18%}
+  #fh-preland-root .fh-hb-copy{padding:14px}
+  #fh-preland-root .fh-hb-title{font-size:clamp(25px,7.2vw,34px);line-height:1.04}
+  #fh-preland-root .fh-hb-method{margin-top:14px}
+  #fh-preland-root .fh-hb-proof{margin-top:14px}
+}
+</style>
+<div id="fh-preland-root" class="${rootClass}" style="${esc(rootStyle)}">
+  <main class="fh-hb-stage">
+    <div class="fh-hb-scene" aria-hidden="true">
+      ${heroImageHtml}
+    </div>
+    <div class="fh-hb-wrap">
+      <section class="fh-hb-hero" aria-label="Главный экран">
+        <div class="fh-hb-copy">
+          <div class="fh-hb-kicker">${esc(badge)}</div>
+          <h1 class="fh-hb-title">${titleHtml}</h1>
+          <p class="fh-hb-lead">${esc(leadText)}</p>
+          ${methodHtml}
+          ${proofListHtml}
+        </div>
+        <div class="fh-hb-bottom">
+          <div class="fh-hb-story-row">${cardsHtml}</div>
+          <div class="fh-hb-actions">
+            ${actionNoteHtml}
+            <div class="fh-hb-buttons" aria-label="Выбор мессенджера">
+              ${renderAtmospaceMessengerButton('telegram', 'fh-hb-btn fh-hb-btn-tg', 'Начать разбор в Telegram')}
+              ${renderAtmospaceMessengerButton('max', 'fh-hb-btn fh-hb-btn-max', 'Начать разбор в MAX')}
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <section class="fh-hb-section" aria-label="Что внутри">
+    <div class="fh-hb-section-grid">
+      <div>
+        <div class="fh-hb-section-label">Что покажем внутри</div>
+        <h2 class="fh-hb-section-title">${esc(content.valueTitle || leadText)}</h2>
+      </div>
+      <div class="${valueMediaClass}" aria-hidden="true">
+        ${valueImageHtml}
+      </div>
+    </div>
+    <div class="fh-hb-value-grid">${valueHtml}</div>
+  </section>
+
+  <section class="fh-hb-section fh-hb-cta" aria-label="Финальный призыв">
+    <div>
+      <div class="fh-hb-section-label">Следующий шаг</div>
+      <h2 class="fh-hb-cta-title">${esc(ctaTitle)}</h2>
+      <p class="fh-hb-cta-sub">${esc(ctaSubtitle)}</p>
+      <div class="fh-hb-buttons" aria-label="Финальные кнопки">
+        ${renderAtmospaceMessengerButton('telegram', 'fh-hb-btn fh-hb-btn-tg', 'Начать в Telegram')}
+        ${renderAtmospaceMessengerButton('max', 'fh-hb-btn fh-hb-btn-max', 'Начать в MAX')}
+      </div>
+    </div>
+    <div class="${ctaMediaClass}" aria-hidden="true">
+      ${ctaImageHtml}
+    </div>
+  </section>
+
+  <label class="fh-hb-policy" for="atmospace-policy-consent">
+    <input id="atmospace-policy-consent" type="checkbox">
+    <span>Я принимаю <a href="https://modernisto.ru/politics" target="_blank" rel="noopener noreferrer">политику конфиденциальности</a> и <a href="https://modernisto.ru/approval" target="_blank" rel="noopener noreferrer">согласие на обработку персональных данных</a>.</span>
+  </label>
+  <div id="atmospace-policy-error" class="fh-hb-policy-error" role="alert" hidden>Для перехода в мессенджер подтвердите согласие на обработку персональных данных.</div>
+  <p class="fh-hb-legal">Нажимая кнопку, вы переходите в выбранный мессенджер для получения материала. Разбор откроется в новой вкладке, а эта страница останется доступной.</p>
+</div>
+${buildAtmospacePrelandingTrackingScript()}`;
+}
+
+function renderNatureEditorialPrelanding({ content, projectData, landingMeta, sceneImage, valueImage, ctaImage, style, palette, layout, effects }) {
+  const selectedPalette = PALETTES.find(item => item[0] === palette) || PALETTES.find(item => item[0] === 'white-gold-ad') || PALETTES[0];
+  const paletteColors = selectedPalette?.[3] || ['#6f7554', '#b96b4e', '#f7f4ed'];
+  const titleText = stripHtml(content.titleHtml || content.title || 'Книги прочитаны. А жизнь всё ещё не меняется?');
+  const titleWords = titleText.split(/\s+/).filter(Boolean);
+  const accentCount = titleWords.length > 7 ? 4 : Math.max(1, Math.ceil(titleWords.length / 3));
+  const titleHtml = titleWords.length > 2
+    ? `${esc(titleWords.slice(0, -accentCount).join(' '))} <em>${esc(titleWords.slice(-accentCount).join(' '))}</em>`
+    : `<em>${esc(titleText)}</em>`;
+  const leadText = content.trustTitle || content.valueTitle || 'Короткий разбор показывает, почему знания, планы и желания не переходят в устойчивое действие.';
+  const ctaLead = content.actionSubtitle || content.ctaLead || buildTildaCtaLead(titleText, leadText);
+  const cards = (content.cards?.length ? content.cards : buildTildaStoryCards(titleText)).slice(0, 3);
+  const valueItems = (content.valueItems?.length ? content.valueItems : cards.map(item => item.text)).slice(0, 3);
+  const images = [
+    bothelpImageSrc(sceneImage || PRELANDING_FALLBACK_IMAGES[0]),
+    bothelpImageSrc(valueImage || PRELANDING_FALLBACK_IMAGES[1]),
+    bothelpImageSrc(ctaImage || PRELANDING_FALLBACK_IMAGES[2])
+  ];
+  const theme = `${style || ''} ${palette || ''}`.toLowerCase();
+  const rootTone = theme.includes('terra') || theme.includes('coral')
+    ? 'fh-nd-tone-terra'
+    : theme.includes('forest') || theme.includes('green')
+      ? 'fh-nd-tone-forest'
+      : 'fh-nd-tone-sage';
+  const rootClass = [
+    'fh-nd26',
+    rootTone,
+    `fh-nd-layout-${prelandingClassToken(layout || 'split')}`,
+    ...(Array.isArray(effects) ? effects.map(item => `fh-nd-effect-${prelandingClassToken(item)}`) : [])
+  ].filter(Boolean).join(' ');
+  const rootStyle = [
+    `--nd-olive:${paletteColors[0] || '#6f7554'}`,
+    `--nd-terra:${paletteColors[1] || '#b96b4e'}`,
+    `--nd-cloud:${paletteColors[2] || '#f7f4ed'}`
+  ].join(';');
+  const cssUrl = (url) => String(url || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const bg = (url, overlay = 'linear-gradient(180deg,rgba(37,35,30,.04),rgba(37,35,30,.18))') => (
+    url
+      ? `${overlay},url('${cssUrl(url)}')`
+      : 'linear-gradient(135deg,rgba(111,117,84,.18),rgba(185,107,78,.12)),linear-gradient(135deg,#fbfaf6,#ede7dc)'
+  );
+  const cardsHtml = cards.map((item, index) => {
+    const cardImage = images[index % images.length];
+    return `<article class="fh-nd-card">
+      <div class="fh-nd-photo" style="background-image:${esc(bg(cardImage))}"></div>
+      <div class="fh-nd-num">${String(index + 1).padStart(2, '0')}</div>
+      <h3>${esc(item?.title || `Смысл ${index + 1}`)}</h3>
+      <p>${esc(item?.text || valueItems[index] || 'Понятный шаг без лишней теории.')}</p>
+    </article>`;
+  }).join('');
+  const stepsHtml = valueItems.map((item, index) => `<div class="fh-nd-step">
+    <i>${index + 1}</i>
+    <div><b>${esc(cards[index]?.title || `Шаг ${index + 1}`)}</b><span>${esc(item)}</span></div>
+  </div>`).join('');
+  const heroNote = content.methodName || content.liveNote || 'Не ещё читать. Начать применять.';
+  const badge = content.badge || 'Короткий практический разбор';
+  const finalTitle = content.actionTitle || 'Начните с короткого разбора';
+  const finalText = content.actionSubtitle || 'Выберите мессенджер. Разбор откроется в новой вкладке, а эта страница останется доступной.';
+
+  return `${buildAtmospaceHeadConfig({
+  projectData,
+  ...(landingMeta || {})
+})}
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;700;800;900&display=swap');
+#fh-preland-root.fh-nd26,
+#fh-preland-root.fh-nd26 *{box-sizing:border-box}
+#fh-preland-root.fh-nd26{
+  --nd-paper:#fbfaf6;
+  --nd-ink:#25231e;
+  --nd-muted:#746e63;
+  --nd-line:rgba(55,48,38,.15);
+  --nd-sage:#a9b49b;
+  --nd-shadow:0 28px 70px rgba(70,58,40,.13);
+  width:100vw;
+  min-height:100vh;
+  margin-left:calc(50% - 50vw);
+  margin-right:calc(50% - 50vw);
+  color:var(--nd-ink);
+  font-family:'Inter',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  background:
+    radial-gradient(circle at 12% 14%,rgba(185,107,78,.16),transparent 28%),
+    radial-gradient(circle at 86% 20%,rgba(111,117,84,.16),transparent 30%),
+    linear-gradient(180deg,#f0eee9 0%,#f7f4ed 54%,#efeae1 100%);
+  overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+#fh-preland-root.fh-nd-tone-terra{--nd-olive:#7c6b46;--nd-terra:#c06445;--nd-cloud:#fff6ee}
+#fh-preland-root.fh-nd-tone-forest{--nd-olive:#3f6b4a;--nd-terra:#9b7a35;--nd-cloud:#f2f8ef}
+#fh-preland-root.fh-nd26 a{text-decoration:none;color:inherit}
+#fh-preland-root.fh-nd26:before{
+  content:"";
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  opacity:.28;
+  background-image:radial-gradient(rgba(37,35,30,.12) .45px,transparent .45px),linear-gradient(90deg,rgba(37,35,30,.035) 1px,transparent 1px);
+  background-size:5px 5px,64px 64px;
+}
+#fh-preland-root .fh-nd-wrap{width:min(1120px,calc(100% - 34px));margin:auto;position:relative;z-index:2}
+#fh-preland-root .fh-nd-hero{min-height:100svh;padding:52px 0 68px;display:flex;align-items:center}
+#fh-preland-root .fh-nd-grid{display:grid;grid-template-columns:1fr 1.02fr;gap:46px;align-items:center}
+#fh-preland-root .fh-nd-kicker{display:inline-flex;align-items:center;gap:10px;font-size:11px;letter-spacing:.20em;text-transform:uppercase;color:var(--nd-muted);font-weight:900;margin-bottom:26px}
+#fh-preland-root .fh-nd-kicker:before{content:"";width:10px;height:10px;border-radius:50%;background:var(--nd-olive);box-shadow:0 0 0 7px rgba(111,117,84,.10)}
+#fh-preland-root .fh-nd-title{font-family:'Cormorant Garamond',Georgia,serif;font-size:clamp(52px,7.5vw,94px);line-height:.9;letter-spacing:-.045em;font-weight:600;margin:0 0 28px;text-wrap:balance}
+#fh-preland-root .fh-nd-title em{font-style:normal;color:var(--nd-terra)}
+#fh-preland-root .fh-nd-lead{font-size:19px;line-height:1.66;color:var(--nd-muted);max-width:560px;margin:0 0 30px}
+#fh-preland-root .fh-nd-lead b{color:var(--nd-ink)}
+#fh-preland-root .fh-nd-buttons{display:flex;gap:14px;flex-wrap:wrap;margin:0 0 24px}
+#fh-preland-root .fh-nd-btn{min-height:64px;padding:0 24px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;gap:12px;border:1px solid var(--nd-line);font-size:15px;font-weight:900;box-shadow:0 16px 40px rgba(70,58,40,.08);transition:transform .22s ease,filter .22s ease;text-decoration:none!important}
+#fh-preland-root .fh-nd-btn:hover{transform:translateY(-3px);filter:brightness(1.03)}
+#fh-preland-root .fh-nd-btn-tg{background:var(--nd-olive);color:#fff!important;-webkit-text-fill-color:#fff!important;border-color:var(--nd-olive)}
+#fh-preland-root .fh-nd-btn-max{background:rgba(255,255,255,.62);backdrop-filter:blur(10px);color:var(--nd-ink)!important}
+#fh-preland-root .fh-nd-note{display:flex;gap:10px;align-items:flex-start;color:var(--nd-muted);font-size:13px;line-height:1.45;max-width:520px}
+#fh-preland-root .fh-nd-note i{font-style:normal;width:24px;height:24px;border-radius:50%;border:1px solid var(--nd-line);display:grid;place-items:center;flex:0 0 auto;background:rgba(255,255,255,.45)}
+#fh-preland-root .fh-nd-art{min-height:650px;position:relative;border-radius:38px;background:var(--nd-paper);border:1px solid rgba(255,255,255,.72);box-shadow:var(--nd-shadow);overflow:hidden;padding:24px}
+#fh-preland-root .fh-nd-big{position:absolute;right:24px;top:24px;width:62%;height:72%;border-radius:32px;overflow:hidden;background-size:cover;background-position:center;box-shadow:0 24px 60px rgba(70,58,40,.16);z-index:2}
+#fh-preland-root .fh-nd-small{position:absolute;left:24px;bottom:28px;width:48%;height:42%;border-radius:30px;overflow:hidden;background-size:cover;background-position:center;box-shadow:0 22px 50px rgba(70,58,40,.15);z-index:3}
+#fh-preland-root .fh-nd-paper{position:absolute;left:48px;top:70px;width:245px;padding:24px;border-radius:24px;background:rgba(255,255,255,.74);border:1px solid rgba(255,255,255,.76);backdrop-filter:blur(12px);box-shadow:0 18px 50px rgba(70,58,40,.12);z-index:4}
+#fh-preland-root .fh-nd-paper b{display:block;font-family:'Cormorant Garamond',Georgia,serif;font-size:34px;line-height:.95;font-weight:700;margin-bottom:12px}
+#fh-preland-root .fh-nd-paper span{display:block;color:var(--nd-muted);font-size:14px;line-height:1.45}
+#fh-preland-root .fh-nd-quote{position:absolute;right:46px;bottom:52px;width:300px;padding:22px;border-radius:26px;background:rgba(240,238,233,.78);border:1px solid rgba(255,255,255,.70);backdrop-filter:blur(12px);box-shadow:0 18px 50px rgba(70,58,40,.12);z-index:5}
+#fh-preland-root .fh-nd-quote small{display:block;text-transform:uppercase;letter-spacing:.18em;color:var(--nd-terra);font-size:10px;font-weight:900;margin-bottom:8px}
+#fh-preland-root .fh-nd-quote p{margin:0;font-family:'Cormorant Garamond',Georgia,serif;font-size:28px;line-height:1.05}
+#fh-preland-root .fh-nd-leaf{position:absolute;left:36px;top:38%;width:150px;height:150px;border:1px solid rgba(80,87,61,.22);border-radius:80% 0 80% 0;transform:rotate(-24deg);z-index:2}
+#fh-preland-root .fh-nd-section{padding:84px 0}
+#fh-preland-root .fh-nd-head{text-align:center;max-width:800px;margin:0 auto 34px}
+#fh-preland-root .fh-nd-head h2,#fh-preland-root .fh-nd-panel h2,#fh-preland-root .fh-nd-final h2{font-family:'Cormorant Garamond',Georgia,serif;font-size:clamp(42px,6vw,70px);line-height:.96;letter-spacing:-.035em;margin:0 0 16px;font-weight:600}
+#fh-preland-root .fh-nd-head p,#fh-preland-root .fh-nd-panel p,#fh-preland-root .fh-nd-final p{margin:0;color:var(--nd-muted);font-size:18px;line-height:1.58}
+#fh-preland-root .fh-nd-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+#fh-preland-root .fh-nd-card{background:rgba(255,255,255,.60);border:1px solid rgba(255,255,255,.72);border-radius:28px;padding:18px;box-shadow:0 18px 44px rgba(70,58,40,.08);backdrop-filter:blur(10px)}
+#fh-preland-root .fh-nd-photo{height:178px;border-radius:22px;background-size:cover;background-position:center;margin-bottom:20px;position:relative;overflow:hidden}
+#fh-preland-root .fh-nd-num{font-size:12px;letter-spacing:.20em;text-transform:uppercase;color:var(--nd-terra);font-weight:900;margin-bottom:10px}
+#fh-preland-root .fh-nd-card h3{font-family:'Cormorant Garamond',Georgia,serif;font-size:32px;line-height:1;margin:0 0 10px;font-weight:700}
+#fh-preland-root .fh-nd-card p{color:var(--nd-muted);line-height:1.55;margin:0;font-size:15px}
+#fh-preland-root .fh-nd-panel{border-radius:36px;padding:46px;background:rgba(255,255,255,.62);border:1px solid rgba(255,255,255,.78);box-shadow:var(--nd-shadow);backdrop-filter:blur(10px);display:grid;grid-template-columns:.94fr 1.06fr;gap:34px;align-items:center}
+#fh-preland-root .fh-nd-panel h2 em{font-style:normal;color:var(--nd-terra)}
+#fh-preland-root .fh-nd-steps{display:grid;gap:12px}
+#fh-preland-root .fh-nd-step{padding:20px;border-radius:22px;background:var(--nd-paper);border:1px solid var(--nd-line);display:grid;grid-template-columns:46px 1fr;gap:14px;align-items:start}
+#fh-preland-root .fh-nd-step i{width:46px;height:46px;border-radius:50%;border:1px solid var(--nd-line);display:grid;place-items:center;font-style:normal;color:var(--nd-olive);font-weight:900}
+#fh-preland-root .fh-nd-step b{display:block;margin-bottom:6px;font-size:17px}
+#fh-preland-root .fh-nd-step span{display:block;color:var(--nd-muted);font-size:14px;line-height:1.45}
+#fh-preland-root .fh-nd-final{padding:0 0 94px}
+#fh-preland-root .fh-nd-box{text-align:center;border-radius:36px;background:linear-gradient(135deg,rgba(111,117,84,.12),rgba(185,107,78,.09)),rgba(255,255,255,.60);border:1px solid rgba(255,255,255,.78);padding:48px 28px;box-shadow:var(--nd-shadow);backdrop-filter:blur(10px)}
+#fh-preland-root .fh-nd-box p{margin:0 auto 26px;max-width:680px}
+#fh-preland-root .fh-nd-box .fh-nd-buttons{justify-content:center}
+#fh-preland-root .fh-nd-policy,#fh-preland-root .fh-nd-policy-error,#fh-preland-root .fh-nd-legal{width:min(920px,calc(100% - 48px));margin:18px auto 0;position:relative;z-index:2}
+#fh-preland-root .fh-nd-policy{display:flex;gap:12px;align-items:flex-start;padding:16px 18px;border-radius:20px;background:rgba(255,255,255,.74);border:1px solid rgba(55,48,38,.12);box-shadow:0 14px 34px rgba(70,58,40,.06);color:var(--nd-muted);font:650 13px/1.55 'Inter',system-ui,sans-serif}
+#fh-preland-root .fh-nd-policy input{width:18px;height:18px;margin:2px 0 0;flex:0 0 18px;accent-color:var(--nd-olive)}
+#fh-preland-root .fh-nd-policy a{color:var(--nd-olive);font-weight:850;text-decoration:underline;text-underline-offset:2px}
+#fh-preland-root .fh-nd-policy-error{display:none;color:#b45336;font:850 13px/1.4 'Inter',system-ui,sans-serif;text-align:center}
+#fh-preland-root .fh-nd-legal{color:#8a8174;font:600 12px/1.5 'Inter',system-ui,sans-serif;text-align:center}
+#fh-preland-root.fh-nd-effect-micro .fh-nd-card,#fh-preland-root.fh-nd-effect-micro .fh-nd-btn{transition:transform .22s ease,box-shadow .22s ease}
+#fh-preland-root.fh-nd-effect-micro .fh-nd-card:hover{transform:translateY(-3px)}
+#fh-preland-root.fh-nd-effect-fadein .fh-nd-copy,#fh-preland-root.fh-nd-effect-fadein .fh-nd-art,#fh-preland-root.fh-nd-effect-fadein .fh-nd-card,#fh-preland-root.fh-nd-effect-fadein .fh-nd-panel{animation:fhNdIn .55s ease both}
+@keyframes fhNdIn{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+.wh-landing-buttons,.wh-widget{display:none!important}
+@media(max-width:940px){
+  #fh-preland-root .fh-nd-grid,#fh-preland-root .fh-nd-cards,#fh-preland-root .fh-nd-panel{grid-template-columns:1fr}
+  #fh-preland-root .fh-nd-hero{padding-top:44px}
+  #fh-preland-root .fh-nd-art{min-height:560px}
+  #fh-preland-root .fh-nd-big{width:68%}
+}
+@media(max-width:560px){
+  #fh-preland-root .fh-nd-wrap{width:calc(100% - 24px)}
+  #fh-preland-root .fh-nd-hero{min-height:auto;padding:32px 0 44px}
+  #fh-preland-root .fh-nd-title{font-size:46px;line-height:.94}
+  #fh-preland-root .fh-nd-lead{font-size:16px}
+  #fh-preland-root .fh-nd-buttons{display:grid}
+  #fh-preland-root .fh-nd-btn{width:100%;min-height:60px}
+  #fh-preland-root .fh-nd-art{min-height:460px;border-radius:28px}
+  #fh-preland-root .fh-nd-big{right:16px;top:16px;width:70%;height:62%;border-radius:24px}
+  #fh-preland-root .fh-nd-small{left:16px;bottom:18px;width:58%;height:36%;border-radius:24px}
+  #fh-preland-root .fh-nd-paper{left:18px;top:44px;width:190px;padding:18px}
+  #fh-preland-root .fh-nd-paper b{font-size:27px}
+  #fh-preland-root .fh-nd-quote{right:16px;bottom:38px;width:220px;padding:17px}
+  #fh-preland-root .fh-nd-quote p{font-size:22px}
+  #fh-preland-root .fh-nd-leaf{display:none}
+  #fh-preland-root .fh-nd-section{padding:58px 0}
+  #fh-preland-root .fh-nd-panel{padding:28px}
+  #fh-preland-root .fh-nd-final{padding-bottom:52px}
+}
+</style>
+<div id="fh-preland-root" class="${rootClass}" style="${esc(rootStyle)}">
+  <section class="fh-nd-hero" aria-label="Главный экран">
+    <div class="fh-nd-wrap fh-nd-grid">
+      <div class="fh-nd-copy">
+        <div class="fh-nd-kicker">${esc(badge)}</div>
+        <h1 class="fh-nd-title">${titleHtml}</h1>
+        <p class="fh-nd-lead">${esc(leadText)}</p>
+        <div class="fh-nd-buttons" aria-label="Выбор мессенджера">
+          ${renderAtmospaceMessengerButton('telegram', 'fh-nd-btn fh-nd-btn-tg', 'Начать разбор в Telegram')}
+          ${renderAtmospaceMessengerButton('max', 'fh-nd-btn fh-nd-btn-max', 'Начать разбор в MAX')}
+        </div>
+        <div class="fh-nd-note"><i>✓</i><span>${esc(ctaLead)}</span></div>
+      </div>
+
+      <div class="fh-nd-art" aria-hidden="true">
+        <div class="fh-nd-big" style="background-image:${esc(bg(images[0]))}"></div>
+        <div class="fh-nd-small" style="background-image:${esc(bg(images[1]))}"></div>
+        <div class="fh-nd-leaf"></div>
+        <div class="fh-nd-paper"><b>${esc(cards[0]?.title || 'Знание ≠ движение')}</b><span>${esc(cards[0]?.text || 'Инсайт становится результатом только после внедрения в ежедневную систему.')}</span></div>
+        <div class="fh-nd-quote"><small>точка входа</small><p>${esc(heroNote)}</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="fh-nd-section" aria-label="Знакомый сценарий">
+    <div class="fh-nd-wrap">
+      <div class="fh-nd-head">
+        <div class="fh-nd-kicker">Знакомый сценарий</div>
+        <h2>${esc(content.painTitle || 'Когда желание есть, а движение не закрепляется')}</h2>
+        <p>${esc(content.painAlert || 'Показываем человеку не ещё одну теорию, а понятный вход в действие через короткий разбор.')}</p>
+      </div>
+      <div class="fh-nd-cards">${cardsHtml}</div>
+    </div>
+  </section>
+
+  <section class="fh-nd-section" aria-label="Механика">
+    <div class="fh-nd-wrap">
+      <div class="fh-nd-panel">
+        <div>
+          <div class="fh-nd-kicker">Суть проста</div>
+          <h2>${esc(content.trustSmall || 'Смысл не в новой информации.')} <em>${esc(content.methodName || 'Смысл в первом действии.')}</em></h2>
+          <p>${esc(content.valueTitle || 'Разбор переводит внимание человека из состояния “надо когда-нибудь” в понятный ближайший шаг.')}</p>
+        </div>
+        <div class="fh-nd-steps">${stepsHtml}</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="fh-nd-final" aria-label="Финальный призыв">
+    <div class="fh-nd-wrap">
+      <div class="fh-nd-box">
+        <h2>${esc(finalTitle)}</h2>
+        <p>${esc(finalText)}</p>
+        <div class="fh-nd-buttons" aria-label="Финальные кнопки">
+          ${renderAtmospaceMessengerButton('telegram', 'fh-nd-btn fh-nd-btn-tg', 'Начать в Telegram')}
+          ${renderAtmospaceMessengerButton('max', 'fh-nd-btn fh-nd-btn-max', 'Начать в MAX')}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <label class="fh-nd-policy" for="atmospace-policy-consent">
+    <input id="atmospace-policy-consent" type="checkbox">
+    <span>Я принимаю <a href="https://modernisto.ru/politics" target="_blank" rel="noopener noreferrer">политику конфиденциальности</a> и <a href="https://modernisto.ru/approval" target="_blank" rel="noopener noreferrer">согласие на обработку персональных данных</a>.</span>
+  </label>
+  <div id="atmospace-policy-error" class="fh-nd-policy-error" role="alert" hidden>Для перехода в мессенджер подтвердите согласие на обработку персональных данных.</div>
+  <p class="fh-nd-legal">Нажимая кнопку, вы переходите в выбранный мессенджер для получения материала. Разбор откроется в новой вкладке, а эта страница останется доступной.</p>
+</div>
+${buildAtmospacePrelandingTrackingScript()}`;
+}
+
+function renderMinimalComparePrelanding({ content, projectData, landingMeta, style, palette, layout, effects }) {
+  const selectedStyle = style || 'minimal-noir';
+  const selectedPalette = palette || 'black-yellow-ad';
+  const titleText = stripHtml(content.titleHtml || content.title || 'Смотрю на других и думаю: почему у меня не так?');
+  const titleWords = titleText.split(/\s+/).filter(Boolean);
+  const accentCount = titleWords.length > 6 ? Math.max(2, Math.ceil(titleWords.length / 3)) : 2;
+  const titleHtml = /<\/?[a-z][\s\S]*>/i.test(String(content.titleHtml || ''))
+    ? content.titleHtml
+    : titleWords.length > accentCount
+      ? `${esc(titleWords.slice(0, -accentCount).join(' '))} <span>${esc(titleWords.slice(-accentCount).join(' '))}</span>`
+      : `<span>${esc(titleText)}</span>`;
+  const leadText = content.trustTitle || content.valueTitle || 'Это не зависть и не слабость. Часто чужая жизнь цепляет именно там, где ваша собственная давно стоит на паузе.';
+  const miniItems = (content.valueItems?.length ? content.valueItems : [
+    'Если кажется, что все вокруг уже движутся, а вы всё ещё ждёте подходящий момент.',
+    'Если внутри есть ощущение: “я тоже хочу иначе”, но непонятно, с чего начать.',
+    'Если хочется не мотивации на вечер, а понятного первого шага.'
+  ]).slice(0, 3);
+  const cards = (content.cards?.length ? content.cards : miniItems.map((text, index) => ({
+    title: ['Сравнение', 'Пауза', 'Первый шаг'][index] || `Смысл ${index + 1}`,
+    text
+  }))).slice(0, 3);
+  const rootTone = selectedStyle.includes('blue') || selectedPalette.includes('blue')
+    ? 'fh-mc-tone-blue'
+    : selectedStyle.includes('graphite') || selectedPalette.includes('clean')
+      ? 'fh-mc-tone-graphite'
+      : 'fh-mc-tone-noir';
+  const rootClass = [
+    'fh-mc26',
+    rootTone,
+    `fh-mc-layout-${prelandingClassToken(layout || 'minimal')}`,
+    ...(Array.isArray(effects) ? effects.map(item => `fh-mc-effect-${prelandingClassToken(item)}`) : [])
+  ].filter(Boolean).join(' ');
+  const badge = content.badge || 'Тихое сравнение';
+  const buttonLead = content.ctaLead || content.actionSubtitle || 'Разбор откроется в новой вкладке, а эта страница останется доступной.';
+  const miniHtml = miniItems.map((item) => `<div class="fh-mc-mini-item"><span class="fh-mc-mini-dot"></span><span>${esc(item)}</span></div>`).join('');
+  const cardsHtml = cards.map((item, index) => `<article class="fh-mc-proof-card">
+    <div class="fh-mc-proof-num">${String(index + 1).padStart(2, '0')}</div>
+    <h3>${esc(item?.title || `Смысл ${index + 1}`)}</h3>
+    <p>${esc(item?.text || miniItems[index] || 'Короткий смысл перед первым шагом.')}</p>
+  </article>`).join('');
+
+  return `${buildAtmospaceHeadConfig({
+  projectData,
+  ...(landingMeta || {})
+})}
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap');
+#fh-preland-root.fh-mc26,
+#fh-preland-root.fh-mc26 *{box-sizing:border-box}
+#fh-preland-root.fh-mc26{
+  --mc-bg:#090909;
+  --mc-bg2:#0d0d0d;
+  --mc-text:#ffffff;
+  --mc-muted:#8b8b8b;
+  --mc-line:#252525;
+  --mc-soft:#151515;
+  --mc-accent:#ffffff;
+  width:100vw;
+  min-height:100vh;
+  margin-left:calc(50% - 50vw);
+  margin-right:calc(50% - 50vw);
+  color:var(--mc-text);
+  background:
+    radial-gradient(circle at 82% 18%,rgba(255,255,255,.08),transparent 22%),
+    radial-gradient(circle at 10% 90%,rgba(255,255,255,.06),transparent 26%),
+    linear-gradient(180deg,var(--mc-bg) 0%,var(--mc-bg2) 56%,#070707 100%);
+  font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+#fh-preland-root.fh-mc-tone-blue{--mc-bg:#06101f;--mc-bg2:#08182c;--mc-muted:#91a2bd;--mc-line:rgba(148,163,184,.22);--mc-soft:rgba(15,31,55,.72);--mc-accent:#73b8ff}
+#fh-preland-root.fh-mc-tone-graphite{--mc-bg:#101114;--mc-bg2:#15171c;--mc-muted:#a3a7b0;--mc-line:rgba(255,255,255,.16);--mc-soft:rgba(255,255,255,.045);--mc-accent:#f3f4f6}
+#fh-preland-root.fh-mc26 a{color:inherit;text-decoration:none}
+#fh-preland-root .fh-mc-page{min-height:100vh;display:flex;align-items:center;padding:64px 0}
+#fh-preland-root .fh-mc-container{width:min(680px,calc(100% - 44px));margin:0 auto}
+#fh-preland-root .fh-mc-kicker{font-size:10px;letter-spacing:.30em;text-transform:uppercase;color:#5a5a5a;margin-bottom:24px;font-weight:800}
+#fh-preland-root.fh-mc-tone-blue .fh-mc-kicker{color:#86a7d8}
+#fh-preland-root .fh-mc-title{font-size:clamp(38px,7vw,64px);font-weight:850;line-height:1.04;margin:0 0 30px;letter-spacing:-.055em;text-wrap:balance}
+#fh-preland-root .fh-mc-title span{color:var(--mc-accent)}
+#fh-preland-root .fh-mc-description{font-size:16px;color:var(--mc-muted);line-height:1.68;margin:0 0 42px;max-width:590px}
+#fh-preland-root .fh-mc-description strong{color:#fff;font-weight:750}
+#fh-preland-root .fh-mc-divider{width:100%;height:1px;background:linear-gradient(90deg,var(--mc-line),transparent);margin:0 0 28px}
+#fh-preland-root .fh-mc-mini{display:grid;gap:10px;margin:0 0 34px}
+#fh-preland-root .fh-mc-mini-item{display:flex;gap:12px;align-items:flex-start;color:#777;font-size:13px;line-height:1.45}
+#fh-preland-root.fh-mc-tone-blue .fh-mc-mini-item,#fh-preland-root.fh-mc-tone-graphite .fh-mc-mini-item{color:var(--mc-muted)}
+#fh-preland-root .fh-mc-mini-dot{width:6px;height:6px;margin-top:7px;border-radius:50%;background:var(--mc-accent);opacity:.58;flex:0 0 auto}
+#fh-preland-root .fh-mc-proof{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:0 0 34px}
+#fh-preland-root .fh-mc-proof-card{min-height:148px;padding:18px;border:1px solid var(--mc-line);border-radius:6px;background:var(--mc-soft)}
+#fh-preland-root .fh-mc-proof-num{font-size:10px;letter-spacing:.24em;color:#5a5a5a;font-weight:900;margin-bottom:16px}
+#fh-preland-root .fh-mc-proof-card h3{margin:0 0 10px;color:#fff;font-size:16px;line-height:1.12;letter-spacing:-.02em;font-weight:850;text-transform:uppercase}
+#fh-preland-root .fh-mc-proof-card p{margin:0;color:var(--mc-muted);font-size:12px;line-height:1.48;font-weight:500}
+#fh-preland-root .fh-mc-btn-group{display:flex;flex-direction:column;gap:12px}
+#fh-preland-root .fh-mc-btn{padding:18px 20px;border:1px solid var(--mc-line);border-radius:4px;text-align:center;text-decoration:none!important;color:#fff!important;-webkit-text-fill-color:#fff!important;font-size:14px;font-weight:500;transition:background .2s ease,color .2s ease,border-color .2s ease,transform .2s ease;cursor:pointer;background:transparent}
+#fh-preland-root .fh-mc-btn:hover{transform:translateY(-1px);background:#fff;color:#000!important;-webkit-text-fill-color:#000!important;border-color:#fff}
+#fh-preland-root .fh-mc-btn-primary{background:#fff;color:#000!important;-webkit-text-fill-color:#000!important;border-color:#fff;font-weight:800}
+#fh-preland-root .fh-mc-btn-primary:hover{background:transparent;color:#fff!important;-webkit-text-fill-color:#fff!important}
+#fh-preland-root.fh-mc-tone-blue .fh-mc-btn-primary{background:linear-gradient(135deg,#73b8ff,#2f6bff);border-color:rgba(115,184,255,.52);color:#fff!important;-webkit-text-fill-color:#fff!important}
+#fh-preland-root .fh-mc-next{margin:14px 0 0;color:var(--mc-muted);font-size:11px;line-height:1.45}
+#fh-preland-root .fh-mc-policy{margin-top:34px;font-size:10px;color:#555;line-height:1.5;display:flex;align-items:flex-start;gap:8px}
+#fh-preland-root .fh-mc-policy input{width:14px;height:14px;margin:1px 0 0;accent-color:#fff;flex:0 0 auto}
+#fh-preland-root .fh-mc-policy a{color:#777;text-decoration:underline;text-underline-offset:2px}
+#fh-preland-root .fh-mc-error{display:none;margin-top:14px;font-size:12px;color:#c9c9c9}
+#fh-preland-root.fh-mc-effect-fadein .fh-mc-kicker,
+#fh-preland-root.fh-mc-effect-fadein .fh-mc-title,
+#fh-preland-root.fh-mc-effect-fadein .fh-mc-description,
+#fh-preland-root.fh-mc-effect-fadein .fh-mc-mini,
+#fh-preland-root.fh-mc-effect-fadein .fh-mc-proof,
+#fh-preland-root.fh-mc-effect-fadein .fh-mc-btn-group{animation:fhMcIn .55s ease both}
+#fh-preland-root.fh-mc-effect-fadein .fh-mc-title{animation-delay:.04s}
+#fh-preland-root.fh-mc-effect-fadein .fh-mc-description{animation-delay:.08s}
+#fh-preland-root.fh-mc-effect-fadein .fh-mc-mini{animation-delay:.12s}
+#fh-preland-root.fh-mc-effect-fadein .fh-mc-proof{animation-delay:.16s}
+#fh-preland-root.fh-mc-effect-fadein .fh-mc-btn-group{animation-delay:.20s}
+@keyframes fhMcIn{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+.wh-landing-buttons,.wh-widget{display:none!important}
+@media(max-width:720px){
+  #fh-preland-root .fh-mc-page{align-items:flex-start;padding:54px 0 42px}
+  #fh-preland-root .fh-mc-container{width:calc(100% - 34px)}
+  #fh-preland-root .fh-mc-title{font-size:clamp(32px,11vw,48px);letter-spacing:-.038em}
+  #fh-preland-root .fh-mc-description{font-size:15px;margin-bottom:34px}
+  #fh-preland-root .fh-mc-proof{grid-template-columns:1fr}
+  #fh-preland-root .fh-mc-proof-card{min-height:auto}
+  #fh-preland-root .fh-mc-btn{padding:17px 18px}
+}
+</style>
+<div id="fh-preland-root" class="${rootClass}">
+  <main class="fh-mc-page" aria-label="Тихий предлендинг">
+    <div class="fh-mc-container">
+      <div class="fh-mc-kicker">${esc(badge)}</div>
+      <h1 class="fh-mc-title">${titleHtml}</h1>
+      <p class="fh-mc-description">${esc(leadText)}</p>
+      <div class="fh-mc-divider"></div>
+      <div class="fh-mc-mini">${miniHtml}</div>
+      <div class="fh-mc-proof" aria-label="Короткие смыслы">${cardsHtml}</div>
+      <div class="fh-mc-btn-group" aria-label="Выбор мессенджера">
+        ${renderAtmospaceMessengerButton('telegram', 'fh-mc-btn fh-mc-btn-primary', 'Начать разбор в Telegram')}
+        ${renderAtmospaceMessengerButton('max', 'fh-mc-btn', 'Начать разбор в MAX')}
+      </div>
+      <p class="fh-mc-next">${esc(buttonLead)}</p>
+      <label class="fh-mc-policy" for="atmospace-policy-consent">
+        <input id="atmospace-policy-consent" type="checkbox">
+        <span>Я принимаю <a href="https://modernisto.ru/politics" target="_blank" rel="noopener noreferrer">политику конфиденциальности</a> и <a href="https://modernisto.ru/approval" target="_blank" rel="noopener noreferrer">согласие на обработку персональных данных</a>.</span>
+      </label>
+      <div id="atmospace-policy-error" class="fh-mc-error" role="alert" hidden>Чтобы открыть разбор, подтвердите согласие на обработку персональных данных.</div>
+    </div>
+  </main>
+</div>
+${buildAtmospacePrelandingTrackingScript()}`;
+}
+
+function renderCoreMethodInlinePrelanding({ templateId, content, projectData, landingMeta, sceneImage, valueImage, ctaImage }) {
+  const safeTemplateId = [1, 2, 3].includes(Number(templateId)) ? Number(templateId) : 1;
+  const titleText = stripHtml(content.titleHtml || 'Откройте короткий разбор и первый понятный шаг');
+  const titleHtml = content.titleHtml || esc(titleText);
+  const images = [
+    bothelpImageSrc(sceneImage || PRELANDING_FALLBACK_IMAGES[0]),
+    bothelpImageSrc(valueImage || PRELANDING_FALLBACK_IMAGES[1]),
+    bothelpImageSrc(ctaImage || PRELANDING_FALLBACK_IMAGES[2])
+  ];
+  const designClass = content.coreDesignClass || (safeTemplateId === 2 ? 'fh-theme-sky' : safeTemplateId === 3 ? 'fh-theme-lime' : 'fh-theme-ember');
+  const heroLabel = safeTemplateId === 2 ? 'Цель → маршрут → действие' : safeTemplateId === 3 ? 'Доверие и ясность' : content.badge;
+  const valueLabel = safeTemplateId === 2 ? 'Что человек увидит внутри' : safeTemplateId === 3 ? 'Почему это не очередная попытка' : 'Ключевая ценность';
+  const ctaLead = content.actionSubtitle || 'Откройте короткий разбор и первый шаг.';
+  const ctaTitle = content.actionTitle || 'ОТКРОЙТЕ ПЕРВЫЙ ШАГ';
+  const pills = (content.pills || []).slice(0, 5).map(item => `<div class="pill"><span class="cross">✕</span>${esc(item)}</div>`).join('');
+  const painRows = (content.painItems || []).slice(0, 4).map((item, index) => `<div class="scenario-row"><b>${index + 1}</b><span>${esc(item)}</span></div>`).join('');
+  const benefits = (content.valueItems || []).slice(0, 3).map(item => `<li><div class="icon-arrow">➔</div><div>${esc(item)}</div></li>`).join('');
+  return `${buildAtmospaceHeadConfig({
+  projectData,
+  ...(landingMeta || {})
+})}
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800;900&display=swap');
+:root{
+  --bg:#f4f7fb;
+  --text:#0f172a;
+  --muted:#475569;
+  --blue:#2f6bff;
+  --violet:#7c5cff;
+  --pink:#ff4db8;
+  --sun:#ffd54f;
+  --green:#16a34a;
+  --tg1:#00a3ff;
+  --tg2:#0077ff;
+  --max1:#ff1f5a;
+  --max2:#e11d48;
+  --shadow:0 24px 80px rgba(15,23,42,.08);
+  --shadow2:0 18px 46px rgba(15,23,42,.08);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  min-height:100vh;
+  font-family:'Manrope',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  color:var(--text);
+  background:
+    radial-gradient(circle at 8% 12%,rgba(87,168,255,.22),transparent 28%),
+    radial-gradient(circle at 92% 18%,rgba(255,77,184,.16),transparent 24%),
+    radial-gradient(circle at 78% 82%,rgba(124,92,255,.14),transparent 22%),
+    linear-gradient(180deg,#f8fbff 0%,#f4f7fb 44%,#eef4fb 100%);
+  overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+body:before{
+  content:"";
+  position:fixed;
+  inset:0;
+  background-image:
+    linear-gradient(rgba(148,163,184,.05) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(148,163,184,.05) 1px,transparent 1px);
+  background-size:34px 34px;
+  pointer-events:none;
+  z-index:0;
+}
+.fh-theme-sky{--blue:#0ea5e9;--violet:#2563eb;--pink:#38bdf8;--sun:#facc15;--green:#0f766e}
+.fh-theme-lime{--blue:#22c55e;--violet:#0f766e;--pink:#84cc16;--sun:#fde047;--green:#15803d}
+.fh-theme-ember{--blue:#f97316;--violet:#ef4444;--pink:#facc15;--sun:#fde047;--green:#16a34a}
+.page-shell{position:relative;z-index:1;width:100%;max-width:1180px;margin:0 auto;padding:28px 18px 56px}
+.section-card{
+  position:relative;
+  overflow:hidden;
+  background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(255,255,255,.88));
+  border:1px solid rgba(148,163,184,.18);
+  border-radius:34px;
+  box-shadow:var(--shadow);
+  backdrop-filter:blur(16px);
+}
+.section-card:before{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:linear-gradient(135deg,rgba(255,255,255,.56),rgba(255,255,255,0));
+  pointer-events:none;
+}
+.hero-card{padding:30px;margin-bottom:24px}
+.hero-grid{position:relative;display:grid;grid-template-columns:minmax(0,1.04fr) minmax(360px,.96fr);gap:28px;align-items:center}
+.fh-theme-sky .hero-grid{grid-template-columns:minmax(360px,.92fr) minmax(0,1.08fr)}
+.fh-theme-sky .hero-copy{order:2}
+.fh-theme-sky .hero-visual{order:1}
+.hero-copy{position:relative;z-index:2;padding:12px 4px}
+.top-badge,.card-label{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  padding:10px 18px;
+  border-radius:999px;
+  background:linear-gradient(135deg,rgba(124,92,255,.12),rgba(87,168,255,.14));
+  border:1px solid rgba(124,92,255,.16);
+  color:var(--violet);
+  font-size:12px;
+  font-weight:900;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  margin-bottom:22px;
+  box-shadow:0 10px 30px rgba(124,92,255,.08);
+}
+.top-badge:before,.card-label:before{
+  content:"";
+  width:8px;
+  height:8px;
+  border-radius:50%;
+  background:linear-gradient(135deg,var(--blue),var(--pink));
+  box-shadow:0 0 0 6px rgba(47,107,255,.08);
+}
+.hero-title{
+  font-size:clamp(34px,5.5vw,58px);
+  font-weight:900;
+  line-height:1.04;
+  letter-spacing:-.04em;
+  margin-bottom:22px;
+}
+.hero-title span,.gradient-text{
+  background:linear-gradient(135deg,var(--blue),var(--violet) 52%,var(--pink));
+  -webkit-background-clip:text;
+  background-clip:text;
+  color:transparent;
+}
+.pills-container{display:flex;flex-wrap:wrap;gap:10px}
+.pill{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  padding:12px 16px;
+  background:rgba(255,255,255,.84);
+  border-radius:999px;
+  border:1px solid rgba(148,163,184,.16);
+  box-shadow:0 10px 24px rgba(15,23,42,.04);
+  color:var(--text);
+  font-size:14px;
+  font-weight:800;
+}
+.cross{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:24px;
+  height:24px;
+  border-radius:50%;
+  background:linear-gradient(135deg,rgba(255,79,146,.12),rgba(255,112,176,.18));
+  color:#ff4f92;
+  font-size:14px;
+  font-weight:900;
+}
+.photo-wrap{
+  position:relative;
+  z-index:2;
+  width:100%;
+  border-radius:32px;
+  overflow:hidden;
+  background:rgba(255,255,255,.74);
+  border:1px solid rgba(148,163,184,.16);
+  box-shadow:var(--shadow2);
+  isolation:isolate;
+}
+.photo-wrap img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;filter:saturate(1.04) contrast(1.02);transform:scale(1.01)}
+.photo-wrap:after{
+  content:"";
+  position:absolute;
+  inset:0;
+  z-index:1;
+  background:
+    radial-gradient(circle at 80% 18%,rgba(255,77,184,.13),transparent 34%),
+    radial-gradient(circle at 12% 85%,rgba(87,168,255,.14),transparent 36%),
+    linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,.10));
+  pointer-events:none;
+}
+.hero-visual{position:relative;min-height:470px;display:flex;align-items:center;justify-content:center}
+.hero-visual:before{
+  content:"";
+  position:absolute;
+  inset:28px 12px 18px;
+  border-radius:36px;
+  background:linear-gradient(180deg,rgba(255,255,255,.84),rgba(244,248,255,.92));
+  border:1px solid rgba(148,163,184,.14);
+}
+.hero-photo{min-height:430px;transform:rotate(-1.5deg)}
+.fh-theme-sky .hero-photo{transform:rotate(1.5deg)}
+.fh-theme-lime .hero-photo{transform:none;border-radius:42px}
+.scenario-card{padding:30px;margin-bottom:24px}
+.scenario-grid{position:relative;z-index:2;display:grid;grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr);gap:22px;align-items:start}
+.scenario-title{font-size:clamp(26px,3vw,40px);font-weight:900;line-height:1.05;letter-spacing:-.03em;margin-bottom:14px}
+.scenario-alert{margin-top:18px;padding:18px 20px;border-radius:22px;background:linear-gradient(135deg,rgba(255,77,184,.10),rgba(47,107,255,.10));border:1px solid rgba(148,163,184,.18);font-size:18px;font-weight:850;line-height:1.32}
+.scenario-list{display:grid;gap:12px}
+.scenario-row{display:grid;grid-template-columns:46px minmax(0,1fr);gap:14px;align-items:center;padding:16px;border-radius:22px;background:rgba(255,255,255,.78);border:1px solid rgba(148,163,184,.16);box-shadow:0 10px 24px rgba(15,23,42,.04)}
+.scenario-row b{width:46px;height:46px;border-radius:16px;display:grid;place-items:center;background:linear-gradient(135deg,var(--blue),var(--violet));color:#fff;font-size:18px}
+.scenario-row span{font-size:16px;font-weight:800;color:var(--muted);line-height:1.34}
+.value-card{padding:34px;margin-bottom:24px}
+.value-top{position:relative;z-index:2;display:grid;grid-template-columns:minmax(0,1.08fr) minmax(300px,.92fr);gap:24px;align-items:center;margin-bottom:26px}
+.value-lead{font-size:clamp(20px,2.4vw,28px);font-weight:900;line-height:1.34;letter-spacing:-.02em;color:var(--text);max-width:720px}
+.value-lead span{display:inline-block;padding:4px 12px;border-radius:12px;background:linear-gradient(135deg,rgba(47,107,255,.10),rgba(124,92,255,.12));color:var(--blue);box-shadow:inset 0 0 0 1px rgba(47,107,255,.12);white-space:normal}
+.info-visual{min-height:260px;border-radius:30px}
+.benefits-list{position:relative;z-index:2;list-style:none;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.benefits-list li{display:flex;align-items:flex-start;gap:14px;padding:22px 20px;background:linear-gradient(180deg,rgba(255,255,255,.96),rgba(248,250,255,.92));border:1px solid rgba(148,163,184,.14);border-radius:22px;box-shadow:0 10px 26px rgba(15,23,42,.06)}
+.icon-arrow{flex-shrink:0;width:42px;height:42px;border-radius:16px;background:linear-gradient(135deg,rgba(87,168,255,.18),rgba(124,92,255,.18));color:var(--blue);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900}
+.benefits-list li div:last-child{font-size:16px;font-weight:750;line-height:1.55;color:var(--muted)}
+.cta-card{padding:34px}
+.cta-shell{position:relative;z-index:2;overflow:hidden;padding:28px;border-radius:28px;background:radial-gradient(circle at 86% 18%,rgba(255,77,184,.12),transparent 24%),radial-gradient(circle at 12% 84%,rgba(87,168,255,.14),transparent 24%),linear-gradient(135deg,#f7fbff,#fff 48%,#f8f5ff);border:1px solid rgba(148,163,184,.12)}
+.cta-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,420px);gap:26px;align-items:center;margin-bottom:26px}
+.cta-subtitle{font-size:clamp(18px,2vw,24px);font-weight:800;line-height:1.35;color:var(--violet);margin-bottom:12px}
+.cta-title{font-size:clamp(30px,4.1vw,46px);font-weight:900;line-height:1.08;letter-spacing:-.04em;color:var(--text);text-transform:uppercase}
+.cta-visual{min-height:250px;border-radius:28px}
+.buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;width:100%}
+.btn{position:relative;display:flex;align-items:center;justify-content:center;width:100%;min-height:74px;padding:22px 24px;border-radius:22px;text-decoration:none!important;color:#fff!important;-webkit-text-fill-color:#fff!important;font-size:17px;font-weight:900;overflow:hidden;isolation:isolate;transition:transform .3s cubic-bezier(.22,1,.36,1),box-shadow .3s ease}
+.btn span{position:relative;z-index:2;color:#fff!important;-webkit-text-fill-color:#fff!important;text-decoration:none!important}
+.btn:before{content:"";position:absolute;inset:1px;border-radius:21px;background:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,0));z-index:-1}
+.btn:hover{transform:translateY(-3px)}
+.btn-tg{background:linear-gradient(135deg,var(--tg1),var(--tg2));box-shadow:0 18px 34px rgba(0,119,255,.24)}
+.btn-max{background:linear-gradient(135deg,var(--max1),var(--max2));box-shadow:0 18px 34px rgba(255,31,90,.22)}
+.legal{margin-top:14px;color:#64748b;font-size:12px;line-height:1.42;text-align:center}
+.policy-box{display:flex;align-items:flex-start;gap:12px;margin:18px auto 0;padding:16px 18px;border-radius:20px;background:rgba(255,255,255,.74);border:1px solid rgba(148,163,184,.16);box-shadow:0 14px 34px rgba(15,23,42,.06);color:#64748b;font-size:13px;line-height:1.55;text-align:left}
+.policy-checkbox{width:18px;height:18px;margin:2px 0 0;flex:0 0 18px;accent-color:var(--blue);cursor:pointer}
+.policy-box a{color:#1d4ed8;font-weight:850;text-decoration:underline;text-underline-offset:2px}
+.policy-error{display:none;margin:8px auto 0;color:#b91c1c;font-size:13px;line-height:1.4;font-weight:850;text-align:center}
+.wh-landing-buttons,.wh-widget{display:none!important}
+@media(max-width:980px){
+  .page-shell{max-width:860px}
+  .hero-grid,.fh-theme-sky .hero-grid,.scenario-grid,.value-top,.cta-layout{grid-template-columns:1fr}
+  .fh-theme-sky .hero-copy,.fh-theme-sky .hero-visual{order:initial}
+  .hero-visual{min-height:390px}
+  .benefits-list{grid-template-columns:1fr}
+}
+@media(max-width:767px){
+  .page-shell{padding:16px 12px 38px}
+  .hero-card,.scenario-card,.value-card,.cta-card{padding:18px}
+  .cta-shell{padding:18px}
+  .hero-title{font-size:clamp(30px,9vw,42px);line-height:1.08}
+  .hero-visual{min-height:330px}
+  .hero-photo{min-height:310px;transform:none!important}
+  .info-visual{min-height:230px}
+  .cta-visual{min-height:220px}
+  .buttons{grid-template-columns:1fr}
+  .btn{min-height:68px;font-size:16px}
+  .benefits-list li{padding:18px}
+  .value-lead{font-size:20px}
+}
+</style>
+<div id="fh-preland-root" class="${designClass}">
+  <div class="page-shell">
+    <section class="section-card hero-card">
+      <div class="hero-grid">
+        <div class="hero-copy">
+          <div class="top-badge">${esc(heroLabel)}</div>
+          <h1 class="hero-title">${titleHtml}</h1>
+          <div class="pills-container">${pills}</div>
+        </div>
+        <div class="hero-visual" aria-hidden="true">
+          <div class="photo-wrap hero-photo">
+            <img src="${esc(images[0])}" alt="" loading="eager" decoding="async" fetchpriority="high">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section-card scenario-card">
+      <div class="scenario-grid">
+        <div>
+          <div class="card-label">${esc(content.painTitle || 'Узнаете сценарий?')}</div>
+          <h2 class="scenario-title">${esc(content.trustTitle || 'Сначала понятный разбор, потом первый шаг.')}</h2>
+          <div class="scenario-alert">${esc(content.painAlert || 'Посмотрите, как можно по-другому.')}</div>
+        </div>
+        <div class="scenario-list">${painRows}</div>
+      </div>
+    </section>
+
+    <section class="section-card value-card">
+      <div class="value-top">
+        <div>
+          <div class="card-label">${esc(valueLabel)}</div>
+          <p class="value-lead">${esc(content.valueTitle || 'Короткий разбор помогает перейти от интереса к понятному действию.')}</p>
+        </div>
+        <div class="photo-wrap info-visual" aria-hidden="true">
+          <img src="${esc(images[1])}" alt="" loading="lazy" decoding="async">
+        </div>
+      </div>
+      <ul class="benefits-list">${benefits}</ul>
+    </section>
+
+    <section class="section-card cta-card">
+      <div class="cta-shell">
+        <div class="cta-layout">
+          <div class="cta-wrapper">
+            <div class="cta-subtitle">${esc(ctaLead)}</div>
+            <div class="cta-title">Хватит.<br>${esc(ctaTitle)}</div>
+          </div>
+          <div class="photo-wrap cta-visual" aria-hidden="true">
+            <img src="${esc(images[2])}" alt="" loading="lazy" decoding="async">
+          </div>
+        </div>
+        <div class="buttons">
+          ${renderAtmospaceMessengerButton('telegram', 'btn btn-tg', 'Начать разбор в Telegram')}
+          ${renderAtmospaceMessengerButton('max', 'btn btn-max', 'Начать разбор в MAX')}
+        </div>
+        <p class="legal">Нажимая кнопку, вы переходите в выбранный мессенджер. Данные перехода используются для корректной работы бота и аналитики.</p>
+        <label class="policy-box" for="atmospace-policy-consent">
+          <input id="atmospace-policy-consent" class="policy-checkbox" type="checkbox">
+          <span>Я принимаю <a href="https://modernisto.ru/politics" target="_blank" rel="noopener noreferrer">политику конфиденциальности</a> и <a href="https://modernisto.ru/approval" target="_blank" rel="noopener noreferrer">согласие на обработку персональных данных</a>.</span>
+        </label>
+        <div id="atmospace-policy-error" class="policy-error" role="alert" hidden>Для перехода в мессенджер подтвердите согласие на обработку персональных данных.</div>
+      </div>
+    </section>
+  </div>
+</div>
+${buildAtmospacePrelandingTrackingScript()}`;
+}
+
+function staticLandingSlug(value = '') {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/ё/g, 'e')
+    .replace(/а/g, 'a')
+    .replace(/б/g, 'b')
+    .replace(/в/g, 'v')
+    .replace(/г/g, 'g')
+    .replace(/д/g, 'd')
+    .replace(/е/g, 'e')
+    .replace(/ж/g, 'zh')
+    .replace(/з/g, 'z')
+    .replace(/и/g, 'i')
+    .replace(/й/g, 'y')
+    .replace(/к/g, 'k')
+    .replace(/л/g, 'l')
+    .replace(/м/g, 'm')
+    .replace(/н/g, 'n')
+    .replace(/о/g, 'o')
+    .replace(/п/g, 'p')
+    .replace(/р/g, 'r')
+    .replace(/с/g, 's')
+    .replace(/т/g, 't')
+    .replace(/у/g, 'u')
+    .replace(/ф/g, 'f')
+    .replace(/х/g, 'h')
+    .replace(/ц/g, 'c')
+    .replace(/ч/g, 'ch')
+    .replace(/ш/g, 'sh')
+    .replace(/щ/g, 'sch')
+    .replace(/ы/g, 'y')
+    .replace(/э/g, 'e')
+    .replace(/ю/g, 'yu')
+    .replace(/я/g, 'ya')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 70) || 'landing';
+}
+
+function buildStaticLandingConfig(projectData = {}, content = {}) {
+  const clientName = String(projectData.clientDisplayName || projectData.clientName || '').trim();
+  const landingName = stripHtml(content.title || content.titleHtml || 'Лендинг');
+  const landingSlug = staticLandingSlug(`${clientName || 'client'} ${landingName}`);
+  return {
+    clientName,
+    landingName,
+    landingSlug,
+    ctaText: 'Начать',
+    ctaMode: 'placeholder',
+    ctaUrl: '#'
+  };
+}
+
+function buildStaticLandingConfigScript(projectData, content) {
+  return `<script>
+  window.LANDING_CONFIG = ${safeInlineJson(buildStaticLandingConfig(projectData, content))};
+</script>`;
+}
+
+function renderStaticLandingCta(extraClass = '') {
+  const className = ['cta-button', extraClass].filter(Boolean).join(' ');
+  return `<a href="#" class="${esc(className)}" data-atmosfera-cta data-cta-mode="placeholder">Начать</a>`;
+}
+
+function buildStaticLandingPlaceholderScript() {
+  return `<script>
+  document.querySelectorAll("[data-atmosfera-cta]").forEach(function (button) {
+    button.addEventListener("click", function (event) {
+      if (button.getAttribute("data-cta-mode") === "placeholder") {
+        event.preventDefault();
+      }
+    });
+  });
+</script>`;
+}
+
+function normalizeStaticLandingItems(items, fallback) {
+  const source = Array.isArray(items) && items.length ? items : fallback;
+  return source
+    .map(item => typeof item === 'string' ? item : item?.text || item?.title || item?.value || '')
+    .filter(Boolean)
+    .slice(0, 6);
+}
+
+function renderStaticLandingV1({
+  content,
+  projectData,
+  sceneImage,
+  valueImage,
+  ctaImage,
+  style,
+  palette,
+  accent,
+  accent2
+}) {
+  const config = buildStaticLandingConfig(projectData, content);
+  const title = stripHtml(content.titleHtml || content.title || 'Откройте короткий разбор');
+  const titleHtml = /<span[\s>]/i.test(content.titleHtml || '')
+    ? content.titleHtml
+    : esc(title);
+  const lead = content.actionSubtitle || content.trustSmall || content.valueTitle || 'Короткий разбор помогает перейти от интереса к первому понятному действию.';
+  const problemItems = normalizeStaticLandingItems(content.painItems, [
+    'Старый подход уже не даёт нужного результата.',
+    'Есть интерес, но непонятно, какой шаг делать первым.',
+    'Не хочется снова тратить время на длинную теорию.',
+    'Нужен короткий разбор и понятный переход дальше.'
+  ]).slice(0, 4);
+  const promiseItems = normalizeStaticLandingItems(content.valueItems, [
+    'почему старый подход мог не сработать',
+    'какой новый маршрут можно рассмотреть без долгой подготовки',
+    'какой первый шаг откроется после перехода в мессенджер'
+  ]).slice(0, 3);
+  const audienceItems = normalizeStaticLandingItems(content.pills, [
+    'Для тех, кто узнаёт проблему в заголовке',
+    'Для тех, кому нужен короткий разбор перед решением',
+    'Для тех, кто хочет понятный первый шаг без давления'
+  ]).slice(0, 3);
+  const benefits = normalizeStaticLandingItems(content.proofItems, [
+    'Не продаём в лоб: сначала показываем смысл и первый шаг.',
+    'Страница объясняет выгоды коротко, без лишней легенды.',
+    'CTA подготовлены к будущему подключению через один компонент.'
+  ]).slice(0, 3);
+  const storyCards = (content.cards?.length ? content.cards : buildTildaStoryCards(title)).slice(0, 3);
+  const primary = accent || '#2563eb';
+  const secondary = accent2 || '#0ea5e9';
+  const themeClass = `static-${prelandingClassToken(style || 'premium-light')}-${prelandingClassToken(palette || 'blue-trust')}`;
+  const images = {
+    hero: bothelpImageSrc(sceneImage || content.heroImage || content.sceneImage || PRELANDING_FALLBACK_IMAGES[0]),
+    value: bothelpImageSrc(valueImage || content.valueImage || PRELANDING_FALLBACK_IMAGES[1]),
+    cta: bothelpImageSrc(ctaImage || content.ctaImage || PRELANDING_FALLBACK_IMAGES[2])
+  };
+  const problemHtml = problemItems.map((item, index) => `<li><b>${index + 1}</b><span>${esc(item)}</span></li>`).join('');
+  const promiseHtml = promiseItems.map((item, index) => `<article><b>0${index + 1}</b><p>${esc(item)}</p></article>`).join('');
+  const audienceHtml = audienceItems.map(item => `<li>${esc(item)}</li>`).join('');
+  const benefitHtml = benefits.map(item => `<article><span>✓</span><p>${esc(item)}</p></article>`).join('');
+  const stepsHtml = storyCards.map((item, index) => `<article><b>${index + 1}</b><h3>${esc(item.title || `Шаг ${index + 1}`)}</h3><p>${esc(item.text || promiseItems[index] || 'Понятный шаг без лишней теории.')}</p></article>`).join('');
+  const factsHtml = [
+    'Главная ранняя метрика: человек понял смысл и перешёл в выбранный мессенджер.',
+    'Все CTA собраны через единый компонент и могут быть заменены централизованно.',
+    'Сейчас CTA работает как безопасная заглушка, позже подключим рабочую схему централизованно.'
+  ].map(item => `<li>${esc(item)}</li>`).join('');
+  const faqHtml = [
+    ['Это готовая продажа продукта?', 'Нет. Предлендинг делает короткий прогрев: показывает смысл, выгоды и переводит человека к следующему шагу.'],
+    ['Можно ли обещать доход?', 'Нет. Лендинг не обещает гарантированный доход или быстрый результат. Формулировки остаются осторожными и проверяемыми.'],
+    ['Кнопки уже рабочие?', 'Визуально да. Сейчас это заглушка: клик не ломает страницу и не уводит человека на внешний сервис.'],
+    ['Можно ли заменить ссылку позже?', 'Да. Все CTA собраны через один компонент и общий LANDING_CONFIG.']
+  ].map(([q, a]) => `<details><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join('');
+
+  return `<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="format-detection" content="telephone=no">
+<title>${esc(config.landingName)}</title>
+${buildStaticLandingConfigScript(projectData, content)}
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&family=Manrope:wght@500;600;700;800;900&display=swap');
+:root{
+  --sl-bg:#f5f8ff;
+  --sl-card:rgba(255,255,255,.86);
+  --sl-text:#091226;
+  --sl-muted:#526174;
+  --sl-line:rgba(24,38,65,.10);
+  --sl-accent:${primary};
+  --sl-accent2:${secondary};
+  --sl-shadow:0 28px 86px rgba(28,48,86,.12);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:radial-gradient(circle at 6% 4%,color-mix(in srgb,var(--sl-accent) 18%,transparent),transparent 28vw),radial-gradient(circle at 94% 8%,color-mix(in srgb,var(--sl-accent2) 14%,transparent),transparent 30vw),linear-gradient(180deg,#fbfdff 0%,var(--sl-bg) 48%,#eef6ff 100%);color:var(--sl-text);font-family:Manrope,Inter,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+.landing-root{min-height:100vh}
+.wrap{width:min(1180px,calc(100% - 40px));margin:0 auto}
+.section{padding:76px 0}
+.hero{min-height:92vh;display:grid;align-items:center;padding:42px 0}
+.hero-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(360px,.88fr);gap:42px;align-items:center}
+.badge{display:inline-flex;align-items:center;gap:10px;width:max-content;max-width:100%;padding:10px 16px;border-radius:999px;background:rgba(255,255,255,.76);border:1px solid var(--sl-line);box-shadow:0 16px 44px rgba(30,54,92,.08);color:color-mix(in srgb,var(--sl-accent) 76%,#111827);font-size:12px;font-weight:950;letter-spacing:.07em;text-transform:uppercase}
+.badge:before{content:"";width:9px;height:9px;border-radius:50%;background:linear-gradient(135deg,var(--sl-accent),var(--sl-accent2));box-shadow:0 0 0 7px color-mix(in srgb,var(--sl-accent) 12%,transparent)}
+h1,h2,h3,p{margin-top:0}
+h1{max-width:720px;margin:24px 0 18px;font-size:clamp(42px,6vw,82px);line-height:.94;letter-spacing:-.055em;font-weight:950;text-transform:uppercase;text-wrap:balance}
+h1 span,.accent{color:transparent;background:linear-gradient(112deg,var(--sl-accent),var(--sl-accent2));-webkit-background-clip:text;background-clip:text}
+.lead{max-width:660px;margin-bottom:26px;color:#172033;font:850 clamp(18px,1.8vw,24px)/1.38 Inter,Manrope,system-ui,sans-serif}
+.hero-card,.image-card,.panel{background:var(--sl-card);border:1px solid rgba(255,255,255,.78);border-radius:34px;box-shadow:var(--sl-shadow);backdrop-filter:blur(16px)}
+.image-card{position:relative;overflow:hidden;min-height:440px}
+.image-card img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.image-card:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,0),rgba(255,255,255,.10));pointer-events:none}
+.cta-button{display:inline-flex;align-items:center;justify-content:center;min-height:66px;padding:0 34px;border-radius:22px;background:linear-gradient(135deg,var(--sl-accent),var(--sl-accent2));color:#fff!important;font:950 18px/1 Inter,Manrope,system-ui,sans-serif;box-shadow:0 22px 54px color-mix(in srgb,var(--sl-accent) 26%,rgba(30,54,92,.15));transition:transform .18s ease,filter .18s ease}
+.cta-button:hover{transform:translateY(-2px);filter:brightness(1.04)}
+.cta-row{display:flex;flex-wrap:wrap;gap:14px;align-items:center}
+.micro{color:var(--sl-muted);font:800 13px/1.45 Inter,system-ui,sans-serif}
+.panel{padding:clamp(24px,4vw,48px)}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,.8fr);gap:34px;align-items:center}
+h2{font-size:clamp(34px,4.6vw,64px);line-height:1;letter-spacing:-.052em;font-weight:950;text-transform:uppercase}
+.problem-list,.audience-list,.facts-list{display:grid;gap:12px;margin:22px 0 0;padding:0;list-style:none}
+.problem-list li{display:grid;grid-template-columns:48px minmax(0,1fr);gap:14px;align-items:center;padding:16px;border-radius:20px;background:rgba(255,255,255,.70);border:1px solid var(--sl-line)}
+.problem-list b,.steps b{display:grid;place-items:center;width:48px;height:48px;border-radius:16px;background:linear-gradient(135deg,var(--sl-accent),var(--sl-accent2));color:#fff;font:950 18px/1 Inter,system-ui,sans-serif}
+.problem-list span,.card-grid p,.steps p,.facts-list li,.faq p{color:var(--sl-muted);font:750 16px/1.5 Inter,Manrope,system-ui,sans-serif}
+.card-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.card-grid article,.steps article,.faq details{padding:22px;border-radius:24px;background:rgba(255,255,255,.76);border:1px solid var(--sl-line);box-shadow:0 18px 50px rgba(30,54,92,.07)}
+.card-grid b{display:inline-block;margin-bottom:16px;color:var(--sl-accent);font:950 34px/1 Inter,system-ui,sans-serif}
+.audience-list{grid-template-columns:repeat(3,minmax(0,1fr))}
+.audience-list li{padding:18px 20px;border-radius:20px;background:rgba(255,255,255,.72);border:1px solid var(--sl-line);font:900 16px/1.35 Inter,system-ui,sans-serif}
+.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:24px}
+.steps h3{margin:14px 0 8px;font-size:20px;line-height:1.15}
+.center-cta{margin-top:26px;text-align:center}
+.benefit-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:24px}
+.benefit-grid article{min-height:170px}
+.benefit-grid span{display:grid;place-items:center;width:42px;height:42px;border-radius:14px;background:linear-gradient(135deg,var(--sl-accent),var(--sl-accent2));color:#fff;font-weight:950;margin-bottom:14px}
+.proof{display:grid;grid-template-columns:minmax(0,.86fr) minmax(320px,1fr);gap:30px;align-items:center}
+.facts-list li{padding:16px 18px;border-radius:18px;background:rgba(255,255,255,.68);border:1px solid var(--sl-line)}
+.faq{display:grid;gap:12px}
+.faq summary{cursor:pointer;font:950 18px/1.3 Inter,system-ui,sans-serif}
+.faq p{margin:12px 0 0}
+.final{text-align:center}
+.final p{max-width:680px;margin:0 auto 24px;color:var(--sl-muted);font:750 18px/1.55 Inter,system-ui,sans-serif}
+.legal-footer{padding:32px 0 44px;color:var(--sl-muted);font:700 13px/1.5 Inter,system-ui,sans-serif}
+.legal-footer .wrap{display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between;border-top:1px solid var(--sl-line);padding-top:22px}
+.footer-links{display:flex;flex-wrap:wrap;gap:14px}
+.footer-links a{text-decoration:underline;text-underline-offset:3px}
+@media(max-width:900px){
+  .wrap{width:min(100% - 24px,1180px)}
+  .hero{min-height:auto;padding:22px 0 34px}
+  .hero-grid,.split,.proof{grid-template-columns:1fr}
+  .image-card{min-height:320px}
+  .card-grid,.audience-list,.steps,.benefit-grid{grid-template-columns:1fr}
+  h1{font-size:clamp(38px,12vw,58px)}
+  h2{font-size:clamp(32px,10vw,48px)}
+  .section{padding:46px 0}
+  .cta-button{width:100%}
+}
+</style>
+</head>
+<body>
+<div class="landing-root ${esc(themeClass)}">
+  <main class="hero" data-landing-section="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <div class="badge">${esc(content.badge || 'Короткий первый шаг')}</div>
+        <h1>${titleHtml}</h1>
+        <p class="lead">${esc(lead)}</p>
+        <div class="cta-row">${renderStaticLandingCta('hero-cta')}<span class="micro">Пока заглушка. Позже подключим рабочий вход.</span></div>
+      </div>
+      <div class="image-card" aria-hidden="true"><img src="${esc(images.hero)}" alt="" loading="eager" decoding="async"></div>
+    </div>
+  </main>
+
+  <section class="section" data-landing-section="problem">
+    <div class="wrap panel split">
+      <div>
+        <div class="badge">Проблема клиента</div>
+        <h2>${esc(content.painTitle || 'Почему человек снова возвращается назад')}</h2>
+        <p class="lead">${esc(content.painAlert || 'Сначала показываем знакомую ситуацию, потом переводим человека к короткому разбору и первому шагу.')}</p>
+      </div>
+      <ul class="problem-list">${problemHtml}</ul>
+    </div>
+  </section>
+
+  <section class="section" data-landing-section="promise">
+    <div class="wrap panel">
+      <div class="split">
+        <div>
+          <div class="badge">Обещание результата</div>
+          <h2>${esc(content.trustTitle || 'Сначала смысл, потом действие')}</h2>
+          <p class="lead">${esc(content.trustSmall || 'Человек видит не набор обещаний, а понятную причину открыть разбор и перейти дальше.')}</p>
+        </div>
+        <div class="image-card" aria-hidden="true"><img src="${esc(images.value)}" alt="" loading="lazy" decoding="async"></div>
+      </div>
+      <div class="card-grid">${promiseHtml}</div>
+    </div>
+  </section>
+
+  <section class="section" data-landing-section="for-whom">
+    <div class="wrap panel">
+      <div class="badge">Для кого продукт</div>
+      <h2>Кому подходит этот разбор</h2>
+      <ul class="audience-list">${audienceHtml}</ul>
+    </div>
+  </section>
+
+  <section class="section" data-landing-section="how-it-works">
+    <div class="wrap panel">
+      <div class="badge">Как это работает</div>
+      <h2>Как человек попадает в движение</h2>
+      <div class="steps">${stepsHtml}</div>
+      <div class="center-cta">${renderStaticLandingCta('how-cta')}</div>
+    </div>
+  </section>
+
+  <section class="section" data-landing-section="what-get">
+    <div class="wrap panel split">
+      <div>
+        <div class="badge">Что получит человек</div>
+        <h2>${esc(content.valueTitle || 'Что человек увидит внутри')}</h2>
+      </div>
+      <div class="image-card" aria-hidden="true"><img src="${esc(images.cta)}" alt="" loading="lazy" decoding="async"></div>
+    </div>
+  </section>
+
+  <section class="section" data-landing-section="benefits">
+    <div class="wrap panel">
+      <div class="badge">Преимущества</div>
+      <h2>Почему это не выглядит как очередной курс</h2>
+      <div class="benefit-grid">${benefitHtml}</div>
+      <div class="center-cta">${renderStaticLandingCta('benefits-cta')}</div>
+    </div>
+  </section>
+
+  <section class="section" data-landing-section="proof">
+    <div class="wrap panel proof">
+      <div>
+        <div class="badge">Социальное доказательство</div>
+        <h2>Что важно для запуска рекламы</h2>
+        <ul class="facts-list">${factsHtml}</ul>
+        <div class="center-cta">${renderStaticLandingCta('proof-cta')}</div>
+      </div>
+      <div class="image-card" aria-hidden="true"><img src="${esc(images.hero)}" alt="" loading="lazy" decoding="async"></div>
+    </div>
+  </section>
+
+  <section class="section" data-landing-section="faq">
+    <div class="wrap panel">
+      <div class="badge">FAQ</div>
+      <h2>Частые вопросы</h2>
+      <div class="faq">${faqHtml}</div>
+    </div>
+  </section>
+
+  <section class="section final" data-landing-section="final-cta">
+    <div class="wrap panel">
+      <div class="badge">Финальный CTA</div>
+      <h2>${esc(content.actionTitle || 'Откройте первый шаг')}</h2>
+      <p>${esc(content.actionSubtitle || 'Сейчас кнопка безопасно стоит на заглушке. После подключения рабочая ссылка заменится централизованно.')}</p>
+      ${renderStaticLandingCta('final-cta')}
+    </div>
+  </section>
+
+  <footer class="legal-footer" data-landing-section="legal-footer">
+    <div class="wrap">
+      <span>© ${new Date().getFullYear()} ${esc(config.clientName || config.landingName)}</span>
+      <nav class="footer-links" aria-label="Юридические ссылки">
+        <a href="#">Политика конфиденциальности</a>
+        <a href="#">Оферта</a>
+        <a href="#">Контакты</a>
+      </nav>
+    </div>
+  </footer>
+</div>
+${buildStaticLandingPlaceholderScript()}
+</body>
+</html>`;
+}
+
+function renderInteractiveQuizPrelanding({
+  mode,
+  content,
+  projectData,
+  landingMeta,
+  sceneImage,
+  style,
+  palette,
+  designRoute
+}) {
+  const isPersonalRoute = mode === 'personalRouteQuiz';
+  const isBarrierProfile = mode === 'barrierProfileQuiz';
+  const rootModeClass = isBarrierProfile ? 'fh-bpq26' : isPersonalRoute ? 'fh-prq26' : 'fh-dq26';
+  const title = stripHtml(content?.titleHtml || content?.title || 'Откройте короткий разбор и найдите первый понятный шаг');
+  const subtitle = stripHtml(
+    content?.trustSmall
+      || content?.actionSubtitle
+      || content?.valueTitle
+      || 'Ответьте на несколько коротких вопросов и получите ориентир без лишнего давления.'
+  );
+  const heroImage = bothelpImageSrc(sceneImage || content?.sceneImage || content?.heroImage || PRELANDING_FALLBACK_IMAGES[0]);
+  const styleKey = `${style || ''} ${palette || ''} ${designRoute?.id || ''}`.toLowerCase();
+  const theme = isBarrierProfile
+    ? styleKey.includes('teal') || styleKey.includes('green')
+      ? { bg: '#071512', panel: '#0d221d', soft: '#143129', accent: '#2dd4a0', accent2: '#8ce8c9', text: '#f4fff9', muted: '#bdd6cc', line: 'rgba(45,212,160,.24)' }
+      : styleKey.includes('blue') || styleKey.includes('navy')
+        ? { bg: '#07101c', panel: '#0d1a2d', soft: '#142641', accent: '#4f8cff', accent2: '#83c9ff', text: '#f4f8ff', muted: '#b8c8dc', line: 'rgba(79,140,255,.25)' }
+        : { bg: '#120d10', panel: '#201418', soft: '#2b1b20', accent: '#ff765f', accent2: '#ffb08e', text: '#fff7f4', muted: '#d8c5c8', line: 'rgba(255,118,95,.25)' }
+    : isPersonalRoute
+    ? styleKey.includes('amber') || styleKey.includes('gold')
+      ? { bg: '#130f08', panel: '#1c160d', soft: '#261d10', accent: '#f5b642', accent2: '#ffd77a', text: '#fffaf0', muted: '#d4c8b5', line: 'rgba(245,182,66,.24)' }
+      : styleKey.includes('violet') || styleKey.includes('blue')
+        ? { bg: '#0c0b18', panel: '#15132a', soft: '#1d1a36', accent: '#9b7bff', accent2: '#5fa9ff', text: '#f7f5ff', muted: '#c5c0db', line: 'rgba(155,123,255,.25)' }
+        : { bg: '#140b13', panel: '#21101d', soft: '#2b1525', accent: '#ff6f61', accent2: '#ffad86', text: '#fff6f4', muted: '#d8c2cd', line: 'rgba(255,111,97,.25)' }
+    : styleKey.includes('gold') || styleKey.includes('yellow')
+      ? { bg: '#100e09', panel: '#1a170e', soft: '#242014', accent: '#f6c453', accent2: '#ffe49a', text: '#fffaf0', muted: '#d2c8ae', line: 'rgba(246,196,83,.25)' }
+      : styleKey.includes('forest') || styleKey.includes('green')
+        ? { bg: '#07140f', panel: '#0d2118', soft: '#123021', accent: '#41c78a', accent2: '#9ae8bd', text: '#f3fff8', muted: '#bad5c6', line: 'rgba(65,199,138,.24)' }
+        : { bg: '#07101d', panel: '#0c1b2e', soft: '#112844', accent: '#4f8cff', accent2: '#77c8ff', text: '#f4f8ff', muted: '#b6c6da', line: 'rgba(79,140,255,.25)' };
+  const directionQuestions = [
+    {
+      eyebrow: 'ТОЧКА НАПРЯЖЕНИЯ',
+      title: 'Что в текущем деле забирает у тебя больше всего сил?',
+      hint: 'Выберите ответ, который ближе к реальности сейчас.',
+      options: [
+        'Работаю много, но смысла почти не чувствую',
+        'Держит стабильность, страшно что-то менять',
+        'Понимаю, что хочу другого, но не вижу старта',
+        'Не работа, а весь ритм жизни стал чужим'
+      ]
+    },
+    {
+      eyebrow: 'ПОВТОРЯЮЩИЙСЯ СЦЕНАРИЙ',
+      title: 'Когда появляется мысль «надо что-то менять», что происходит потом?',
+      hint: 'Важен привычный сценарий, а не редкое исключение.',
+      options: [
+        'Откладываю до подходящего момента',
+        'Пробую, но быстро распыляюсь',
+        'Ищу ещё информацию, чтобы не ошибиться',
+        'Делаю шаг и возвращаюсь назад после первого сбоя'
+      ]
+    },
+    {
+      eyebrow: 'НЕДОСТАЮЩАЯ ОПОРА',
+      title: 'Чего сейчас не хватает, чтобы сдвинуться?',
+      hint: 'Ответ поможет определить не идеальный, а реальный первый шаг.',
+      options: [
+        'Одного ясного направления',
+        'Реалистичного плана без героизма',
+        'Опоры, чтобы не бросить после старта',
+        'Разрешения наконец выбрать себя'
+      ]
+    },
+    {
+      eyebrow: 'ЧЕСТНЫЙ РЕЗУЛЬТАТ',
+      title: 'Какой первый результат был бы для тебя честным?',
+      hint: 'Не максимум. То, что действительно изменит ближайший месяц.',
+      options: [
+        'Понять, чего я хочу на самом деле',
+        'Выбрать одну главную цель',
+        'Собрать первые действия на ближайший месяц',
+        'Перестать жить и работать на автопилоте'
+      ]
+    }
+  ];
+  const personalRouteQuestions = [
+    {
+      eyebrow: 'ТВОЙ СЦЕНАРИЙ',
+      title: 'Что чаще всего сбивает тебя с выбранного курса?',
+      hint: 'Выбери ответ, который больше похож на правду — не на правильную версию себя.',
+      options: [
+        'Начинаю мощно, но быстро выдыхаюсь',
+        'Долго готовлюсь и откладываю первый шаг',
+        'Перегружаю себя и срываюсь',
+        'Не понимаю, куда именно двигаться'
+      ]
+    },
+    {
+      eyebrow: 'ПОСЛЕ СБОЯ',
+      title: 'Что ты обычно делаешь, когда снова не получилось?',
+      hint: 'Здесь нет плохого ответа. Важно увидеть повторяющийся сценарий.',
+      options: [
+        'Ругаю себя и обещаю начать заново',
+        'Ищу новый метод, курс или систему',
+        'Возвращаюсь в привычный ритм',
+        'Стараюсь вообще об этом не думать'
+      ]
+    },
+    {
+      eyebrow: 'УСТОЙЧИВОСТЬ',
+      title: 'Как долго обычно держатся твои изменения?',
+      hint: 'Не считай исключения — вспомни, как происходит чаще всего.',
+      options: [
+        'Несколько дней',
+        'Одну–две недели',
+        'До первого сложного периода',
+        'Я чаще не начинаю, чем срываюсь'
+      ]
+    },
+    {
+      eyebrow: 'ТОЧКА ОПОРЫ',
+      title: 'Чего тебе сейчас не хватает больше всего?',
+      hint: 'Это станет основой твоего личного маршрута.',
+      options: [
+        'Понятной точки старта',
+        'Реалистичного маршрута',
+        'Системы без перегруза',
+        'Поддержки и обратной связи'
+      ]
+    },
+    {
+      eyebrow: 'ТВОЙ ТЕМП',
+      title: 'В каком ритме тебе было бы реально двигаться?',
+      hint: 'Не максимум возможностей, а темп, который выдержит обычная неделя.',
+      options: [
+        'Один небольшой шаг каждый день',
+        'Два–три точных действия в неделю',
+        'Интенсивный старт с контролем',
+        'Пока не знаю — хочу определить'
+      ]
+    }
+  ];
+  const barrierProfileQuestions = [
+    {
+      eyebrow: 'ТОЧКА СБОЯ',
+      title: 'Как обычно начинается очередная попытка что-то изменить?',
+      hint: 'Выберите не красивый ответ, а наиболее частый сценарий. Именно он определяет профиль барьера.',
+      options: [
+        { label: 'Начинаю слишком резко и быстро выдыхаюсь', value: 'overdrive' },
+        { label: 'Долго откладываю, ожидая полной уверенности', value: 'freeze' },
+        { label: 'Беру на себя слишком много и срываюсь', value: 'overload' },
+        { label: 'Меняю направление, не успев проверить прежнее', value: 'drift' }
+      ]
+    },
+    {
+      eyebrow: 'ПОСЛЕ НЕУДАЧИ',
+      title: 'Что происходит сразу после очередного сбоя?',
+      hint: 'Здесь проявляется не слабость характера, а автоматическая реакция, которую можно изменить.',
+      options: [
+        { label: 'Обещаю себе новый мощный старт', value: 'overdrive' },
+        { label: 'Замираю и стараюсь об этом не думать', value: 'freeze' },
+        { label: 'Добавляю ещё задач и контроля', value: 'overload' },
+        { label: 'Ищу новый способ или новую систему', value: 'drift' }
+      ]
+    },
+    {
+      eyebrow: 'ДЛИНА ИЗМЕНЕНИЯ',
+      title: 'Как долго обычно держится выбранный курс?',
+      hint: 'Не вспоминайте редкое исключение — оцените привычный ритм за последние месяцы.',
+      options: [
+        { label: 'До нескольких дней', value: 'overdrive' },
+        { label: 'Часто вообще не дохожу до старта', value: 'freeze' },
+        { label: 'До первого перегруженного периода', value: 'overload' },
+        { label: 'Пока новая идея не вытеснит прежнюю', value: 'drift' }
+      ]
+    },
+    {
+      eyebrow: 'НЕДОСТАЮЩАЯ ОПОРА',
+      title: 'Что помогло бы не повторить тот же круг?',
+      hint: 'Ответ станет основой первого шага, а не очередного большого обещания себе.',
+      options: [
+        { label: 'Спокойный темп без нового рывка', value: 'overdrive' },
+        { label: 'Безопасное маленькое первое действие', value: 'freeze' },
+        { label: 'Жёсткое ограничение числа задач', value: 'overload' },
+        { label: 'Одно ясное направление без метаний', value: 'drift' }
+      ]
+    },
+    {
+      eyebrow: 'РЕАЛИСТИЧНЫЙ ТЕМП',
+      title: 'Какой ритм выдержит ваша обычная неделя?',
+      hint: 'Не максимум возможностей. Выберите темп, который реально повторить несколько недель подряд.',
+      options: [
+        { label: '10 минут в день', value: 'pace' },
+        { label: 'Два–три действия в неделю', value: 'pace' },
+        { label: 'Один защищённый блок времени', value: 'pace' },
+        { label: 'Сначала хочу определить реалистичный темп', value: 'pace' }
+      ]
+    }
+  ];
+  const questions = isBarrierProfile
+    ? barrierProfileQuestions
+    : isPersonalRoute
+      ? personalRouteQuestions
+      : directionQuestions;
+  const heroLabel = isBarrierProfile ? 'Профиль барьера' : isPersonalRoute ? 'Личный маршрут' : 'Короткий разбор';
+  const heroButton = isBarrierProfile ? 'Увидеть свой профиль' : isPersonalRoute ? 'Определить свой маршрут' : 'Начать разбор';
+  const resultTitle = isBarrierProfile
+    ? 'Ваш профиль барьера определён'
+    : isPersonalRoute
+      ? 'Ваш личный маршрут собран'
+      : 'Ваш первый маршрут уже виден';
+  const resultText = isBarrierProfile
+    ? 'Ответы покажут не общую мотивацию, а конкретный повторяющийся сценарий и первый шаг, который можно выдержать в обычной неделе.'
+    : isPersonalRoute
+    ? 'Ответы показали, где сейчас находится главная точка опоры. Откройте короткий разбор в удобном мессенджере и заберите следующий шаг.'
+    : 'Вы уже отделили реальную точку старта от лишнего шума. Откройте короткий разбор и заберите первый шаг, который можно применить без нового рывка.';
+
+  return `${buildAtmospaceHeadConfig({
+  projectData,
+  ...(landingMeta || {})
+})}
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800;900&display=swap');
+#fh-preland-root.${rootModeClass},#fh-preland-root.${rootModeClass} *{box-sizing:border-box}
+#fh-preland-root.${rootModeClass}{
+  --fhq-bg:${theme.bg};--fhq-panel:${theme.panel};--fhq-soft:${theme.soft};--fhq-accent:${theme.accent};--fhq-accent2:${theme.accent2};--fhq-text:${theme.text};--fhq-muted:${theme.muted};--fhq-line:${theme.line};
+  width:100vw;min-height:100svh;margin-left:calc(50% - 50vw);margin-right:calc(50% - 50vw);overflow:hidden;background:var(--fhq-bg);color:var(--fhq-text);font-family:'Manrope',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;letter-spacing:0
+}
+#fh-preland-root.${rootModeClass} [hidden]{display:none!important}
+#fh-preland-root.${rootModeClass} button,#fh-preland-root.${rootModeClass} a,#fh-preland-root.${rootModeClass} input{font:inherit}
+#fh-preland-root.${rootModeClass} button,#fh-preland-root.${rootModeClass} a{letter-spacing:0}
+#fh-preland-root.${rootModeClass} .fhq-shell{width:min(1180px,calc(100% - 32px));margin:0 auto}
+#fh-preland-root.${rootModeClass} .fhq-hero{min-height:100svh;display:grid;grid-template-columns:minmax(0,1fr) minmax(420px,.92fr);gap:54px;align-items:center;padding:52px 0}
+#fh-preland-root.${rootModeClass} .fhq-copy{position:relative;z-index:2}
+#fh-preland-root.${rootModeClass} .fhq-kicker{display:inline-flex;align-items:center;gap:10px;margin-bottom:24px;padding:10px 14px;border:1px solid var(--fhq-line);border-radius:999px;background:var(--fhq-soft);color:var(--fhq-accent2);font-size:12px;font-weight:900;text-transform:uppercase}
+#fh-preland-root.${rootModeClass} .fhq-kicker:before{content:'';width:9px;height:9px;border-radius:50%;background:var(--fhq-accent)}
+#fh-preland-root.${rootModeClass} h1,#fh-preland-root.${rootModeClass} h2,#fh-preland-root.${rootModeClass} p{margin-top:0}
+#fh-preland-root.${rootModeClass} h1{max-width:690px;margin-bottom:24px;font-size:64px;line-height:1.02;font-weight:900;letter-spacing:0;text-wrap:balance}
+#fh-preland-root.${rootModeClass} .fhq-lead{max-width:660px;margin-bottom:30px;color:var(--fhq-muted);font-size:20px;line-height:1.55;font-weight:600}
+#fh-preland-root.${rootModeClass} .fhq-start,#fh-preland-root.${rootModeClass} .fhq-back,#fh-preland-root.${rootModeClass} .fhq-restart{border:0;border-radius:8px;cursor:pointer;font-weight:900}
+#fh-preland-root.${rootModeClass} .fhq-start{min-height:64px;padding:0 28px;background:var(--fhq-accent);color:#07101a;font-size:17px;box-shadow:0 18px 50px rgba(0,0,0,.28)}
+#fh-preland-root.${rootModeClass} .fhq-image{position:relative;min-height:570px;overflow:hidden;border:1px solid var(--fhq-line);border-radius:8px;background:var(--fhq-panel);box-shadow:0 28px 80px rgba(0,0,0,.34)}
+#fh-preland-root.${rootModeClass} .fhq-image img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+#fh-preland-root.${rootModeClass} .fhq-image:after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent 48%,rgba(0,0,0,.48));pointer-events:none}
+#fh-preland-root.${rootModeClass} .fhq-stage{min-height:100svh;display:grid;align-items:center;padding:54px 0}
+#fh-preland-root.${rootModeClass} .fhq-panel{width:min(900px,100%);margin:0 auto;padding:42px;border:1px solid var(--fhq-line);border-radius:8px;background:var(--fhq-panel);box-shadow:0 28px 80px rgba(0,0,0,.30)}
+#fh-preland-root.${rootModeClass} .fhq-progress-row{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:32px;color:var(--fhq-muted);font-size:13px;font-weight:800}
+#fh-preland-root.${rootModeClass} .fhq-progress{height:7px;flex:1;overflow:hidden;border-radius:999px;background:var(--fhq-soft)}
+#fh-preland-root.${rootModeClass} .fhq-progress span{display:block;width:0;height:100%;border-radius:inherit;background:var(--fhq-accent);transition:width .25s ease}
+#fh-preland-root.${rootModeClass} .fhq-eyebrow{margin-bottom:14px;color:var(--fhq-accent2);font-size:12px;font-weight:900;text-transform:uppercase}
+#fh-preland-root.${rootModeClass} .fhq-question{margin-bottom:12px;font-size:38px;line-height:1.15;font-weight:900;letter-spacing:0;text-wrap:balance}
+#fh-preland-root.${rootModeClass} .fhq-hint{margin-bottom:28px;color:var(--fhq-muted);font-size:16px;line-height:1.5}
+#fh-preland-root.${rootModeClass} .fhq-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+#fh-preland-root.${rootModeClass} .fhq-option{min-height:82px;padding:18px;border:1px solid var(--fhq-line);border-radius:8px;background:var(--fhq-soft);color:var(--fhq-text);cursor:pointer;text-align:left;font-size:15px;line-height:1.42;font-weight:800;transition:border-color .18s ease,transform .18s ease,background .18s ease}
+#fh-preland-root.${rootModeClass} .fhq-option:hover,#fh-preland-root.${rootModeClass} .fhq-option:focus-visible{border-color:var(--fhq-accent);background:var(--fhq-bg);transform:translateY(-2px);outline:none}
+#fh-preland-root.${rootModeClass} .fhq-nav{display:flex;justify-content:flex-start;margin-top:24px}
+#fh-preland-root.${rootModeClass} .fhq-back,#fh-preland-root.${rootModeClass} .fhq-restart{min-height:44px;padding:0 16px;background:transparent;color:var(--fhq-muted);border:1px solid var(--fhq-line)}
+#fh-preland-root.${rootModeClass} .fhq-result{text-align:center}
+#fh-preland-root.${rootModeClass} .fhq-result h2{max-width:740px;margin:0 auto 18px;font-size:48px;line-height:1.08;font-weight:900;letter-spacing:0;text-wrap:balance}
+#fh-preland-root.${rootModeClass} .fhq-result-copy{max-width:700px;margin:0 auto 28px;color:var(--fhq-muted);font-size:18px;line-height:1.55}
+#fh-preland-root.${rootModeClass} .fhq-messengers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;max-width:720px;margin:0 auto}
+#fh-preland-root.${rootModeClass} .fhq-cta{display:flex;align-items:center;justify-content:center;min-height:66px;padding:16px;border-radius:8px;color:#fff!important;text-decoration:none!important;font-size:16px;font-weight:900}
+#fh-preland-root.${rootModeClass} .fhq-cta-tg{background:#168de2}
+#fh-preland-root.${rootModeClass} .fhq-cta-max{background:#6a4ee6}
+#fh-preland-root.${rootModeClass} .fhq-policy{display:flex;align-items:flex-start;gap:10px;max-width:760px;margin:24px auto 0;padding:14px;border:1px solid var(--fhq-line);border-radius:8px;color:var(--fhq-muted);font-size:12px;line-height:1.5;text-align:left}
+#fh-preland-root.${rootModeClass} .fhq-policy input{width:18px;height:18px;margin:1px 0 0;flex:0 0 18px;accent-color:var(--fhq-accent)}
+#fh-preland-root.${rootModeClass} .fhq-policy a{color:var(--fhq-accent2);font-weight:800}
+#fh-preland-root.${rootModeClass} .fhq-policy-error{margin:8px auto 0;color:#ff9a93;font-size:12px;font-weight:800}
+#fh-preland-root.${rootModeClass} .fhq-restart{margin-top:16px}
+#fh-preland-root.${rootModeClass}.fh-prq26 .fhq-hero,#fh-preland-root.${rootModeClass}.fh-bpq26 .fhq-hero{grid-template-columns:minmax(0,.86fr) minmax(460px,1.14fr)}
+#fh-preland-root.${rootModeClass}.fh-prq26 .fhq-image,#fh-preland-root.${rootModeClass}.fh-bpq26 .fhq-image{min-height:620px}
+@media(max-width:900px){
+  #fh-preland-root.${rootModeClass} .fhq-hero,#fh-preland-root.${rootModeClass}.fh-prq26 .fhq-hero,#fh-preland-root.${rootModeClass}.fh-bpq26 .fhq-hero{min-height:auto;grid-template-columns:1fr;gap:28px;padding:36px 0}
+  #fh-preland-root.${rootModeClass} h1{font-size:48px}
+  #fh-preland-root.${rootModeClass} .fhq-image,#fh-preland-root.${rootModeClass}.fh-prq26 .fhq-image,#fh-preland-root.${rootModeClass}.fh-bpq26 .fhq-image{min-height:0;aspect-ratio:16/10}
+}
+@media(max-width:640px){
+  #fh-preland-root.${rootModeClass} .fhq-shell{width:calc(100% - 24px)}
+  #fh-preland-root.${rootModeClass} .fhq-hero{padding:24px 0 34px}
+  #fh-preland-root.${rootModeClass} h1{font-size:36px;line-height:1.08}
+  #fh-preland-root.${rootModeClass} .fhq-lead{font-size:17px}
+  #fh-preland-root.${rootModeClass} .fhq-start{width:100%}
+  #fh-preland-root.${rootModeClass} .fhq-image,#fh-preland-root.${rootModeClass}.fh-prq26 .fhq-image,#fh-preland-root.${rootModeClass}.fh-bpq26 .fhq-image{aspect-ratio:4/3}
+  #fh-preland-root.${rootModeClass} .fhq-stage{padding:24px 0}
+  #fh-preland-root.${rootModeClass} .fhq-panel{padding:22px 16px}
+  #fh-preland-root.${rootModeClass} .fhq-question{font-size:28px}
+  #fh-preland-root.${rootModeClass} .fhq-options,#fh-preland-root.${rootModeClass} .fhq-messengers{grid-template-columns:1fr}
+  #fh-preland-root.${rootModeClass} .fhq-option{min-height:70px}
+  #fh-preland-root.${rootModeClass} .fhq-result h2{font-size:34px}
+}
+</style>
+<div id="fh-preland-root" class="fhq-root ${rootModeClass} ${esc(prelandingClassToken(style || designRoute?.id || 'default'))}">
+  <main class="fhq-shell">
+    <section class="fhq-hero" data-quiz-hero>
+      <div class="fhq-copy">
+        <div class="fhq-kicker">${esc(heroLabel)}</div>
+        <h1>${esc(title)}</h1>
+        <p class="fhq-lead">${esc(subtitle)}</p>
+        <button class="fhq-start" type="button" data-quiz-start>${esc(heroButton)}</button>
+      </div>
+      <div class="fhq-image" aria-hidden="true">
+        <img src="${esc(heroImage)}" alt="" loading="eager" decoding="async" fetchpriority="high">
+      </div>
+    </section>
+
+    <section class="fhq-stage" data-quiz-stage hidden>
+      <div class="fhq-panel">
+        <div data-quiz-form>
+          <div class="fhq-progress-row"><span data-quiz-counter>1 / ${questions.length}</span><div class="fhq-progress"><span data-quiz-progress></span></div></div>
+          <div class="fhq-eyebrow" data-quiz-eyebrow></div>
+          <h2 class="fhq-question" data-quiz-question></h2>
+          <p class="fhq-hint" data-quiz-hint></p>
+          <div class="fhq-options" data-quiz-options></div>
+          <div class="fhq-nav"><button class="fhq-back" type="button" data-quiz-back>Назад</button></div>
+        </div>
+
+        <div class="fhq-result" data-quiz-result hidden>
+          <div class="fhq-kicker">Результат готов</div>
+          <h2 data-quiz-result-title>${esc(resultTitle)}</h2>
+          <p class="fhq-result-copy" data-quiz-result-copy>${esc(resultText)}</p>
+          <div class="fhq-messengers">
+            ${renderAtmospaceMessengerButton('telegram', 'fhq-cta fhq-cta-tg', 'Открыть разбор в Telegram')}
+            ${renderAtmospaceMessengerButton('max', 'fhq-cta fhq-cta-max', 'Открыть разбор в MAX')}
+          </div>
+          <label class="fhq-policy" for="atmospace-policy-consent">
+            <input id="atmospace-policy-consent" type="checkbox">
+            <span>Я принимаю <a href="https://modernisto.ru/politics" target="_blank" rel="noopener noreferrer">политику конфиденциальности</a> и <a href="https://modernisto.ru/approval" target="_blank" rel="noopener noreferrer">согласие на обработку персональных данных</a>.</span>
+          </label>
+          <p id="atmospace-policy-error" class="fhq-policy-error" role="alert" hidden>Для перехода подтвердите согласие на обработку персональных данных.</p>
+          <button class="fhq-restart" type="button" data-quiz-restart>Пройти заново</button>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+<script>
+(function(){
+  'use strict';
+  var root=document.getElementById('fh-preland-root');
+  if(!root)return;
+  var questions=${safeInlineJson(questions)};
+  var isPersonal=${isPersonalRoute ? 'true' : 'false'};
+  var isBarrier=${isBarrierProfile ? 'true' : 'false'};
+  var hero=root.querySelector('[data-quiz-hero]');
+  var stage=root.querySelector('[data-quiz-stage]');
+  var form=root.querySelector('[data-quiz-form]');
+  var result=root.querySelector('[data-quiz-result]');
+  var resultTitle=root.querySelector('[data-quiz-result-title]');
+  var resultCopy=root.querySelector('[data-quiz-result-copy]');
+  var defaultResultTitle=${safeInlineJson(resultTitle)};
+  var defaultResultText=${safeInlineJson(resultText)};
+  var eyebrow=root.querySelector('[data-quiz-eyebrow]');
+  var questionTitle=root.querySelector('[data-quiz-question]');
+  var hint=root.querySelector('[data-quiz-hint]');
+  var options=root.querySelector('[data-quiz-options]');
+  var counter=root.querySelector('[data-quiz-counter]');
+  var progress=root.querySelector('[data-quiz-progress]');
+  var back=root.querySelector('[data-quiz-back]');
+  var index=0;
+  var answers=[];
+
+  function moveTo(node){
+    if(node&&typeof node.scrollIntoView==='function')node.scrollIntoView({behavior:'smooth',block:'start'});
+  }
+
+  function renderQuestion(){
+    var current=questions[index];
+    if(!current){showResult();return;}
+    eyebrow.textContent=current.eyebrow||'';
+    questionTitle.textContent=current.title||'';
+    hint.textContent=current.hint||'';
+    counter.textContent=String(index+1)+' / '+String(questions.length);
+    progress.style.width=String(((index+1)/questions.length)*100)+'%';
+    back.disabled=index===0;
+    back.style.opacity=index===0?'.45':'1';
+    options.replaceChildren();
+    current.options.forEach(function(option,optionIndex){
+      var item=typeof option==='string'?{label:option,value:''}:option;
+      var button=document.createElement('button');
+      button.type='button';
+      button.className='fhq-option';
+      button.textContent=item.label;
+      button.addEventListener('click',function(){
+        answers[index]={label:item.label,value:item.value||'',optionIndex:optionIndex};
+        index+=1;
+        if(index>=questions.length){showResult();return;}
+        renderQuestion();
+      });
+      options.appendChild(button);
+    });
+  }
+
+  var barrierProfiles={
+    overdrive:{
+      title:'Твой барьер — рывок вместо устойчивого ритма',
+      text:'Ты начинаешь сильнее, чем может выдержать обычная неделя. Первый шаг — не новый марафон, а выбранный ритм: '
+    },
+    freeze:{
+      title:'Твой барьер — ожидание полной уверенности',
+      text:'Старт откладывается до момента, когда исчезнут сомнения. Первый шаг должен быть маленьким и безопасным: '
+    },
+    overload:{
+      title:'Твой барьер — перегруз вместо приоритета',
+      text:'Ты пытаешься удержать слишком много сразу, и система ломается под собственной тяжестью. Первый шаг — ограничить нагрузку: '
+    },
+    drift:{
+      title:'Твой барьер — смена направления до проверки',
+      text:'Новая идея вытесняет прежнюю раньше, чем появляется честный результат. Первый шаг — зафиксировать один маршрут: '
+    }
+  };
+
+  function getBarrierProfile(){
+    var scores={overdrive:0,freeze:0,overload:0,drift:0};
+    var order=['overdrive','freeze','overload','drift'];
+    answers.slice(0,4).forEach(function(answer){
+      if(answer&&Object.prototype.hasOwnProperty.call(scores,answer.value))scores[answer.value]+=1;
+    });
+    var winner=order[0];
+    order.slice(1).forEach(function(key){
+      if(scores[key]>scores[winner])winner=key;
+    });
+    return barrierProfiles[winner];
+  }
+
+  function showResult(){
+    form.hidden=true;
+    result.hidden=false;
+    resultTitle.textContent=defaultResultTitle;
+    resultCopy.textContent=defaultResultText;
+    if(isBarrier){
+      var profile=getBarrierProfile();
+      var pace=answers[4]&&answers[4].label?answers[4].label:'один небольшой шаг, который можно повторить';
+      resultTitle.textContent=profile.title;
+      resultCopy.textContent=profile.text+pace+'. Открой короткий разбор и забери следующий шаг без нового рывка.';
+    }else if(isPersonal){
+      var support=answers[3]&&answers[3].label?answers[3].label:'';
+      var title='Твоя точка старта — устойчивый ритм без перегруза';
+      if(support.indexOf('Поддержки')!==-1)title='Твоя точка старта — опора, а не ещё больше контроля';
+      else if(support.indexOf('Понятной')!==-1)title='Твоя точка старта — ясность вместо нового рывка';
+      else if(support.indexOf('Реалистичного')!==-1)title='Твоя точка старта — маршрут, который выдержит реальность';
+      resultTitle.textContent=title;
+    }
+    moveTo(stage);
+  }
+
+  root.querySelector('[data-quiz-start]').addEventListener('click',function(){
+    hero.hidden=true;
+    stage.hidden=false;
+    form.hidden=false;
+    result.hidden=true;
+    index=0;
+    answers=[];
+    renderQuestion();
+    moveTo(stage);
+  });
+
+  back.addEventListener('click',function(){
+    if(index===0){
+      stage.hidden=true;
+      hero.hidden=false;
+      moveTo(hero);
+      return;
+    }
+    index-=1;
+    renderQuestion();
+  });
+
+  root.querySelector('[data-quiz-restart]').addEventListener('click',function(){
+    index=0;
+    answers=[];
+    form.hidden=false;
+    result.hidden=true;
+    renderQuestion();
+    moveTo(stage);
+  });
+})();
+</script>
+${buildAtmospacePrelandingTrackingScript()}`;
+}
+
+function renderDirectionQuizPrelanding(props) {
+  return renderInteractiveQuizPrelanding({ ...props, mode: 'directionQuiz' });
+}
+
+function renderPersonalRouteQuizPrelanding(props) {
+  return renderInteractiveQuizPrelanding({ ...props, mode: 'personalRouteQuiz' });
+}
+
+function renderBarrierProfileQuizPrelanding(props) {
+  return renderInteractiveQuizPrelanding({ ...props, mode: 'barrierProfileQuiz' });
+}
+
+function renderPrelandingHtml({ tpl, style, palette, photo, overrides, projectData, landingMeta, layout = 'split', typo = 'manrope', effects = [] }) {
+  const isCoreMethod = overrides?.prelandingMode === 'coreMethod' || overrides?.prelandingMode === 'core-method';
+  const isHeroBlocks = overrides?.prelandingMode === 'heroBlocks' || overrides?.prelandingMode === 'hero-blocks';
+  const isNatureEditorial = overrides?.prelandingMode === 'natureEditorial' || overrides?.prelandingMode === 'nature-editorial';
+  const isMinimalCompare = overrides?.prelandingMode === 'minimalCompare' || overrides?.prelandingMode === 'minimal-compare';
+  const isDirectionQuiz = overrides?.prelandingMode === 'directionQuiz' || overrides?.prelandingMode === 'direction-quiz';
+  const isPersonalRouteQuiz = overrides?.prelandingMode === 'personalRouteQuiz' || overrides?.prelandingMode === 'personal-route-quiz';
+  const isBarrierProfileQuiz = overrides?.prelandingMode === 'barrierProfileQuiz' || overrides?.prelandingMode === 'barrier-profile-quiz';
+  const overrideTemplateId = Number(overrides?.templateId);
+  const baseTemplateId = [1, 2, 3].includes(Number(tpl)) ? Number(tpl) : 1;
+  const templateId = isCoreMethod
+    ? [1, 2, 3].includes(overrideTemplateId)
+      ? overrideTemplateId
+      : baseTemplateId
+    : (overrides?.fromBanner || overrides?.lockTemplateCopy) && [1, 2, 3].includes(overrideTemplateId)
+      ? overrideTemplateId
+      : baseTemplateId;
+  const content = mergePrelandingContent(
+    PRELANDING_CONTENT[templateId] || PRELANDING_CONTENT[1],
+    overrides
+  );
+  if (!content) return '';
+
+  const paletteKey = PALETTES.some(x => x[0] === palette) ? palette : 'blue-trust';
+  const paletteData = PALETTES.find(x => x[0] === paletteKey) || PALETTES[0];
+  const [paletteAccent, paletteAccent2, paletteBg = '#050505'] = paletteData[3];
+  const resolvedCoreStyle = CORE_PRELANDING_THEME_STYLES[templateId] || 'darkYellow';
+  const themeStyle = isCoreMethod
+    ? (overrides?.themeStyle || resolvedCoreStyle)
+    : (overrides?.themeStyle || style || (
+      isHeroBlocks ? 'premium-light'
+        : isNatureEditorial ? 'nature-sage-paper'
+          : isMinimalCompare ? 'minimal-noir'
+            : isDirectionQuiz ? 'direction-quiz-navy'
+              : isPersonalRouteQuiz ? 'personal-route-coral'
+                : isBarrierProfileQuiz ? 'barrier-profile-ember'
+                  : 'glassmorphism'
+    ));
+  const theme = prelandingThemeForStyle(themeStyle, paletteKey);
+  const title = stripHtml(content.titleHtml || '');
+  const activeMode = isHeroBlocks
+    ? 'heroBlocks'
+    : isNatureEditorial
+      ? 'natureEditorial'
+      : isMinimalCompare
+        ? 'minimalCompare'
+        : isDirectionQuiz
+          ? 'directionQuiz'
+          : isPersonalRouteQuiz
+            ? 'personalRouteQuiz'
+            : isBarrierProfileQuiz
+              ? 'barrierProfileQuiz'
+              : 'templateStage';
+  const landingLogic = resolveClientPrelandingLogic(title, content.trustTitle || content.methodName || content.actionSubtitle || '', activeMode);
+  const fallbackSeed = `${templateId}|${style || ''}|${paletteKey}|${overrides?.variantKey || overrides?.conceptId || ''}|${title}`;
+  const usedPrelandingImages = new Set();
+  const rawSceneImage = pickDistinctPrelandingImage(fallbackSeed, [0, 3, 6, 9], usedPrelandingImages,
+    overrides?.sceneImage,
+    overrides?.bannerImage,
+    overrides?.heroImage,
+    photo,
+    pickStaticPrelandingFallback(fallbackSeed, 0)
+  );
+  const rawSceneFallback = pickDistinctPrelandingImage(fallbackSeed, [1, 4, 7], usedPrelandingImages,
+    overrides?.sceneFallback,
+    overrides?.bannerFallback,
+    overrides?.heroImage,
+    photo,
+    pickStaticPrelandingFallback(fallbackSeed, 1)
+  );
+  const rawValueImage = pickDistinctPrelandingImage(fallbackSeed, [2, 5, 8], usedPrelandingImages,
+    overrides?.valueImage,
+    overrides?.sceneFallback,
+    overrides?.bannerFallback,
+    pickStaticPrelandingFallback(fallbackSeed, 1)
+  );
+  const rawCtaImage = pickDistinctPrelandingImage(fallbackSeed, [4, 6, 9], usedPrelandingImages,
+    overrides?.ctaImage,
+    overrides?.bannerFallback,
+    overrides?.sceneFallback,
+    pickStaticPrelandingFallback(fallbackSeed, 2)
+  );
+  const sceneImage = bothelpImageSrc(rawSceneImage);
+  const sceneFallback = bothelpImageSrc(rawSceneFallback);
+  const valueImage = bothelpImageSrc(rawValueImage);
+  const ctaImage = bothelpImageSrc(rawCtaImage);
+  const source = `${style || ''} ${paletteKey} ${overrides?.themeStyle || ''} ${title}`.toLowerCase();
+  const designFamily = isCoreMethod ? 'core-method' : overrides?.designFamily || (
+    isDirectionQuiz ? 'direction-quiz'
+      : isPersonalRouteQuiz ? 'personal-route-quiz'
+      : isBarrierProfileQuiz ? 'barrier-profile-quiz'
+        : isMinimalCompare ? 'minimal-compare'
+      :
+    isNatureEditorial ? 'nature-editorial'
+      :
+    isHeroBlocks ? 'hero-bright'
+      : source.includes('red') || source.includes('shock') || source.includes('brutal') ? 'editorial-strike'
+      : source.includes('green') || source.includes('money') || source.includes('terminal') ? 'price-signal'
+        : source.includes('dark') || source.includes('noir') || source.includes('black') ? 'noir-focus'
+          : source.includes('premium') || source.includes('gold') || source.includes('editorial') ? 'split-premium'
+            : 'object-stage'
+  );
+  const variant = isCoreMethod ? (overrides?.landingVariant || CORE_PRELANDING_VARIANTS[templateId] || 'tf-v-spotlight') : overrides?.landingVariant || (
+    isDirectionQuiz ? 'tf-v-direction-quiz'
+      : isPersonalRouteQuiz ? 'tf-v-personal-route-quiz'
+      : isBarrierProfileQuiz ? 'tf-v-barrier-profile-quiz'
+        : isMinimalCompare ? 'tf-v-minimal-compare'
+      :
+    isNatureEditorial ? 'tf-v-nature-editorial'
+      :
+    isHeroBlocks ? 'tf-v-mint'
+      : source.includes('green') || source.includes('terminal') ? 'tf-v-aurora'
+      : source.includes('red') || source.includes('shock') ? 'tf-v-spotlight'
+        : source.includes('gold') || source.includes('premium') ? 'tf-v-editorial'
+          : source.includes('blue') || source.includes('glass') ? 'tf-v-motion'
+            : 'tf-v-cinema'
+  );
+  const accent = readablePrelandingTitleAccent({
+    accent: theme?.accent,
+    accent2: theme?.accent2,
+    btnMain1: theme?.btnMain1,
+    btnMain2: theme?.btnMain2
+  }) || paletteAccent;
+  const accent2 = theme?.accent2 || paletteAccent2 || '#f97316';
+  const themeVars = [
+    `--tf-accent:${accent}`,
+    `--tf-accent2:${accent2}`,
+    `--tf-title-accent:${accent}`,
+    `--tf-btn-main-1:${theme?.btnMain1 || accent}`,
+    `--tf-btn-main-2:${theme?.btnMain2 || accent2}`,
+    `--tf-btn-alt-1:${theme?.btnAlt1 || '#111827'}`,
+    `--tf-btn-alt-2:${theme?.btnAlt2 || paletteBg || '#2563eb'}`
+  ].join(';');
+  const prelandConfig = {
+    templateId,
+    renderMode: isCoreMethod ? 'classicText' : (overrides?.renderMode || (
+      isDirectionQuiz ? 'directionQuiz'
+        : isPersonalRouteQuiz ? 'personalRouteQuiz'
+          : isBarrierProfileQuiz ? 'barrierProfileQuiz'
+            : isMinimalCompare ? 'minimalCompare'
+            : isHeroBlocks ? 'bannerMatched'
+              : isNatureEditorial ? 'natureEditorial'
+                : 'immersiveStage'
+    )),
+    variant,
+    designFamily,
+    layoutMode: overrides?.layoutMode || '',
+    typeMode: overrides?.typeMode || '',
+    mobileMode: overrides?.mobileMode || '',
+    coreDesignClass: overrides?.coreDesignClass || '',
+    variantSeed: overrides?.variantKey || overrides?.conceptId || `${templateId}-${style || ''}-${paletteKey}-${hashText(title)}`,
+    visualSource: sceneImage ? (overrides?.visualSource || 'scene') : '',
+    themeVars,
+    sceneImage,
+    sceneFallback,
+    bannerImage: bothelpImageSrc(pickPrelandingImageUrl(overrides?.bannerImage)),
+    bannerFallback: bothelpImageSrc(pickPrelandingImageUrl(overrides?.bannerFallback)),
+    heroImage: sceneImage,
+    valueImage,
+    ctaImage,
+    badge: content.badge || landingLogic.badge,
+    title,
+    titleHtml: content.titleHtml || title,
+    pills: content.pills || [],
+    painTitle: content.painTitle || landingLogic.label,
+    painItems: content.painItems || [],
+    painAlert: content.painAlert || landingLogic.defaultText,
+    trustTitle: content.trustTitle || landingLogic.trustTitle,
+    trustSmall: content.trustSmall || landingLogic.trustSmall,
+    methodName: Object.prototype.hasOwnProperty.call(overrides || {}, 'methodName') ? overrides.methodName : (content.methodName || landingLogic.methodName),
+    valueTitle: content.valueTitle || landingLogic.valueTitle,
+    valueItems: content.valueItems || landingLogic.valueItems,
+    cards: overrides?.cards || content.cards || landingLogic.cards,
+    proofItems: overrides?.proofItems || content.proofItems || [],
+    liveNote: Object.prototype.hasOwnProperty.call(overrides || {}, 'liveNote') ? overrides.liveNote : landingLogic.botTransition,
+    copy: overrides?.copy || content.copy || '',
+    ctaLead: overrides?.ctaLead || content.ctaLead || landingLogic.ctaLead,
+    ctaSub: overrides?.ctaSub || content.ctaSub || '',
+    actionTitle: content.actionTitle || landingLogic.actionTitle,
+    actionSubtitle: content.actionSubtitle || landingLogic.ctaLead,
+    adAngleTitle: content.methodName || overrides?.adAngleTitle || content.actionTitle || landingLogic.actionTitle,
+    telegramLabel: 'Начать разбор в Telegram',
+    maxLabel: 'Начать разбор в MAX',
+    telegramHref: '#',
+    maxHref: '#'
+  };
+  if (isCoreMethod) {
+    return renderCoreMethodInlinePrelanding({
+      templateId,
+      content: prelandConfig,
+      projectData,
+      landingMeta,
+      sceneImage,
+      valueImage,
+      ctaImage
+    });
+  }
+  if (isDirectionQuiz) {
+    return renderDirectionQuizPrelanding({
+      content: prelandConfig,
+      projectData,
+      landingMeta,
+      sceneImage,
+      style: themeStyle,
+      palette: paletteKey,
+      designRoute: overrides?.designRoute || {
+        id: overrides?.designRouteId || themeStyle,
+        style: themeStyle,
+        palette: paletteKey
+      }
+    });
+  }
+  if (isPersonalRouteQuiz) {
+    return renderPersonalRouteQuizPrelanding({
+      content: prelandConfig,
+      projectData,
+      landingMeta,
+      sceneImage,
+      style: themeStyle,
+      palette: paletteKey,
+      designRoute: overrides?.designRoute || {
+        id: overrides?.designRouteId || themeStyle,
+        style: themeStyle,
+        palette: paletteKey
+      }
+    });
+  }
+  if (isBarrierProfileQuiz) {
+    return renderBarrierProfileQuizPrelanding({
+      content: prelandConfig,
+      projectData,
+      landingMeta,
+      sceneImage,
+      style: themeStyle,
+      palette: paletteKey,
+      designRoute: overrides?.designRoute || {
+        id: overrides?.designRouteId || themeStyle,
+        style: themeStyle,
+        palette: paletteKey
+      }
+    });
+  }
+  if (isNatureEditorial) {
+    return renderNatureEditorialPrelanding({
+      content: prelandConfig,
+      projectData,
+      landingMeta,
+      sceneImage,
+      valueImage,
+      ctaImage,
+      style: themeStyle,
+      palette: paletteKey,
+      layout: overrides?.layoutMode || layout,
+      effects: overrides?.effects || effects
+    });
+  }
+  if (isMinimalCompare) {
+    return renderMinimalComparePrelanding({
+      content: prelandConfig,
+      projectData,
+      landingMeta,
+      style: themeStyle,
+      palette: paletteKey,
+      layout: overrides?.layoutMode || layout,
+      effects: overrides?.effects || effects
+    });
+  }
+
+  return renderHeroSceneBlocksPrelanding({
+    content: prelandConfig,
+    projectData,
+    landingMeta,
+    sceneImage,
+    valueImage,
+    ctaImage,
+    style: themeStyle,
+    palette: paletteKey,
+    layout: overrides?.layoutMode || layout,
+    typo: overrides?.typeMode || typo,
+    effects: overrides?.effects || effects,
+    theme,
+    accent,
+    accent2
+  });
+}
+
+function countMatches(text, pattern) {
+  return (String(text || '').match(pattern) || []).length;
+}
+
+function validateAtmospaceTildaHtml(html = '', config = {}) {
+  const source = String(html || '');
+  const errors = [];
+  const warnings = [];
+  const marker = (...parts) => parts.join('');
+  const patternFrom = (...parts) => new RegExp(parts.join(''), 'i');
+  const requiredConfig = [
+    ['publicLandingKey', 'public_landing_key'],
+    ['counterId', 'counter_id'],
+    ['landingName', 'landing_name'],
+    ['landingCode', 'landing_variant_code'],
+    ['apiBaseUrl', 'api_base_url'],
+    ['initEndpoint', 'init_endpoint'],
+    ['clickEndpoint', 'click_endpoint']
+  ];
+
+  if (!source.trim()) errors.push('HTML ещё не собран.');
+  if (/<!doctype|<html[\s>]|<head[\s>]|<body[\s>]/i.test(source)) errors.push('HTML для Tilda не должен быть полноценным документом с html/head/body.');
+
+  [
+    [patternFrom('window\\.', 'FH_', 'CONFIG'), 'старый объект FH'],
+    [patternFrom('window\\.', 'FUNNEL_', 'CONFIG'), 'старый объект FUNNEL'],
+    [patternFrom('smart', '-', 'endpoint'), 'старый smart endpoint'],
+    [patternFrom('supabase\\.co\\/', 'functions\\/v1'), 'старая прямая Supabase-ссылка'],
+    [patternFrom('landing', '-', 'attribution'), 'старый endpoint атрибуции'],
+    [patternFrom('r\\.bothelp\\.', 'io'), 'прямая ссылка BotHelp'],
+    [patternFrom('data-', 'fh-', 'messenger'), 'старый messenger-атрибут'],
+    [patternFrom('lead', '_', 'static'), 'старый статический lead'],
+    [patternFrom('order', '_url_', '990', '|', 'order', 'Url', '990'), 'старое поле регистрации'],
+    [patternFrom('purchase', '_url_', '990', '|', 'purchase', 'Url', '990'), 'старое поле покупки'],
+    [patternFrom('serverOnly', 'AdGoal', 'Credential'), 'серверный токен'],
+    [patternFrom('metrika', 'Token', '|', 'yandex', '_oauth_', 'token'), 'токен Яндекс.Метрики'],
+    [patternFrom('\\b', 'client', '_', 'id', '\\b'), 'старый технический идентификатор'],
+    [patternFrom('data:', 'image'), 'встроенное base64-изображение'],
+    [patternFrom('DIRECTION', '_CONFIG'), 'сторонний объект конфигурации квиза'],
+    [patternFrom('webhook', 'Url', '|webhook', '_url', '|quiz[-_ ]?webhook'), 'сторонний webhook квиза'],
+    [patternFrom('lichnyy-marshrut\\.gayvoronskyluka\\.chatgpt\\.site'), 'сторонний сервер личного маршрута'],
+    [patternFrom('\\/api\\/', 'register'), 'сторонний endpoint регистрации']
+  ].forEach(([pattern, label]) => {
+    if (pattern.test(source)) errors.push(`В Tilda HTML найден запрещённый фрагмент: ${label}.`);
+  });
+
+  [
+    marker('window.', 'ATMOSPACE_LANDING_CONFIG'),
+    'Object.freeze(',
+    ATMOSPACE_GENERATED_RUNTIME_VERSION,
+    ATMOSPACE_PUBLIC_API_BASE_URL,
+    '/api/landing-runtime/init',
+    '/api/landing-runtime/click',
+    'data-atmospace-messenger="telegram"',
+    'data-atmospace-messenger="max"',
+    'data-atmospace-state',
+    'aria-disabled="true"',
+    'landing_opened',
+    'messenger_button_clicked',
+    'landing_variant_code',
+    'landing_variant_name',
+    'page_instance_id',
+    'browser_language',
+    'browser_client_time',
+    'advertising_click_ids',
+    'yclid',
+    'gclid',
+    'fbclid',
+    'msclkid',
+    'dclid',
+    'utm_source',
+    'utm_medium',
+    'utm_campaign',
+    'utm_content',
+    'utm_term',
+    'messenger: messenger || null',
+    '!links.telegram || !links.max',
+    'result && result.body',
+    'var pageInstanceId = makePageInstanceId();',
+    'Сейчас переход временно недоступен. Попробуйте ещё раз чуть позже.',
+    'id="atmospace-policy-consent"',
+    'href="#"',
+    'target="_blank"',
+    'Local preview',
+    'public_landing_key',
+    'counter_id'
+  ].forEach((marker) => {
+    if (!source.includes(marker)) errors.push(`В Atmospace HTML не найден обязательный маркер: ${marker}.`);
+  });
+
+  if (countMatches(source, /window\.ATMOSPACE_LANDING_CONFIG\s*=/g) !== 1) {
+    errors.push('В HTML должен быть ровно один объект window.ATMOSPACE_LANDING_CONFIG.');
+  }
+  if (countMatches(source, /var pageInstanceId = makePageInstanceId\(\);/g) !== 1) {
+    errors.push('page_instance_id должен создаваться ровно один раз при каждой загрузке страницы.');
+  }
+  if (source.includes('sessionStorage')) {
+    errors.push('page_instance_id не должен сохраняться в sessionStorage.');
+  }
+  if (/\blanding_name\s*:\s*cfg\.landingName/.test(source)) {
+    errors.push('Используйте landing_variant_name вместо устаревшего landing_name.');
+  }
+  if (/\byclid\s*:\s*getParam\(/.test(source)) {
+    errors.push('yclid должен передаваться только внутри advertising_click_ids.');
+  }
+  if (source.includes('https://web.telegram.org/k/#')) {
+    errors.push('В HTML найдена запрещённая прямая ссылка Telegram Web.');
+  }
+
+  requiredConfig.forEach(([key, label]) => {
+    if (!String(config[key] || '').trim()) errors.push(`В конфиге не заполнено ${label}.`);
+  });
+
+  if (config.runtimeVersion && config.runtimeVersion !== ATMOSPACE_GENERATED_RUNTIME_VERSION) {
+    errors.push(`runtimeVersion должен быть ${ATMOSPACE_GENERATED_RUNTIME_VERSION}.`);
+  }
+  if (config.apiBaseUrl && config.apiBaseUrl !== ATMOSPACE_PUBLIC_API_BASE_URL) {
+    errors.push('apiBaseUrl должен вести на https://api.atmospace.pro.');
+  }
+  if (config.initEndpoint && config.initEndpoint !== ATMOSPACE_INIT_ENDPOINT) {
+    errors.push('initEndpoint должен вести на /api/landing-runtime/init.');
+  }
+  if (config.clickEndpoint && config.clickEndpoint !== ATMOSPACE_CLICK_ENDPOINT) {
+    errors.push('clickEndpoint должен вести на /api/landing-runtime/click.');
+  }
+  if (config.publicLandingKey && !source.includes(String(config.publicLandingKey))) {
+    errors.push('В HTML не найден текущий publicLandingKey.');
+  }
+  if (config.counterId && !source.includes(String(config.counterId))) {
+    errors.push('В HTML не найден текущий counterId.');
+  }
+  if (config.landingCode && !source.includes(String(config.landingCode))) {
+    errors.push('В HTML не найден текущий landingCode.');
+  }
+  return {
+    ok: errors.length === 0,
+    errors,
+    warnings
+  };
+}
+
 /* ================== UI КОМПОНЕНТЫ ================== */
 function CopyBtn({ text, label = 'Скопировать', big = false, dark = false }) {
   const [s, setS] = useState('idle');
@@ -1418,14 +5095,6 @@ function CopyBtn({ text, label = 'Скопировать', big = false, dark = f
   );
 }
 
-function DownloadBtn({ filename, content, label }) {
-  return (
-    <button onClick={() => downloadFile(filename, content)} className="py-3 text-sm font-black rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white transition-all flex items-center justify-center gap-2 shadow-lg w-full px-5 hover:scale-[1.01]">
-      <Download className="w-5 h-5" /> {label}
-    </button>
-  );
-}
-
 function Tab({ active, onClick, icon: Icon, children, dark }) {
   return (
     <button onClick={onClick} className={`flex items-center gap-2 px-3 py-2.5 rounded-xl font-bold text-xs whitespace-nowrap transition-all ${active ? (dark ? 'bg-yellow-400 text-slate-900 shadow-lg' : 'bg-slate-900 text-white shadow-lg') : (dark ? 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200')}`}>
@@ -1434,14 +5103,14 @@ function Tab({ active, onClick, icon: Icon, children, dark }) {
   );
 }
 
-function Field({ label, hint, value, onChange, placeholder, dark }) {
+function Field({ label, hint, value, onChange, placeholder, dark, type = 'text', autoComplete = 'off' }) {
   return (
     <label className="block">
       <div className="flex items-baseline justify-between mb-1.5">
         <span className={`text-sm font-black ${dark ? 'text-slate-200' : 'text-slate-700'}`}>{label}</span>
         {hint && <span className={`text-[11px] ${dark ? 'text-slate-500' : 'text-slate-400'}`}>{hint}</span>}
       </div>
-      <input type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={`w-full px-4 py-3 rounded-xl border-2 focus:outline-none font-medium ${dark ? 'bg-slate-800 border-slate-700 focus:border-blue-500 text-white placeholder:text-slate-500' : 'bg-white border-slate-200 focus:border-blue-500 text-slate-900 placeholder:text-slate-400'}`} />
+      <input type={type} autoComplete={autoComplete} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={`w-full px-4 py-3 rounded-xl border-2 focus:outline-none font-medium ${dark ? 'bg-slate-800 border-slate-700 focus:border-blue-500 text-white placeholder:text-slate-500' : 'bg-white border-slate-200 focus:border-blue-500 text-slate-900 placeholder:text-slate-400'}`} />
     </label>
   );
 }
@@ -1458,80 +5127,347 @@ function TextArea({ label, hint, value, onChange, placeholder, rows = 6, dark })
   );
 }
 
-/* ================== LIVE PREVIEW ================== */
-function LivePreview({ tpl, style, palette, dark }) {
-  const t = tpl ? TPL.find(x => x.id === tpl) : null;
-  const s = style ? STYLES.find(x => x[0] === style) : null;
-  const p = palette ? PALETTES.find(x => x[0] === palette) : null;
-  if (!t || !s || !p) return (
-    <div className={`rounded-2xl p-8 border-2 border-dashed text-center ${dark ? 'border-slate-700 bg-slate-800 text-slate-500' : 'border-slate-300 bg-slate-50 text-slate-400'}`}>
-      <Eye className="w-10 h-10 mx-auto mb-2 opacity-50" />
-      <p className="text-sm font-bold">Выбери шаблон, стиль и палитру для превью</p>
-    </div>
-  );
-  const c1 = p[3][0], c2 = p[3][1], c3 = p[3][2];
-  const isDark = ['darkmode', 'cyberpunk', 'terminal', 'deep-space'].includes(s[0]);
+function AtmospaceLandingConstructor({ dark, value, onChange }) {
+  const card = dark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200';
+  const panel = dark ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200';
+  const text = dark ? 'text-white' : 'text-slate-900';
+  const textMuted = dark ? 'text-slate-400' : 'text-slate-500';
+  const emptyForm = {
+    landingName: '',
+    landingCode: '',
+    counterId: '',
+    serverOnlyAdGoalCredential: ''
+  };
+  const [localForm, setLocalForm] = useState(emptyForm);
+  const form = value || localForm;
+
+  const updateForm = (updater) => {
+    const applyUpdate = (prevValue) => {
+      const prev = { ...emptyForm, ...(prevValue || {}) };
+      return typeof updater === 'function' ? updater(prev) : { ...prev, ...updater };
+    };
+
+    if (onChange) {
+      onChange(applyUpdate);
+      return;
+    }
+
+    setLocalForm(applyUpdate);
+  };
+  const setFormValue = (key, value) => updateForm((prev) => ({ ...prev, [key]: value }));
+
   return (
-    <div className="rounded-2xl overflow-hidden border-2 border-slate-200 shadow-xl" style={{ background: isDark ? '#0a0a0a' : c3 || '#fff' }}>
-      <div style={{ padding: '24px 20px', textAlign: 'center', minHeight: 320 }}>
-        <div style={{ display: 'inline-block', padding: '4px 12px', borderRadius: 100, background: isDark ? c1 : '#222', color: isDark ? '#000' : c1, fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 14 }}>Превью {s[2]}</div>
-        <h1 style={{ fontSize: 22, lineHeight: 1.1, fontWeight: 900, margin: '0 0 14px', color: isDark ? '#fff' : '#0f172a', letterSpacing: '-0.02em' }}>{t.h.length > 60 ? t.h.slice(0, 60) + '...' : t.h}</h1>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, justifyContent: 'center', marginBottom: 16 }}>
-          {t.p.map((pill, i) => (
-            <span key={i} style={{ padding: '4px 10px', borderRadius: 100, background: isDark ? 'rgba(255,255,255,.1)' : '#fff', border: `1px solid ${isDark ? 'rgba(255,255,255,.2)' : '#e2e8f0'}`, fontSize: 9, fontWeight: 700, color: isDark ? '#fff' : '#0f172a' }}>✕ {pill}</span>
-          ))}
+    <section className={`${card} rounded-3xl border p-6 shadow-sm`}>
+      <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-black uppercase text-white">
+            Данные лендинга
+          </div>
+          <h2 className={`text-2xl font-black ${text}`}>Настройки для HTML</h2>
+          <p className={`mt-1 max-w-3xl text-sm ${textMuted}`}>
+            Заполните четыре поля из кабинета Atmospace. Заголовок, текст и один из семи форматов выбираются ниже; готовый Tilda HTML появится в зелёном блоке.
+          </p>
         </div>
-        <div style={{ background: isDark ? 'rgba(255,0,0,.1)' : '#fef2f2', border: `2px dashed ${c1}`, borderRadius: 12, padding: '12px 14px', marginBottom: 14, textAlign: 'left' }}>
-          <div style={{ fontSize: 8, fontWeight: 900, color: c1, textTransform: 'uppercase', marginBottom: 6 }}>БОЛЬ</div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: isDark ? '#fff' : '#0f172a' }}>Купили курсы — результата ноль. Хватит!</div>
+        <div className={`rounded-2xl border px-4 py-3 text-xs ${panel}`}>
+          <div className={`font-black ${text}`}>Защищённый ключ</div>
+          <div className={textMuted}>Отправляется только на сервер генерации. В Tilda HTML не вставляется.</div>
         </div>
-        <div style={{ background: isDark ? 'rgba(255,255,255,.05)' : '#0f172a', borderRadius: 12, padding: 14, marginBottom: 14 }}>
-          <div style={{ fontSize: 10, fontWeight: 900, color: c2, marginBottom: 6 }}>За 8 минут вы узнаете:</div>
-          <div style={{ fontSize: 9, color: isDark ? 'rgba(255,255,255,.8)' : 'rgba(255,255,255,.9)' }}>✓ почему курсы не работают<br />✓ метод который работает сейчас</div>
-        </div>
-        <button style={{ padding: '12px 24px', borderRadius: 100, background: c1, color: isDark ? '#000' : '#fff', fontSize: 11, fontWeight: 900, border: 'none', textTransform: 'uppercase', letterSpacing: 1, boxShadow: `0 8px 16px ${c1}40` }}>Смотреть как →</button>
-        <div style={{ marginTop: 12, fontSize: 18 }}>↓</div>
       </div>
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        <Field
+          label="Название лендинга"
+          value={form.landingName}
+          onChange={(value) => setFormValue('landingName', value)}
+          placeholder="Например: Тест 15 июня / клиент Иван"
+          dark={dark}
+        />
+        <Field
+          label="Код для рекламного лендинга"
+          hint="не gcpc и не partner_code"
+          value={form.landingCode}
+          onChange={(value) => setFormValue('landingCode', value)}
+          placeholder="Полный код из кнопки «Скопировать код»"
+          dark={dark}
+        />
+        <Field
+          label="Номер рекламного счётчика"
+          value={form.counterId}
+          onChange={(value) => setFormValue('counterId', value)}
+          placeholder="109000000"
+          dark={dark}
+        />
+        <Field
+          label="Защищённый ключ отправки целей"
+          hint="актуальный ключ этого кабинета"
+          value={form.serverOnlyAdGoalCredential}
+          onChange={(value) => setFormValue('serverOnlyAdGoalCredential', value)}
+          placeholder="Вставьте ключ полностью, без маскировки"
+          type="password"
+          autoComplete="new-password"
+          dark={dark}
+        />
+      </div>
+
+      <div className={`mt-4 rounded-2xl border px-4 py-3 text-xs font-bold ${dark ? 'border-amber-900/70 bg-amber-500/10 text-amber-100' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
+        Код берите только из кнопки «Сгенерировать код» → «Скопировать код» в кабинете Atmospace. Старый GetCourse-код, partner_code, сокращённое значение с «...» и ключ другого кабинета не подойдут.
+      </div>
+
+      <div className={`mt-4 rounded-2xl border p-4 text-xs font-bold ${panel}`}>
+        <div className={`mb-1 font-black ${text}`}>Дальше</div>
+        <div className={textMuted}>
+          Введите заголовок и текст ниже, выберите формат лендинга и нажмите генерацию. Конструктор отправит эти четыре поля на сервер Atmospace и получит безопасный HTML.
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function LoginGate({ dark, onLogin }) {
+  const [fullName, setFullName] = useState('');
+  const [ownerPassword, setOwnerPassword] = useState('');
+  const [contactChannel, setContactChannel] = useState('telegram');
+  const [contactValue, setContactValue] = useState('');
+  const [pendingAccess, setPendingAccess] = useState(() => (isOwnerOnlyMode() ? null : readPendingAccessRequest()));
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [notice, setNotice] = useState(pendingAccess ? 'Заявка отправлена. Ждём подтверждения.' : '');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (isOwnerOnlyMode()) return undefined;
+    if (!pendingAccess?.requestId || !pendingAccess?.requestToken) return undefined;
+    let cancelled = false;
+
+    const check = async () => {
+      try {
+        const data = await fetchConstructorAccessStatus(pendingAccess);
+        if (cancelled) return;
+        if (data.status === 'approved' && data.account) {
+          rememberApprovedAccount(data.account);
+          clearPendingAccessRequest();
+          setPendingAccess(null);
+          setNotice('');
+          setError('');
+          onLogin(data.account);
+          return;
+        }
+        if (data.status === 'rejected') {
+          clearPendingAccessRequest();
+          setPendingAccess(null);
+          setNotice('');
+          setError(data.message || 'Заявка отклонена.');
+        }
+      } catch (statusError) {
+        if (!cancelled) setNotice(statusError?.message || 'Проверяю статус заявки...');
+      }
+    };
+
+    check();
+    const timer = window.setInterval(check, 4000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [pendingAccess, onLogin]);
+
+  const submit = async (event) => {
+    event.preventDefault();
+    const normalizedName = normalizeLogin(fullName);
+    const adminAccount = normalizedName === OWNER_LOGIN || normalizedName === 'админ'
+      ? findClientAccount(OWNER_LOGIN)
+      : null;
+
+    if (isOwnerOnlyMode()) {
+      if (!adminAccount) {
+        setNotice('');
+        setError('Вход закрыт. Сейчас доступен только владелец конструктора.');
+        return;
+      }
+      if (ownerPassword !== OWNER_PASSWORD) {
+        setNotice('');
+        setError('Неверный пароль владельца.');
+        return;
+      }
+      setError('');
+      setNotice('');
+      onLogin(adminAccount);
+      return;
+    }
+
+    if (adminAccount) {
+      setError('');
+      onLogin(adminAccount);
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError('');
+    setNotice('');
+    try {
+      const data = await requestConstructorAccess({
+        full_name: fullName,
+        contact_channel: contactChannel,
+        contact_value: contactValue
+      });
+      const pending = {
+        requestId: data.requestId,
+        requestToken: data.requestToken,
+        clientId: data.clientId,
+        fullName,
+        contactChannel,
+        contactValue,
+        createdAt: new Date().toISOString()
+      };
+      savePendingAccessRequest(pending);
+      setPendingAccess(pending);
+      setNotice(data.notification?.sent
+        ? 'Заявка отправлена. Подтверждение придёт администратору в Telegram.'
+        : 'Заявка создана, но уведомление администратору пока не настроено.'
+      );
+    } catch (loginError) {
+      setError(loginError?.message || 'Не получилось войти.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const resetPending = () => {
+    clearPendingAccessRequest();
+    setPendingAccess(null);
+    setNotice('');
+    setError('');
+  };
+
+  return (
+    <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-slate-950 p-4 text-white">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(37,99,235,.34),transparent_28%),radial-gradient(circle_at_78%_18%,rgba(16,185,129,.24),transparent_30%),linear-gradient(135deg,#020617,#0f172a_48%,#07111f)]" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent" />
+      <form onSubmit={submit} className="relative z-10 w-full max-w-md rounded-[2rem] border border-white/15 bg-slate-900/90 p-6 text-white shadow-2xl backdrop-blur">
+        <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-blue-600 px-3 py-1 text-xs font-black uppercase text-white">
+          <ShieldCheck className="h-3.5 w-3.5" /> Вход
+        </div>
+        <div className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-blue-300">Landing Constructor OS</div>
+        <h1 className="mb-5 text-3xl font-black leading-tight text-white drop-shadow-[0_10px_28px_rgba(0,0,0,.55)]">Конструктор</h1>
+
+        <div className={`mb-4 rounded-2xl border-2 p-4 ${dark ? 'border-amber-500 bg-amber-950/70 text-amber-50' : 'border-amber-400 bg-amber-50 text-amber-950'}`}>
+          <div className="text-base font-black uppercase leading-tight">Админ-вход открыт</div>
+          <div className="mt-2 text-sm font-black leading-snug">
+            Вход доступен только администратору. Клиентские заявки сейчас отключены.
+          </div>
+        </div>
+
+        <label className="mb-3 block">
+          <span className={`mb-1 block text-xs font-black uppercase tracking-wide ${dark ? 'text-slate-400' : 'text-slate-500'}`}>{isOwnerOnlyMode() ? 'Логин владельца' : 'Имя и фамилия'}</span>
+          <input
+            type="text"
+            value={fullName}
+            onChange={(event) => setFullName(event.target.value)}
+            autoComplete={isOwnerOnlyMode() ? 'username' : 'name'}
+            className={`w-full rounded-xl border px-4 py-3 text-base font-bold outline-none ${dark ? 'border-slate-700 bg-slate-950 text-white focus:border-blue-500' : 'border-slate-200 bg-white text-slate-900 focus:border-blue-500'}`}
+            placeholder={isOwnerOnlyMode() ? 'admin' : 'Антон Иванов'}
+          />
+        </label>
+
+        {isOwnerOnlyMode() && (
+          <label className="mb-3 block">
+            <span className={`mb-1 block text-xs font-black uppercase tracking-wide ${dark ? 'text-slate-400' : 'text-slate-500'}`}>Пароль владельца</span>
+            <input
+              type="password"
+              value={ownerPassword}
+              onChange={(event) => setOwnerPassword(event.target.value)}
+              autoComplete="current-password"
+              className={`w-full rounded-xl border px-4 py-3 text-base font-bold outline-none ${dark ? 'border-slate-700 bg-slate-950 text-white focus:border-blue-500' : 'border-slate-200 bg-white text-slate-900 focus:border-blue-500'}`}
+              placeholder="Введите пароль"
+            />
+          </label>
+        )}
+
+        {!isOwnerOnlyMode() && (
+        <div className="mb-3 grid grid-cols-[124px_1fr] gap-2">
+          <label className="block">
+            <span className={`mb-1 block text-xs font-black uppercase tracking-wide ${dark ? 'text-slate-400' : 'text-slate-500'}`}>Куда писать</span>
+            <select
+              value={contactChannel}
+              onChange={(event) => setContactChannel(event.target.value)}
+              className={`w-full rounded-xl border px-3 py-3 text-base font-bold outline-none ${dark ? 'border-slate-700 bg-slate-950 text-white focus:border-blue-500' : 'border-slate-200 bg-white text-slate-900 focus:border-blue-500'}`}
+            >
+              <option value="telegram">Telegram</option>
+              <option value="max">MAX</option>
+            </select>
+          </label>
+          <label className="block">
+            <span className={`mb-1 block text-xs font-black uppercase tracking-wide ${dark ? 'text-slate-400' : 'text-slate-500'}`}>Username или ссылка</span>
+            <input
+              type="text"
+              value={contactValue}
+              onChange={(event) => setContactValue(event.target.value)}
+              autoComplete="username"
+              className={`w-full rounded-xl border px-4 py-3 text-base font-bold outline-none ${dark ? 'border-slate-700 bg-slate-950 text-white focus:border-blue-500' : 'border-slate-200 bg-white text-slate-900 focus:border-blue-500'}`}
+              placeholder="@username"
+            />
+          </label>
+        </div>
+        )}
+
+        {!isOwnerOnlyMode() && pendingAccess && (
+          <div className={`mb-3 rounded-xl border p-3 text-sm font-bold ${dark ? 'border-amber-800 bg-amber-500/10 text-amber-100' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+            Заявка ждёт подтверждения. Код доступа уже закреплён: {pendingAccess.clientId || 'создаётся'}.
+            <button type="button" onClick={resetPending} className={`mt-2 block text-xs font-black underline ${dark ? 'text-amber-200' : 'text-amber-700'}`}>
+              Заполнить заново
+            </button>
+          </div>
+        )}
+
+        {notice && !error && (
+          <div className={`mb-3 rounded-xl border p-3 text-sm font-bold ${dark ? 'border-blue-900 bg-blue-500/10 text-blue-200' : 'border-blue-200 bg-blue-50 text-blue-800'}`}>
+            {notice}
+          </div>
+        )}
+
+        {error && (
+          <div className={`mb-3 rounded-xl border p-3 text-sm font-bold ${dark ? 'border-red-900 bg-red-500/10 text-red-200' : 'border-red-200 bg-red-50 text-red-700'}`}>
+            {error}
+          </div>
+        )}
+
+        <button type="submit" disabled={isSubmitting || Boolean(pendingAccess)} className="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60">
+          {isOwnerOnlyMode() ? 'Войти владельцу' : pendingAccess ? 'Ожидает подтверждения' : isSubmitting ? 'Отправляю заявку...' : 'Запросить доступ'}
+        </button>
+      </form>
     </div>
   );
 }
 
 /* ================== ОСНОВНОЙ КОМПОНЕНТ ================== */
 export default function Constructor() {
+  const [authorizedClient, setAuthorizedClient] = useState(readAuthorizedClient);
+  const initialProjectRef = useState(() => loadSavedProject(authorizedClient))[0];
+  const [usage, setUsage] = useState(() => readAccountUsage(authorizedClient));
   const [dark, setDark] = useState(false);
-  const [tab, setTab] = useState('how');
-  const [openGuideIndex, setOpenGuideIndex] = useState(null);
-  const [pendingScroll, setPendingScroll] = useState(null);
-  const [projectData, setProjectData] = useState(loadSavedProject);
-  
-  const [tpl, setTpl] = useState(null);
-  const [style, setStyle] = useState(null);
-  const [palette, setPalette] = useState(null);
-  const [typo, setTypo] = useState('manrope');
-  const [layout, setLayout] = useState('classic');
-  const [effects, setEffects] = useState(['micro', 'fadein', 'pulse', 'gradient-anim', 'glow']);
+  const [tab, setTab] = useState('pre');
+  const [projectData, setProjectData] = useState(initialProjectRef);
+  const [landingRuntimeData, setLandingRuntimeData] = useState({
+    landingName: initialProjectRef.clientDisplayName || '',
+    landingCode: '',
+    counterId: initialProjectRef.metrikaId || '',
+    serverOnlyAdGoalCredential: ''
+  });
+  const [landingRuntimeArtifact, setLandingRuntimeArtifact] = useState(null);
 
-  const [gender, setGender] = useState('male');
+  const initialCoreMethodPreset = CORE_METHOD_PRESETS[0];
+  const [tpl, setTpl] = useState(initialCoreMethodPreset.tpl);
+  const [style, setStyle] = useState(initialCoreMethodPreset.style);
+  const [palette, setPalette] = useState(initialCoreMethodPreset.palette);
+  const [typo, setTypo] = useState(initialCoreMethodPreset.typo);
+  const [layout, setLayout] = useState(initialCoreMethodPreset.layout);
+  const [effects, setEffects] = useState(initialCoreMethodPreset.effects);
+  const [activePresetId, setActivePresetId] = useState(initialCoreMethodPreset.id);
+
+  const [gender, setGender] = useState('');
   const [name, setName] = useState('');
   const [age, setAge] = useState('');
   const [shortName, setShortName] = useState('');
   const [photo, setPhoto] = useState('');
-  const [offer, setOffer] = useState('');
-
-  const [pay, setPay] = useState('');
-  const [tg, setTg] = useState('');
-  const [max, setMax] = useState('');
-
-  const [docDate, setDocDate] = useState(() => new Date().toLocaleDateString('ru-RU'));
-  const [operatorName, setOperatorName] = useState('');
-  const [status, setStatus] = useState('ИП');
-  const [inn, setInn] = useState('');
-  const [ogrn, setOgrn] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [privacyUrl, setPrivacyUrl] = useState('');
-  const [personalUrl, setPersonalUrl] = useState('');
-  const [adsUrl, setAdsUrl] = useState('');
 
   // Generator состояния
   const [adProduct, setAdProduct] = useState('');
@@ -1549,412 +5485,889 @@ export default function Constructor() {
   const [creativeVisual, setCreativeVisual] = useState('');
   const [creativeDecor, setCreativeDecor] = useState('');
   const [creativeTone, setCreativeTone] = useState('');
+  const [prelandingSync, setPrelandingSync] = useState(null);
+  const [manualPrelandingMode, setManualPrelandingMode] = useState('templateStage');
+  const [isAiPrelandingBuilding, setIsAiPrelandingBuilding] = useState(false);
+  const [isAiPrelandingInvalidated, setIsAiPrelandingInvalidated] = useState(false);
+  const [prelandingAiImages, setPrelandingAiImages] = useState(null);
+  const [prelandingAiStatus, setPrelandingAiStatus] = useState('');
+  const [prelandingAiError, setPrelandingAiError] = useState('');
 
-  useEffect(() => {
-    localStorage.setItem('constructorProjectData', JSON.stringify(projectData));
-  }, [projectData]);
-
-  useEffect(() => {
-    if (!pendingScroll) return;
-    const timer = window.setTimeout(() => {
-      document.getElementById(pendingScroll)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      setPendingScroll(null);
-    }, 80);
-    return () => window.clearTimeout(timer);
-  }, [pendingScroll, tab, openGuideIndex]);
-
-  const openRoadmapStep = (step) => {
-    if (step.tab !== 'how') {
-      setTab(step.tab);
-      setPendingScroll(null);
-      return;
+  const applyAuthorizedClientProject = (account) => {
+    const nextProject = loadSavedProject(account);
+    const displayName = nextProject.clientDisplayName || account?.label || '';
+    setProjectData(nextProject);
+    setUsage(readAccountUsage(account));
+    if (account && !isUnlimitedAccount(account)) {
+      setName(displayName);
+      const firstName = String(displayName || '').trim().split(/\s+/)[0] || '';
+      if (firstName) setShortName(firstName);
     }
-
-    setTab('how');
-    if (typeof step.guideIndex === 'number') {
-      setOpenGuideIndex(step.guideIndex);
-      setPendingScroll(`guide-section-${step.guideIndex}`);
-      return;
-    }
-
-    setPendingScroll(step.scrollTo || 'project-panel');
+    setAuthorizedClient(account);
   };
 
-  const setProjectValue = (key, value) => setProjectData(prev => ({ ...prev, [key]: value }));
+  useEffect(() => {
+    if (isOwnerOnlyMode()) return;
+    const params = new URLSearchParams(window.location.search);
+    const wantsAdmin = params.get('admin') === '1' || params.get('owner') === 'admin';
+    if (!wantsAdmin) return;
+    const adminAccount = findClientAccount('admin');
+    if (!adminAccount) return;
+    try {
+      localStorage.setItem(AUTH_STORAGE_KEY, adminAccount.login);
+      window.history.replaceState(null, '', window.location.pathname || '/');
+    } catch {
+      // State switch below is enough for the current tab.
+    }
+    applyAuthorizedClientProject(adminAccount);
+  }, []);
+
+  useEffect(() => {
+    if (!authorizedClient) return;
+    saveProjectForAccount(authorizedClient, projectData);
+    if (!isUnlimitedAccount(authorizedClient)) return;
+    try {
+      localStorage.setItem(LEGACY_PROJECT_STORAGE_KEY, JSON.stringify(projectData));
+    } catch {
+      // The current session still works if localStorage is blocked.
+    }
+  }, [projectData, authorizedClient]);
+
+  useEffect(() => {
+    if (!authorizedClient) return;
+    const nextProject = loadSavedProject(authorizedClient);
+    setProjectData(nextProject);
+    setUsage(readAccountUsage(authorizedClient));
+    if (!isUnlimitedAccount(authorizedClient)) {
+      const displayName = nextProject.clientDisplayName || authorizedClient?.label || '';
+      setName(displayName);
+      const firstName = String(displayName || '').trim().split(/\s+/)[0] || '';
+      if (firstName) setShortName(firstName);
+    }
+  }, [authorizedClient]);
+
+  const bannerLimit = getAccountLimit(authorizedClient, 'banners');
+  const prelandingLimit = getAccountLimit(authorizedClient, 'prelandings');
+  const quota = {
+    unlimited: isUnlimitedAccount(authorizedClient),
+    bannersUsed: usage.banners,
+    prelandingsUsed: usage.prelandings,
+    bannerLimit,
+    prelandingLimit,
+    bannerBlocked: !isUnlimitedAccount(authorizedClient) && usage.banners >= bannerLimit,
+    prelandingBlocked: !isUnlimitedAccount(authorizedClient) && usage.prelandings >= prelandingLimit
+  };
+  const prelandingRuntimeProjectData = useMemo(() => {
+    const landingName = String(landingRuntimeData.landingName || projectData.clientDisplayName || creativeHeadline || 'Лендинг').trim();
+    const landingCode = String(landingRuntimeData.landingCode || '').trim();
+    const codeToken = cleanVariantToken(landingCode || landingName || 'landing');
+    const derivedClientId = `landing_${codeToken}`;
+
+    return {
+      ...projectData,
+      clientDisplayName: landingName,
+      clientName: landingName,
+      clientCode: derivedClientId,
+      partnerCode: landingCode || codeToken,
+      metrikaId: String(landingRuntimeData.counterId || projectData.metrikaId || '').trim(),
+      prelandingLink: ''
+    };
+  }, [projectData, landingRuntimeData, creativeHeadline]);
+  const landingRuntimeInputKey = useMemo(
+    () => buildAtmospaceRuntimeInputKey(landingRuntimeData),
+    [landingRuntimeData]
+  );
+  const activeLandingRuntimeArtifact = useMemo(() => {
+    if (!landingRuntimeArtifact?.publicLandingKey) return null;
+    if (landingRuntimeArtifact.inputKey && landingRuntimeArtifact.inputKey !== landingRuntimeInputKey) return null;
+    return landingRuntimeArtifact;
+  }, [landingRuntimeArtifact, landingRuntimeInputKey]);
+  const landingRuntimeMeta = useMemo(() => {
+    const landingName = String(landingRuntimeData.landingName || prelandingRuntimeProjectData.clientDisplayName || creativeHeadline || 'Лендинг').trim();
+
+    return {
+      runtimeVersion: ATMOSPACE_GENERATED_RUNTIME_VERSION,
+      apiBaseUrl: ATMOSPACE_PUBLIC_API_BASE_URL,
+      initEndpoint: ATMOSPACE_INIT_ENDPOINT,
+      clickEndpoint: ATMOSPACE_CLICK_ENDPOINT,
+      publicLandingKey: activeLandingRuntimeArtifact?.publicLandingKey || '',
+      counterId: activeLandingRuntimeArtifact?.counterId || String(landingRuntimeData.counterId || '').trim(),
+      landingName,
+      landingCode: activeLandingRuntimeArtifact?.landingCode || String(landingRuntimeData.landingCode || '').trim()
+    };
+  }, [landingRuntimeData, activeLandingRuntimeArtifact, prelandingRuntimeProjectData, creativeHeadline]);
+  const prelandingRuntimeValidation = useMemo(() => validateAtmospaceLandingInput({
+    ...landingRuntimeData,
+    serverOnlyAdGoalCredential: activeLandingRuntimeArtifact?.publicLandingKey
+      ? landingRuntimeData.serverOnlyAdGoalCredential || 'already-verified'
+      : landingRuntimeData.serverOnlyAdGoalCredential
+  }), [landingRuntimeData, activeLandingRuntimeArtifact]);
+  const prelandingRuntimeMissing = useMemo(() => {
+    if (activeLandingRuntimeArtifact?.publicLandingKey) return [];
+    return prelandingRuntimeValidation.errors.map((error) => error.message);
+  }, [prelandingRuntimeValidation, activeLandingRuntimeArtifact]);
+  const prelandingConfigReady = prelandingRuntimeMissing.length === 0;
+  const hasPrelandingKeys = prelandingConfigReady;
+  const consumeQuota = (key) => {
+    if (!authorizedClient || isUnlimitedAccount(authorizedClient)) return true;
+    const limit = getAccountLimit(authorizedClient, key);
+    const current = readAccountUsage(authorizedClient);
+    if ((current[key] || 0) >= limit) return false;
+    const next = { ...current, [key]: (current[key] || 0) + 1 };
+    saveAccountUsage(authorizedClient, next);
+    setUsage(next);
+    return true;
+  };
+  const consumeBannerQuota = () => consumeQuota('banners');
+  const consumePrelandingQuota = () => consumeQuota('prelandings');
+  const selectedPrelandingTemplateId = [1, 2, 3].includes(Number(tpl)) ? Number(tpl) : 1;
+  const prelandingImageBuildKey = useMemo(() => [
+    manualPrelandingMode,
+    selectedPrelandingTemplateId,
+    activePresetId || '',
+    style || '',
+    palette || '',
+    layout || '',
+    typo || '',
+    Array.isArray(effects) ? effects.join(',') : '',
+    String(creativeHeadline || '').trim(),
+    String(creativeMethod || '').trim(),
+    landingRuntimeInputKey
+  ].join('|'), [
+    manualPrelandingMode,
+    selectedPrelandingTemplateId,
+    activePresetId,
+    style,
+    palette,
+    layout,
+    typo,
+    effects,
+    creativeHeadline,
+    creativeMethod,
+    landingRuntimeInputKey
+  ]);
+  const currentPrelandingAiImages = prelandingAiImages?.key === prelandingImageBuildKey
+    ? prelandingAiImages.images
+    : null;
+  const currentPrelandingDesignRoute = prelandingAiImages?.key === prelandingImageBuildKey
+    ? prelandingAiImages.designRoute
+    : null;
+  const currentPrelandingVariantMeta = prelandingAiImages?.key === prelandingImageBuildKey
+    ? prelandingAiImages.meta
+    : null;
+  const effectivePrelandingVariantMeta = useMemo(() => ({
+    ...(currentPrelandingVariantMeta || {}),
+    ...landingRuntimeMeta,
+    designVariant: currentPrelandingVariantMeta?.landingVariant || '',
+    generatorBuild: currentPrelandingVariantMeta?.generatorBuild || ''
+  }), [currentPrelandingVariantMeta, landingRuntimeMeta]);
+  const isQuizPrelandingMode = manualPrelandingMode === 'directionQuiz'
+    || manualPrelandingMode === 'personalRouteQuiz'
+    || manualPrelandingMode === 'barrierProfileQuiz';
+  const prelandingAiImagesReady = manualPrelandingMode === 'minimalCompare'
+    ? Boolean(prelandingAiImages?.key === prelandingImageBuildKey)
+    : isQuizPrelandingMode
+      ? Boolean(prelandingAiImages?.key === prelandingImageBuildKey && currentPrelandingAiImages?.sceneImage)
+      : Boolean(
+        currentPrelandingAiImages?.sceneImage
+        && currentPrelandingAiImages?.valueImage
+        && currentPrelandingAiImages?.ctaImage
+      );
+  const prelandingNeedsTemplate = manualPrelandingMode === 'templateStage';
+  const prelandingTemplateReady = !prelandingNeedsTemplate || Boolean(tpl);
+  const canGeneratePrelandingAi = Boolean(
+    hasPrelandingKeys
+    && prelandingTemplateReady
+    && style
+    && palette
+    && !isAiPrelandingBuilding
+    && !quota.prelandingBlocked
+  );
+
+  useEffect(() => {
+    if (prelandingAiImages?.key === prelandingImageBuildKey) return;
+    setPrelandingAiError('');
+    setPrelandingAiStatus('');
+  }, [prelandingImageBuildKey, prelandingAiImages?.key]);
+
+  const handleGeneratePrelandingAiImages = async () => {
+    if (!hasPrelandingKeys) {
+      setPrelandingAiError(prelandingRuntimeMissing[0] || 'Проверьте четыре поля серверной сборки.');
+      return;
+    }
+    if (!(prelandingTemplateReady && style && palette)) {
+      setPrelandingAiError(prelandingNeedsTemplate
+        ? 'Сначала выберите один из 3 шаблонов, стиль и палитру предлендинга.'
+        : 'Сначала выберите стиль и палитру предлендинга.');
+      return;
+    }
+    if (quota.prelandingBlocked) {
+      setPrelandingAiError(`Лимит AI-предлендингов для этого профиля исчерпан: ${quota.prelandingsUsed || 0}/${quota.prelandingLimit || 0}.`);
+      return;
+    }
+
+    const buildKey = prelandingImageBuildKey;
+    const resumableAiState = prelandingAiImages?.key === buildKey && !prelandingAiImagesReady
+      ? prelandingAiImages
+      : null;
+    const designRoute = resumableAiState?.designRoute || nextPrelandingDesignRoute(manualPrelandingMode);
+    const visualMemory = readPrelandingVisualMemory();
+    const visualRoute = resumableAiState?.visualRoute || nextPrelandingVisualRoute();
+    const effectiveTemplateId = manualPrelandingMode === 'templateStage'
+      ? selectedPrelandingTemplateId
+      : 1;
+    const effectiveStyle = designRoute?.style || style;
+    const effectivePalette = designRoute?.palette || palette;
+    const variantMeta = resumableAiState?.meta || makePrelandingVariantMeta({
+        projectData: prelandingRuntimeProjectData,
+        mode: manualPrelandingMode,
+        templateId: effectiveTemplateId,
+        style: effectiveStyle,
+        palette: effectivePalette,
+        title: creativeHeadline,
+        text: creativeMethod,
+        routeId: `${designRoute?.id || 'design'}-${visualRoute?.id || 'visual'}`
+      });
+    const specs = buildPrelandingImageSpecs({
+      mode: manualPrelandingMode,
+      templateId: effectiveTemplateId,
+      style: effectiveStyle,
+      palette: effectivePalette,
+      headline: creativeHeadline,
+      text: creativeMethod,
+      projectData: prelandingRuntimeProjectData,
+      designRoute,
+      visualRoute,
+      visualMemory
+    });
+    const expectedImageCount = specs.length;
+
+    setIsAiPrelandingBuilding(true);
+    setIsAiPrelandingInvalidated(false);
+    setPrelandingSync(null);
+    if (!resumableAiState) setPrelandingAiImages(null);
+    setPrelandingAiError('');
+    setPrelandingAiStatus(resumableAiState
+      ? 'Продолжаю сборку: готовые кадры сохранены, генерирую только недостающие.'
+      : manualPrelandingMode === 'minimalCompare'
+      ? 'Собираю минималистичный Tilda HTML без AI-картинок.'
+      : isQuizPrelandingMode
+        ? 'OpenAI генерирует одну смысловую hero-картинку для интерактивного квиза. Если ответ зависнет, конструктор сам перезапустит попытку.'
+        : 'OpenAI генерирует 3 разные картинки для предлендинга. Если ответ зависнет, конструктор сам перезапустит попытку.');
+
+    const cachedImages = resumableAiState?.images || {};
+    let readyImageCount = Object.values(cachedImages).filter(Boolean).length;
+
+    try {
+      let runtimeArtifact = activeLandingRuntimeArtifact;
+      if (!runtimeArtifact?.publicLandingKey) {
+        const runtimePayload = prelandingRuntimeValidation.value;
+        setPrelandingAiStatus('Создаю серверный лендинг Atmospace и получаю publicLandingKey. Токен в HTML не попадёт.');
+        const runtimeResponse = await postJsonWithTimeout(ATMOSPACE_GENERATE_ENDPOINT, runtimePayload, {
+          timeoutMs: 45000,
+          timeoutLabel: 'Atmospace'
+        });
+        runtimeArtifact = normalizeAtmospaceGenerateResult(runtimeResponse, runtimePayload);
+        setLandingRuntimeArtifact(runtimeArtifact);
+        saveAtmospaceLandingArtifact(runtimeArtifact);
+        setLandingRuntimeData((prev) => ({
+          ...prev,
+          serverOnlyAdGoalCredential: ''
+        }));
+      }
+
+      if (manualPrelandingMode === 'minimalCompare') {
+        setPrelandingAiImages({
+          key: buildKey,
+          images: {
+            sceneImage: '',
+            valueImage: '',
+            ctaImage: ''
+          },
+          designRoute,
+          visualRoute: null,
+          meta: variantMeta,
+          createdAt: new Date().toISOString()
+        });
+        setPrelandingAiStatus(`Формат 4 готов: ${designRoute?.label || 'тихий минимализм'}. HTML можно копировать.`);
+        consumePrelandingQuota();
+        return;
+      }
+      const slotLabels = {
+        hero: 'hero-картинка',
+        value: 'блок ценности',
+        cta: 'CTA-блок'
+      };
+      const stateKeyBySlot = {
+        hero: 'sceneImage',
+        value: 'valueImage',
+        cta: 'ctaImage'
+      };
+      const generationProgress = new Map(specs.map((spec) => [spec.slot, {
+        label: slotLabels[spec.slot] || spec.slot,
+        attempt: 0,
+        maxAttempts: PRELANDING_IMAGE_ATTEMPTS,
+        phase: cachedImages[stateKeyBySlot[spec.slot]] ? 'done' : 'queued',
+        done: Boolean(cachedImages[stateKeyBySlot[spec.slot]])
+      }]));
+      const specsToGenerate = specs.filter((spec) => !cachedImages[stateKeyBySlot[spec.slot]]);
+      const updateParallelGenerationStatus = () => {
+        const states = Array.from(generationProgress.values());
+        const doneCount = states.filter((state) => state.done).length;
+        const activeSummary = states
+          .filter((state) => !state.done)
+          .map((state) => `${state.label}: ${state.attempt ? `попытка ${state.attempt}/${state.maxAttempts}` : 'запуск'}`)
+          .join(' · ');
+        setPrelandingAiStatus(doneCount === states.length
+          ? `Готово ${doneCount}/${states.length}. Собираю HTML...`
+          : states.length === 1
+            ? `Генерирую смысловую hero-картинку. ${activeSummary}`
+            : `Одновременно генерирую ${states.length} AI-картинки. Готово ${doneCount}/${states.length}. ${activeSummary}`);
+      };
+
+      updateParallelGenerationStatus();
+      const settledResults = await Promise.allSettled(specsToGenerate.map(async (spec) => {
+        const progress = generationProgress.get(spec.slot);
+        const imageUrl = await generatePrelandingImage(spec, {
+          maxAttempts: PRELANDING_IMAGE_ATTEMPTS,
+          timeoutMs: PRELANDING_IMAGE_TIMEOUT_MS,
+          retryDelayMs: PRELANDING_IMAGE_RETRY_DELAY_MS,
+          imageLoadTimeoutMs: PRELANDING_IMAGE_LOAD_TIMEOUT_MS,
+          onAttempt: ({ attempt, maxAttempts, phase }) => {
+            Object.assign(progress, { attempt, maxAttempts, phase });
+            updateParallelGenerationStatus();
+          }
+        });
+        Object.assign(progress, { done: true, phase: 'done' });
+        updateParallelGenerationStatus();
+        return [spec.slot, imageUrl];
+      }));
+      const successfulResults = settledResults
+        .filter((result) => result.status === 'fulfilled')
+        .map((result) => result.value);
+      const generatedImages = Object.fromEntries(successfulResults);
+      const mergedImages = {
+        sceneImage: cachedImages.sceneImage || generatedImages.hero || '',
+        valueImage: cachedImages.valueImage || generatedImages.value || '',
+        ctaImage: cachedImages.ctaImage || generatedImages.cta || ''
+      };
+      readyImageCount = Object.values(mergedImages).filter(Boolean).length;
+      setPrelandingAiImages({
+        key: buildKey,
+        images: mergedImages,
+        designRoute,
+        visualRoute,
+        meta: variantMeta,
+        createdAt: resumableAiState?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+      const failedResult = settledResults.find((result) => result.status === 'rejected');
+      if (failedResult) throw failedResult.reason;
+      setPrelandingAiStatus(`${expectedImageCount === 1 ? 'AI-картинка и дизайн готовы' : 'AI-картинки и дизайн готовы'}: ${designRoute?.label || 'дизайн'} + ${visualRoute?.label || 'визуальный маршрут'}. HTML можно копировать.`);
+      consumePrelandingQuota();
+    } catch (error) {
+      setPrelandingAiError(String(error?.message || error || 'OpenAI долго не возвращает картинку. Запустите генерацию ещё раз, конструктор продолжит дожимать кадры.'));
+      setPrelandingAiStatus(readyImageCount
+        ? `Сохранено готовых кадров: ${readyImageCount}/${expectedImageCount}. Повторите генерацию — конструктор продолжит только с недостающих.`
+        : 'Кадры пока не готовы. Повторите генерацию: конструктор перезапустит запрос.');
+    } finally {
+      setIsAiPrelandingBuilding(false);
+    }
+  };
+  const handleLogin = (account) => {
+    if (isOwnerOnlyMode() && !isOwnerAccount(account)) {
+      setAuthorizedClient(null);
+      return;
+    }
+    try {
+      localStorage.setItem(AUTH_STORAGE_KEY, account.login);
+    } catch {
+      // The authorized state in React is enough for the current browser session.
+    }
+    applyAuthorizedClientProject(account);
+  };
+  const handleLogout = () => {
+    try {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+    } catch {
+      // Ignore storage errors; state reset below is enough for the current session.
+    }
+    setAuthorizedClient(null);
+    setUsage({ banners: 0, prelandings: 0 });
+  };
 
   const toggleEf = (id) => setEffects(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
 
   const applyPreset = (preset) => {
-    setTpl(preset.tpl); setStyle(preset.style); setPalette(preset.palette);
+    setTpl(preset.tpl || 1); setStyle(preset.style); setPalette(preset.palette);
     setTypo(preset.typo); setLayout(preset.layout); setEffects(preset.effects);
+    setActivePresetId(preset.id);
   };
 
-  const resetAll = () => { setTpl(null); setStyle(null); setPalette(null); setEffects([]); };
-
-  const canPre = tpl && style && palette;
-  const prompt = useMemo(() => canPre ? buildPrompt({ tpl, style, effects, palette, layout, typo }) : '', [tpl, style, palette, typo, layout, effects, canPre]);
-  const prelandingHtml = useMemo(() => canPre ? renderPrelandingHtml({ tpl, style, palette }) : '', [tpl, style, palette, canPre]);
-  const saleHtml = useMemo(() => genSale({ name, age, shortName, photo, offer, gender }), [name, age, shortName, photo, offer, gender]);
-  const offerHtml = useMemo(() => genOffer({ pay, tg, max }), [pay, tg, max]);
-  const docValues = useMemo(() => ({ docDate, operatorName, status, inn, ogrn, email, phone, privacyUrl, personalUrl, adsUrl }), [docDate, operatorName, status, inn, ogrn, email, phone, privacyUrl, personalUrl, adsUrl]);
-  const legalDocs = useMemo(() => makeLegalDocs(docValues), [docValues]);
-  const policyLabel = useMemo(() => makePolicyLabel(docValues), [docValues]);
-
-  const fillSaleDemo = () => {
-    const demo = SALE_DEFAULTS[gender === 'female' ? 'female' : 'male'];
-    setName(demo.name);
-    setAge(gender === 'female' ? '44' : '60');
-    setShortName(demo.shortName);
-    setPhoto(demo.photo);
-    setOffer(demo.offer);
-  };
-  const resetSale = () => { setName(''); setAge(''); setShortName(''); setPhoto(''); setOffer(''); };
-  const fillOfferDemo = () => { setPay(OFFER_DEFAULTS.pay); setTg(OFFER_DEFAULTS.tg); setMax(OFFER_DEFAULTS.max); };
-  const resetOffer = () => { setPay(''); setTg(''); setMax(''); };
-  const fillDocsDemo = () => {
-    setOperatorName('ИП Иванов Иван Иванович');
-    setStatus('ИП');
-    setInn('123456789012');
-    setOgrn('123456789012345');
-    setEmail('hello@example.ru');
-    setPhone('+7 900 000-00-00');
-    setPrivacyUrl('https://example.ru/privacy');
-    setPersonalUrl('https://example.ru/personal-data-consent');
-    setAdsUrl('https://example.ru/advertising-consent');
-  };
-  const resetDocs = () => {
-    setOperatorName('');
-    setStatus('ИП');
-    setInn('');
-    setOgrn('');
-    setEmail('');
-    setPhone('');
-    setPrivacyUrl('');
-    setPersonalUrl('');
-    setAdsUrl('');
+  const applyCoreMethodTemplate = (templateId) => {
+    const preset = CORE_METHOD_PRESETS.find((item) => item.tpl === Number(templateId)) || CORE_METHOD_PRESETS[0];
+    applyPreset(preset);
   };
 
-  // Прогресс воронки
+  const visiblePrelandingPresets = manualPrelandingMode === 'heroBlocks'
+    ? HERO_BLOCKS_PRESETS
+    : manualPrelandingMode === 'natureEditorial'
+      ? NATURE_EDITORIAL_PRESETS
+      : manualPrelandingMode === 'minimalCompare'
+        ? MINIMAL_COMPARE_PRESETS
+        : manualPrelandingMode === 'directionQuiz'
+          ? DIRECTION_QUIZ_PRESETS
+          : manualPrelandingMode === 'personalRouteQuiz'
+            ? PERSONAL_ROUTE_QUIZ_PRESETS
+            : manualPrelandingMode === 'barrierProfileQuiz'
+              ? BARRIER_PROFILE_QUIZ_PRESETS
+              : CORE_METHOD_PRESETS;
+
+  const resetAll = () => {
+    if (manualPrelandingMode === 'heroBlocks') {
+      applyPreset(HERO_BLOCKS_PRESETS[0]);
+      return;
+    }
+    if (manualPrelandingMode === 'natureEditorial') {
+      applyPreset(NATURE_EDITORIAL_PRESETS[0]);
+      return;
+    }
+    if (manualPrelandingMode === 'minimalCompare') {
+      applyPreset(MINIMAL_COMPARE_PRESETS[0]);
+      return;
+    }
+    if (manualPrelandingMode === 'directionQuiz') {
+      applyPreset(DIRECTION_QUIZ_PRESETS[0]);
+      return;
+    }
+    if (manualPrelandingMode === 'personalRouteQuiz') {
+      applyPreset(PERSONAL_ROUTE_QUIZ_PRESETS[0]);
+      return;
+    }
+    if (manualPrelandingMode === 'barrierProfileQuiz') {
+      applyPreset(BARRIER_PROFILE_QUIZ_PRESETS[0]);
+      return;
+    }
+    applyCoreMethodTemplate(1);
+  };
+
+  const prelandingOutputLocked = isAiPrelandingBuilding || isAiPrelandingInvalidated;
+  const canPre = Boolean(!prelandingOutputLocked && prelandingTemplateReady && style && palette && hasPrelandingKeys && activeLandingRuntimeArtifact?.publicLandingKey && prelandingAiImagesReady);
+  const prelandingHtml = useMemo(() => {
+    if (prelandingOutputLocked) return '';
+    if (!hasPrelandingKeys) return '';
+    if (!activeLandingRuntimeArtifact?.publicLandingKey) return '';
+    const enteredHeadline = String(creativeHeadline || '').trim();
+    const enteredText = String(creativeMethod || '').trim();
+    if (!(prelandingTemplateReady && style && palette)) return '';
+    if (!prelandingAiImagesReady) return '';
+    if (prelandingSync?.fromBanner) {
+      return renderPrelandingHtml({
+          tpl: tpl || 1,
+          style: 'glassmorphism',
+          palette: palette || 'blue-trust',
+          photo,
+          layout,
+          typo,
+          effects,
+          overrides: {
+            ...prelandingSync,
+            sceneImage: currentPrelandingAiImages.sceneImage,
+            valueImage: currentPrelandingAiImages.valueImage,
+            ctaImage: currentPrelandingAiImages.ctaImage
+          },
+          projectData: prelandingRuntimeProjectData,
+          landingMeta: effectivePrelandingVariantMeta
+      });
+    }
+    if (manualPrelandingMode === 'templateStage') {
+      const selectedTemplateId = [1, 2, 3].includes(Number(tpl)) ? Number(tpl) : 1;
+      const baseContent = PRELANDING_CONTENT[selectedTemplateId] || PRELANDING_CONTENT[1];
+      const coreDesign = currentPrelandingDesignRoute || CORE_METHOD_DESIGN_ROUTES[(selectedTemplateId - 1 + CORE_METHOD_DESIGN_ROUTES.length) % CORE_METHOD_DESIGN_ROUTES.length];
+      const title = enteredHeadline || stripHtml(baseContent.titleHtml || baseContent.title || 'Откройте короткий разбор и первый шаг');
+      const landingLogic = resolveClientPrelandingLogic(title, enteredText || baseContent.trustTitle || baseContent.valueTitle, 'templateStage');
+      const textLead = enteredText || landingLogic.lead;
+      const corePainItems = landingLogic.painItems?.length
+        ? landingLogic.painItems
+        : landingLogic.cards.map((item) => `${item.title}: ${item.text}`);
+      const imageSeed = `manual-core-${selectedTemplateId}-${coreDesign?.id || style}-${coreDesign?.palette || palette}-${title}-${textLead}`;
+      return renderPrelandingHtml({
+        tpl: selectedTemplateId,
+        style: coreDesign?.themeStyle || style,
+        palette: coreDesign?.palette || palette,
+        photo,
+        layout,
+        typo: coreDesign?.typo || typo,
+        effects: coreDesign?.effects || effects,
+        overrides: {
+          prelandingMode: 'coreMethod',
+          renderMode: 'classicText',
+          templateId: selectedTemplateId,
+          themeStyle: coreDesign?.themeStyle || CORE_PRELANDING_THEME_STYLES[selectedTemplateId] || 'darkYellow',
+          coreDesignClass: coreDesign?.coreDesignClass || '',
+          landingVariant: CORE_PRELANDING_VARIANTS[selectedTemplateId] || 'tf-v-spotlight',
+          designFamily: `core-method-${coreDesign?.id || 'default'}`,
+          variantKey: imageSeed,
+          visualSource: 'scene',
+          badge: landingLogic.badge,
+          title,
+          titleHtml: esc(title),
+          pills: [],
+          painTitle: landingLogic.label,
+          painItems: corePainItems,
+          painAlert: landingLogic.defaultText,
+          trustTitle: textLead,
+          trustSmall: landingLogic.trustSmall,
+          methodName: landingLogic.methodName,
+          valueTitle: landingLogic.valueTitle,
+          valueItems: landingLogic.valueItems,
+          cards: landingLogic.cards,
+          proofItems: landingLogic.proofItems,
+          liveNote: landingLogic.botTransition,
+          ctaLead: landingLogic.ctaLead,
+          actionSubtitle: landingLogic.ctaLead,
+          actionTitle: landingLogic.actionTitle,
+          sceneImage: currentPrelandingAiImages.sceneImage,
+          valueImage: currentPrelandingAiImages.valueImage,
+          ctaImage: currentPrelandingAiImages.ctaImage
+        },
+        projectData: prelandingRuntimeProjectData,
+        landingMeta: effectivePrelandingVariantMeta
+      });
+    }
+    if (manualPrelandingMode === 'heroBlocks') {
+      const heroPreset = HERO_BLOCKS_PRESETS.find((preset) => preset.id === activePresetId) || HERO_BLOCKS_PRESETS[0];
+      const heroDesign = currentPrelandingDesignRoute || heroPreset;
+      const heroTemplateId = 1;
+      const heroStyle = heroDesign.style || heroPreset.style;
+      const heroPalette = heroDesign.palette || heroPreset.palette;
+      const heroLayout = heroDesign.layout || heroPreset.layout;
+      const heroTypo = heroDesign.typo || heroPreset.typo;
+      const heroEffects = heroDesign.effects || heroPreset.effects || [];
+      const title = enteredHeadline || 'Начните движение к цели без очередного отката назад';
+      const landingLogic = resolveClientPrelandingLogic(title, enteredText, 'heroBlocks');
+      const textLead = enteredText || landingLogic.lead;
+      const imageSeed = `manual-hero-blocks-${heroDesign.id || heroPreset.id}-${heroStyle}-${heroPalette}-${heroLayout}-${heroTypo}-${title}-${textLead}`;
+      return renderPrelandingHtml({
+        tpl: heroTemplateId,
+        style: heroStyle,
+        palette: heroPalette,
+        photo,
+        layout: heroLayout,
+        typo: heroTypo,
+        effects: heroEffects,
+        overrides: {
+          prelandingMode: 'heroBlocks',
+          renderMode: 'bannerMatched',
+          templateId: heroTemplateId,
+          themeStyle: heroStyle,
+          designFamily: `hero-blocks-${heroDesign.id || heroLayout || 'split'}`,
+          landingVariant: `hb-${heroStyle || 'style'}-${heroLayout || 'split'}`,
+          layoutMode: heroLayout,
+          typeMode: heroTypo,
+          effects: heroEffects,
+          variantKey: imageSeed,
+          visualSource: 'scene',
+          badge: landingLogic.badge,
+          title,
+          titleHtml: esc(title),
+          pills: [],
+          painTitle: landingLogic.label,
+          trustTitle: textLead,
+          trustSmall: landingLogic.trustSmall,
+          methodName: landingLogic.methodName,
+          valueTitle: landingLogic.valueTitle,
+          valueItems: landingLogic.valueItems,
+          sceneImage: currentPrelandingAiImages.sceneImage,
+          valueImage: currentPrelandingAiImages.valueImage,
+          ctaImage: currentPrelandingAiImages.ctaImage,
+          cards: landingLogic.cards,
+          proofItems: landingLogic.proofItems,
+          liveNote: landingLogic.botTransition,
+          ctaLead: landingLogic.ctaLead,
+          actionSubtitle: landingLogic.ctaLead,
+          actionTitle: landingLogic.actionTitle,
+          showProof: true,
+          showProofGrid: true
+        },
+        projectData: prelandingRuntimeProjectData,
+        landingMeta: effectivePrelandingVariantMeta
+      });
+    }
+    if (manualPrelandingMode === 'natureEditorial') {
+      const naturePreset = NATURE_EDITORIAL_PRESETS.find((preset) => preset.id === activePresetId) || NATURE_EDITORIAL_PRESETS[0];
+      const natureDesign = currentPrelandingDesignRoute || naturePreset;
+      const natureStyle = natureDesign.style || naturePreset.style;
+      const naturePalette = natureDesign.palette || naturePreset.palette;
+      const natureLayout = natureDesign.layout || naturePreset.layout;
+      const natureTypo = natureDesign.typo || naturePreset.typo || 'playfair';
+      const natureEffects = natureDesign.effects || naturePreset.effects || [];
+      const title = enteredHeadline || 'Книги прочитаны. А жизнь всё ещё не меняется?';
+      const landingLogic = resolveClientPrelandingLogic(title, enteredText, 'natureEditorial');
+      const textLead = enteredText || landingLogic.lead;
+      const storyCards = buildTildaStoryCards(title, textLead, 'natureEditorial');
+      const imageSeed = `manual-nature-editorial-${natureDesign.id || naturePreset.id}-${natureStyle}-${naturePalette}-${natureLayout}-${title}-${textLead}`;
+      return renderPrelandingHtml({
+        tpl: 1,
+        style: natureStyle,
+        palette: naturePalette,
+        photo,
+        layout: natureLayout,
+        typo: natureTypo,
+        effects: natureEffects,
+        overrides: {
+          prelandingMode: 'natureEditorial',
+          renderMode: 'natureEditorial',
+          templateId: 1,
+          themeStyle: natureStyle,
+          designFamily: `nature-editorial-${natureDesign.id || naturePreset.id || 'sage'}`,
+          landingVariant: `nd-${natureStyle || 'nature'}-${naturePalette || 'paper'}`,
+          layoutMode: natureLayout,
+          typeMode: natureTypo,
+          effects: natureEffects,
+          variantKey: imageSeed,
+          visualSource: 'scene',
+          badge: landingLogic.badge,
+          title,
+          titleHtml: esc(title),
+          trustTitle: textLead,
+          trustSmall: landingLogic.trustSmall,
+          methodName: landingLogic.methodName,
+          painTitle: landingLogic.label,
+          painAlert: landingLogic.defaultText,
+          valueTitle: landingLogic.valueTitle,
+          valueItems: landingLogic.valueItems,
+          cards: storyCards,
+          proofItems: [],
+          liveNote: landingLogic.botTransition,
+          ctaLead: buildTildaCtaLead(title, textLead, 'natureEditorial'),
+          actionSubtitle: landingLogic.ctaLead,
+          actionTitle: landingLogic.actionTitle,
+          sceneImage: currentPrelandingAiImages.sceneImage,
+          valueImage: currentPrelandingAiImages.valueImage,
+          ctaImage: currentPrelandingAiImages.ctaImage
+        },
+        projectData: prelandingRuntimeProjectData,
+        landingMeta: effectivePrelandingVariantMeta
+      });
+    }
+    if (manualPrelandingMode === 'directionQuiz'
+      || manualPrelandingMode === 'personalRouteQuiz'
+      || manualPrelandingMode === 'barrierProfileQuiz') {
+      const isPersonalRoute = manualPrelandingMode === 'personalRouteQuiz';
+      const isBarrierProfile = manualPrelandingMode === 'barrierProfileQuiz';
+      const quizPresets = isBarrierProfile
+        ? BARRIER_PROFILE_QUIZ_PRESETS
+        : isPersonalRoute
+          ? PERSONAL_ROUTE_QUIZ_PRESETS
+          : DIRECTION_QUIZ_PRESETS;
+      const fallbackPreset = quizPresets[0];
+      const quizPreset = quizPresets.find((preset) => preset.id === activePresetId) || fallbackPreset;
+      const quizDesign = currentPrelandingDesignRoute || quizPreset;
+      const quizStyle = quizDesign.style || quizPreset.style;
+      const quizPalette = quizDesign.palette || quizPreset.palette;
+      const quizEffects = quizDesign.effects || quizPreset.effects || [];
+      const title = enteredHeadline || (isBarrierProfile
+        ? 'Почему в самый важный момент всё снова срывается?'
+        : isPersonalRoute
+          ? 'Как понять, что вы идёте не по своему маршруту?'
+          : 'Как найти направление, которое подходит именно вам?');
+      const landingLogic = resolveClientPrelandingLogic(title, enteredText, manualPrelandingMode);
+      const textLead = enteredText || landingLogic.lead;
+      const imageSeed = `manual-${manualPrelandingMode}-${quizDesign.id || quizPreset.id}-${quizStyle}-${quizPalette}-${title}-${textLead}`;
+      return renderPrelandingHtml({
+        tpl: 1,
+        style: quizStyle,
+        palette: quizPalette,
+        photo,
+        layout: 'quiz',
+        typo: 'manrope',
+        effects: quizEffects,
+        overrides: {
+          prelandingMode: manualPrelandingMode,
+          renderMode: isBarrierProfile
+            ? 'barrierProfileQuiz'
+            : isPersonalRoute
+              ? 'personalRouteQuiz'
+              : 'directionQuiz',
+          templateId: 1,
+          themeStyle: quizStyle,
+          designFamily: isBarrierProfile
+            ? 'barrier-profile-quiz'
+            : isPersonalRoute
+              ? 'personal-route-quiz'
+              : 'direction-quiz',
+          landingVariant: isBarrierProfile
+            ? `bpq-${quizDesign.id || quizPreset.id}`
+            : isPersonalRoute
+              ? `prq-${quizDesign.id || quizPreset.id}`
+              : `dq-${quizDesign.id || quizPreset.id}`,
+          layoutMode: 'quiz',
+          typeMode: 'manrope',
+          effects: quizEffects,
+          variantKey: imageSeed,
+          visualSource: 'scene',
+          badge: landingLogic.badge,
+          title,
+          titleHtml: esc(title),
+          trustTitle: textLead,
+          trustSmall: textLead,
+          methodName: landingLogic.methodName,
+          sceneImage: currentPrelandingAiImages.sceneImage,
+          valueImage: '',
+          ctaImage: '',
+          designRoute: quizDesign,
+          designRouteId: quizDesign.id || quizPreset.id
+        },
+        projectData: prelandingRuntimeProjectData,
+        landingMeta: effectivePrelandingVariantMeta
+      });
+    }
+    if (manualPrelandingMode === 'minimalCompare') {
+      const minimalPreset = MINIMAL_COMPARE_PRESETS.find((preset) => preset.id === activePresetId) || MINIMAL_COMPARE_PRESETS[0];
+      const minimalDesign = currentPrelandingDesignRoute || minimalPreset;
+      const minimalStyle = minimalDesign.style || minimalPreset.style;
+      const minimalPalette = minimalDesign.palette || minimalPreset.palette;
+      const minimalLayout = minimalDesign.layout || minimalPreset.layout || 'minimal';
+      const minimalTypo = minimalDesign.typo || minimalPreset.typo || 'inter';
+      const minimalEffects = minimalDesign.effects || minimalPreset.effects || ['fadein'];
+      const title = enteredHeadline || 'Смотрю на других и думаю: почему у меня не так?';
+      const landingLogic = resolveClientPrelandingLogic(title, enteredText, 'minimalCompare');
+      const textLead = enteredText || landingLogic.lead;
+      const imageSeed = `manual-minimal-compare-${minimalDesign.id || minimalPreset.id}-${minimalStyle}-${minimalPalette}-${title}-${textLead}`;
+      return renderPrelandingHtml({
+        tpl: 1,
+        style: minimalStyle,
+        palette: minimalPalette,
+        photo,
+        layout: minimalLayout,
+        typo: minimalTypo,
+        effects: minimalEffects,
+        overrides: {
+          prelandingMode: 'minimalCompare',
+          renderMode: 'minimalCompare',
+          templateId: 1,
+          themeStyle: minimalStyle,
+          designFamily: `minimal-compare-${minimalDesign.id || minimalPreset.id || 'noir'}`,
+          landingVariant: `mc-${minimalStyle || 'minimal'}-${minimalPalette || 'dark'}`,
+          layoutMode: minimalLayout,
+          typeMode: minimalTypo,
+          effects: minimalEffects,
+          variantKey: imageSeed,
+          visualSource: 'none',
+          badge: landingLogic.badge,
+          title,
+          titleHtml: esc(title),
+          trustTitle: textLead,
+          trustSmall: landingLogic.trustSmall,
+          methodName: landingLogic.methodName,
+          valueTitle: landingLogic.valueTitle,
+          valueItems: landingLogic.valueItems,
+          cards: landingLogic.cards,
+          proofItems: [],
+          liveNote: landingLogic.botTransition,
+          ctaLead: landingLogic.ctaLead,
+          actionSubtitle: landingLogic.ctaLead,
+          actionTitle: landingLogic.actionTitle
+        },
+        projectData: prelandingRuntimeProjectData,
+        landingMeta: effectivePrelandingVariantMeta
+      });
+    }
+    return renderPrelandingHtml({
+      tpl: tpl || 1,
+      style,
+      palette,
+      photo,
+      layout,
+      typo,
+      effects,
+      overrides: prelandingSync,
+      projectData: prelandingRuntimeProjectData,
+      landingMeta: effectivePrelandingVariantMeta
+    });
+  }, [tpl, style, palette, layout, typo, effects, photo, prelandingSync, prelandingRuntimeProjectData, hasPrelandingKeys, activeLandingRuntimeArtifact?.publicLandingKey, prelandingOutputLocked, manualPrelandingMode, activePresetId, creativeHeadline, creativeMethod, prelandingAiImagesReady, currentPrelandingAiImages, currentPrelandingDesignRoute, effectivePrelandingVariantMeta, prelandingTemplateReady]);
+  const prelandingHtmlConfig = useMemo(
+    () => buildAtmospaceLandingConfig({
+      projectData: prelandingRuntimeProjectData,
+      ...landingRuntimeMeta
+    }),
+    [prelandingRuntimeProjectData, landingRuntimeMeta]
+  );
+  const prelandingHtmlValidation = useMemo(
+    () => validateAtmospaceTildaHtml(prelandingHtml, prelandingHtmlConfig),
+    [prelandingHtml, prelandingHtmlConfig]
+  );
+
+  const prelandingPresetForBannerStyle = (bannerStyle) => {
+    const map = {
+      blackRed: 'bannerBlackRed',
+      redWhite: 'bannerBlackRed',
+      darkYellow: 'bannerBlackYellow',
+      darkOrange: 'bannerBlackYellow',
+      splitBeforeAfter: 'bannerBlackYellow',
+      greenSystem: 'bannerGreen',
+      greenDark: 'bannerGreen',
+      moneyProof: 'bannerGreen',
+      blueTrust: 'bannerBlue',
+      cleanSystem: 'bannerBlue',
+      editorialGold: 'bannerWhiteGold',
+      whiteGoldPremium: 'bannerWhiteGold',
+      outdoorFreedom: 'bannerWhiteGold',
+      purple: 'purpleBreak',
+      documentaryNoir: 'documentaryReal',
+      newspaperShock: 'clientStory',
+      fintechRed: 'bannerBlackRed',
+      glassPremium: 'bannerBlue',
+      cosmicMetaphor: 'purpleBreak',
+      animalMetaphor: 'bannerGreen'
+    };
+    return PRESETS.find((preset) => preset.id === (map[bannerStyle] || 'clientStory')) || PRESETS[0];
+  };
+
+  const applyAiIdeaToFlow = (idea) => {
+    setCreativeHeadline(idea.headline || '');
+    setCreativeMethod(idea.decoration || idea.adText || '');
+    setCreativeVisual(idea.visualPrompt || '');
+    setCreativeDecor(idea.decoration || '');
+    setCreativeTone('Хлестко, по-человечески, без воды и без инфоцыганщины');
+    setIsAiPrelandingBuilding(false);
+    setIsAiPrelandingInvalidated(false);
+    setPrelandingSync(idea.prelandingSync || null);
+    applyPreset(prelandingPresetForBannerStyle(idea.bannerStyle));
+    if (idea.heroImage) setPhoto(idea.heroImage);
+  };
+
+  const handleAiPrelandingBuildStart = () => {
+    setIsAiPrelandingBuilding(true);
+    setIsAiPrelandingInvalidated(true);
+    setPrelandingSync(null);
+  };
+
+  const handleAiPrelandingBuildEnd = () => {
+    setIsAiPrelandingBuilding(false);
+  };
+
+  // Прогресс сборки лендинга
   const progress = useMemo(() => {
     let p = 0;
-    if (canPre) p += 25;
-    if (name && age && shortName && photo && offer) p += 25;
-    if (pay && tg && max) p += 25;
-    if (operatorName && inn && email && phone) p += 25;
-    return p;
-  }, [canPre, name, age, shortName, photo, offer, pay, tg, max, operatorName, inn, email, phone]);
-
-  // Промт для генератора заголовков и объявлений
-  const adPrompt = useMemo(() => {
-    if (!adProduct || !adAudience) return '';
-    return `Ты — профессиональный специалист по рекламным текстам Яндекс.Директа и РСЯ.
-Задача: сначала разобрать исходники, затем создать заголовки, тексты и быстрые ссылки для рекламы.
-
-═══════════════════════════════════════════
-0. КРИТИЧНО ДЛЯ МОДЕРАЦИИ ЯНДЕКСА
-═══════════════════════════════════════════
-
-Если тема относится к продвижению заработка, в объявлении должен быть понятен объект продвижения: что именно человек увидит или получит на посадочной странице.
-Не придумывай метод самостоятельно. Используй только то, что указано в полях продукта, ниши, посадочной страницы и оффера.
-
-НЕЛЬЗЯ:
-• гарантировать быстрый доход, успешные сделки, безопасный заработок;
-• обещать нереалистичную прибыль;
-• писать "5000Р за 2 часа", "доход 200 000", "без рисков", "гарантированно";
-• использовать туманные фразы без раскрытия: "способ заработка", "секретная схема", "метод дохода";
-• упоминать банки, карты, кредиты, платежи и оформление финансовых продуктов в холодной рекламе.
-
-МОЖНО:
-• ясно называть формат: разбор, практикум, инструкция, маршрут, чек-лист, мини-лендинг, бот, оффер;
-• объяснять, что человек увидит после клика;
-• брать формулировки с посадочной страницы и сокращать их под лимиты;
-• писать нейтрально, без гарантии результата.
-
-═══════════════════════════════════════════
-1. ИСХОДНЫЙ КОНТЕКСТ
-═══════════════════════════════════════════
-
-ПРОДУКТ/УСЛУГА: ${adProduct}
-
-ЦЕЛЕВАЯ АУДИТОРИЯ: ${adAudience}
-
-${adPain ? `ОСНОВНЫЕ БОЛИ КЛИЕНТОВ: ${adPain}\n` : ''}
-${adBenefit ? `ГЛАВНОЕ ПРЕИМУЩЕСТВО: ${adBenefit}\n` : ''}
-${adNiche ? `НИША/КАТЕГОРИЯ: ${adNiche}\n` : ''}
-
-═══════════════════════════════════════════
-2. ЭТАП РАЗБОРА. ПРОПУСКАТЬ НЕЛЬЗЯ
-═══════════════════════════════════════════
-
-Сначала зафиксируй:
-• кто целевая аудитория;
-• что её бесит и от чего она устала;
-• какие прошлые попытки не сработали;
-• чего человек хочет, но боится очередного обмана;
-• какой конкретный объект продвижения указан в исходнике;
-• какие фразы из посадочной страницы можно безопасно сократить для объявления;
-• какие слова лучше не использовать из-за модерации.
-
-После разбора выведи короткий блок:
-"Я понял ЦА так: ..."
-"Главная боль: ..."
-"Что именно продвигаем для модерации: ..."
-
-═══════════════════════════════════════════
-3. ЗАГОЛОВКИ. СНАЧАЛА ОНИ, ПОТОМ КРЕАТИВЫ
-═══════════════════════════════════════════
-
-Создай 70 заголовков: по 10 в каждом стиле.
-Каждый заголовок до 56 символов, одно слово не длиннее 22 символов.
-После каждого заголовка укажи точное количество символов.
-
-Стили:
-1. Прямая реклама — честно о продукте без обиняков.
-2. Боль аудитории — что реально бесит и достало.
-3. История с интригой — начало личной истории.
-4. Разрушение мифа — почему курсы/контент не обязательны.
-5. Предупреждение — что ломает запуски, но без запугивания.
-6. Акцент на инструмент — РСЯ, BotHelp, чат-боты, мини-лендинги.
-7. Тест терминов — воронка, связка, маршрут, система, практикум.
-
-Требования:
-• заголовок должен быть самодостаточным даже без текста объявления;
-• заголовок должен обращаться к нашей ЦА, а не быть универсальным;
-• в части заголовков явно называй объект продвижения из исходника;
-• не копируй продающую историю дословно, бери только смысл;
-• избегай одинаковой структуры, чтобы объявления не выглядели клонами.
-
-═══════════════════════════════════════════
-4. ОТБОР ДЛЯ СТАРТА
-═══════════════════════════════════════════
-
-Из 70 заголовков выбери 15 для первого запуска:
-• 3 группы по 5 заголовков;
-• каждая группа = один сегмент/одна боль/одна гипотеза;
-• объясни, почему эти 15 лучше остальных;
-• рядом с каждым заголовком напиши, на что он бьёт: боль, желание, метод или возражение.
-
-═══════════════════════════════════════════
-5. ТЕКСТЫ ОБЪЯВЛЕНИЙ
-═══════════════════════════════════════════
-
-Создай 10 универсальных текстов объявления до 81 символа.
-Они должны подходить к выбранным 15 заголовкам.
-После каждого текста укажи точное количество символов.
-Текст должен раскрывать объект продвижения или следующий шаг: разбор, практикум, маршрут, инструкция, видео, бот.
-
-═══════════════════════════════════════════
-6. БЫСТРЫЕ ССЫЛКИ И УТОЧНЕНИЯ
-═══════════════════════════════════════════
-
-Создай 8 быстрых ссылок.
-Формат:
-• Текст ссылки до 30 символов, без эмодзи и без ! ? [ ]
-• Описание до 60 символов
-• Они должны объяснять объект продвижения: как это работает, программа, документы, вопросы, стоимость, маршрут.
-
-Создай 10 уточнений до 25 символов.
-Спокойные тезисы без финансовых обещаний и без туманных фраз.
-
-═══════════════════════════════════════════
-7. ФОРМАТ ОТВЕТА
-═══════════════════════════════════════════
-
-Выдай:
-1. Разбор ЦА и метода.
-2. 70 заголовков по стилям.
-3. 15 заголовков для старта, распределённых по 3 группам.
-4. 10 текстов объявлений.
-5. 8 быстрых ссылок с описаниями.
-6. 10 уточнений.
-7. Красный список фраз, которые нельзя переносить в Директ.
-
-Никакой воды. Все тексты готовы к переносу в Яндекс.Директ.`;
-  }, [adProduct, adAudience, adPain, adBenefit, adNiche]);
-
-  const headlineSelectionPrompt = useMemo(() => {
-    if (!generatedHeadlines.trim()) return '';
-    return `Ты — редактор рекламных объявлений Яндекс.Директа для РСЯ и модерационный фильтр.
-
-У меня уже есть черновик от нейросети: 90 заголовков, 5 текстов объявления и 8 быстрых ссылок.
-Нужно не генерировать всё заново, а отобрать рабочий стартовый набор.
-
-КРИТИЧНО ДЛЯ МОДЕРАЦИИ:
-• в объявлениях о заработке нельзя обещать быстрый доход, гарантии, безопасность и нереалистичную прибыль;
-• нельзя писать туманные фразы без объяснения объекта продвижения;
-• человек и модератор должны понимать, что после клика будет разбор/практикум/маршрут/мини-лендинг/бот/оффер, а не абстрактный "способ заработка";
-• не использовать банки, карты, кредиты, платежи, выплаты и скрины денег в холодном объявлении.
-
-МОИ 90 ЗАГОЛОВКОВ:
-${generatedHeadlines}
-
-МОИ 5 ТЕКСТОВ ОБЪЯВЛЕНИЙ:
-${generatedTexts || 'Тексты не вставлены. Если их нет, предложи 5 нейтральных текстов до 81 символа.'}
-
-МОИ 8 БЫСТРЫХ ССЫЛОК:
-${generatedQuickLinks || 'Быстрые ссылки не вставлены. Если их нет, предложи 8 нейтральных быстрых ссылок с описаниями.'}
-
-ЧТО НУЖНО СДЕЛАТЬ:
-1. Удали слабые, одинаковые и рискованные заголовки.
-2. Отдельно выпиши фразы, которые лучше НЕ переносить в Директ, и объясни почему.
-3. Выбери 15 заголовков для первого запуска.
-4. Разбей 15 заголовков на 3 группы по 5:
-   • группа 1 = одна боль или один сегмент;
-   • группа 2 = вторая боль или второй сегмент;
-   • группа 3 = третья гипотеза.
-5. Для каждого заголовка подбери:
-   • лучший текст объявления из списка;
-   • 2-4 подходящие быстрые ссылки;
-   • текст на баннер до 7 слов;
-   • идею визуала без денег, карт, банков и гарантий;
-   • риск модерации: низкий/средний/высокий.
-
-ФОРМАТ ОТВЕТА:
-Сначала коротко: "Что я убрал и почему".
-Потом таблица:
-Группа | Заголовок | Текст объявления | Быстрые ссылки | Текст на баннер | Визуал | Риск модерации | Что должен понять модератор.
-
-В конце дай список:
-"Эти 15 заголовков копируйте дальше в конструктор креативов по одному".`;
-  }, [generatedHeadlines, generatedTexts, generatedQuickLinks]);
-
-  const adMatrixPrompt = useMemo(() => {
-    if (!finalHeadlines.trim()) return '';
-    return `Ты — специалист по запуску РСЯ в Яндекс.Директе.
-
-Я уже отобрал финальные 15 заголовков. Нужно превратить их в понятную структуру для рекламного кабинета.
-
-ФИНАЛЬНЫЕ 15 ЗАГОЛОВКОВ / ОТВЕТ ПОСЛЕ ОТБОРА:
-${finalHeadlines}
-
-ИСХОДНЫЕ ТЕКСТЫ ОБЪЯВЛЕНИЙ:
-${generatedTexts || 'Если текстов нет в исходнике, предложи 5 текстов до 81 символа.'}
-
-БЫСТРЫЕ ССЫЛКИ:
-${generatedQuickLinks || 'Если быстрых ссылок нет в исходнике, предложи 8 быстрых ссылок и описания.'}
-
-Собери точную матрицу запуска:
-
-1. Кампания:
-   • название кампании;
-   • ссылка ведёт на предлендинг РСЯ;
-   • стратегия: максимум конверсий;
-   • показы: только РСЯ.
-
-2. Группы объявлений:
-   • 3 группы по 5 объявлений;
-   • название каждой группы;
-   • какая гипотеза/боль тестируется в группе.
-
-3. Для каждого объявления:
-   • номер группы;
-   • номер объявления;
-   • заголовок 1;
-   • текст объявления до 81 символа;
-   • какие быстрые ссылки поставить;
-   • уточнения;
-   • какой креатив нужен;
-   • какой заголовок перенести во вкладку "Креативы" для генерации картинки.
-
-4. Проверь модерацию:
-   • нет ли обещаний дохода;
-   • понятен ли объект продвижения;
-   • совпадает ли объявление с предлендингом.
-
-Формат ответа — таблица, которую можно переносить в Яндекс.Директ без дополнительных размышлений.`;
-  }, [finalHeadlines, generatedTexts, generatedQuickLinks]);
-
-  const dnaSummaryPrompt = `У меня получился слишком большой анализ ДНК клиента.
-Сожми его до короткой рабочей выжимки для рекламы РСЯ.
-
-Формат ответа строго такой:
-1. ЦА в 2 строках.
-2. 5 главных болей простыми словами.
-3. 5 страхов/возражений.
-4. 5 фраз, которые человек реально мог бы сказать.
-5. Что продвигаем для модератора Яндекса: одна понятная формулировка без слов "способ заработка" и "секретный метод".
-6. 5 безопасных рекламных углов для заголовков.
-7. Красный список: что нельзя писать в объявлениях.
-
-Пиши коротко. Максимум 1 страница.`;
-
-const creativeContextPrompt = `КАРКАС КОНТЕКСТА ДЛЯ ГЕНЕРАЦИИ БАННЕРОВ РСЯ
-
-Важно: это не готовый текст для копирования. Заполните каждую строку своими словами под свой продукт, свою историю и свой оффер.
-
-1. Что продвигаем:
-[Напишите конкретно: формат, разбор, практикум, маршрут, инструкция, мини-лендинг, бот, оффер или другое. Без туманных слов "способ", "схема", "секрет".]
-
-2. Для кого:
-[Кто человек: возраст/ситуация/опыт/что уже пробовал/где застрял.]
-
-3. Какая главная боль:
-[Одна конкретная боль. Не "нет денег", а что именно мешает: не понимает порядок, нет связки, не проходит модерация, не умеет собрать рекламу и т.д.]
-
-4. Что человек увидит после клика:
-[Опишите первый экран предлендинга или главный смысл посадочной. Баннер должен совпадать с тем, куда человек попадёт.]
-
-5. Что можно показать на картинке:
-[Фото автора, рабочий стол, схема маршрута, интерфейс без персональных данных, нейтральная сцена, эмоция человека, карточки шагов.]
-
-6. Что нельзя показывать и обещать:
-Нельзя деньги, карты, банки, кредиты, платежи, скрины доходов, гарантии, быстрый заработок, конкретную прибыль как обещание.
-
-7. Тон:
-[Выберите свой: спокойный, честный, экспертный, дружеский, объясняющий, без давления.]
-
-8. Правило:
-Один баннер = один финальный заголовок. Текст на баннере до 7 слов. Визуал не должен быть одинаковым у всех участников.`;
-
-  const creativePrompt = useMemo(() => {
-    if (!creativeHeadline) return '';
-    return `Ты — арт-директор и performance-маркетолог РСЯ.
-Нужно придумать креативы для Яндекс РСЯ строго под выбранный заголовок.
-
-ВЫБРАННЫЙ ЗАГОЛОВОК:
-${creativeHeadline}
-
-ЦА:
-${creativeAudience || 'Люди 30-55 лет, которые устали от курсов, хаотичных запусков и хотят понятный маршрут запуска онлайн-проекта.'}
-
-ОБЪЕКТ ПРОДВИЖЕНИЯ / МЕТОД:
-${creativeMethod || 'Пользователь не заполнил. Не придумывай обещания заработка: сформулируй нейтрально через разбор, практикум, маршрут или конкретный формат из заголовка.'}
-
-ВИЗУАЛЬНЫЕ МАТЕРИАЛЫ / ЧТО ЕСТЬ:
-${creativeVisual || 'Фото персонажа, нейтральный визуал, схема, рабочий стол, интерфейс без персональных и финансовых данных.'}
-
-СТИЛЬ / УКРАШЕНИЯ / ЧТО ДОБАВИТЬ:
-${creativeDecor || 'Пользователь не заполнил. Предложи 3 аккуратных визуальных направления: реалистичный, чистый digital, эмоциональный сторителлинг.'}
-
-ТОН:
-${creativeTone || 'Пользователь не заполнил. Используй спокойный понятный тон без гарантий, без давления и без банковских образов.'}
-
-ПРАВИЛА:
-• креатив делается ПОСЛЕ заголовка и усиливает его;
-• на картинке максимум 7-9 слов;
-• не показывать деньги, карты, банки, кредиты, платежи, доходные скриншоты;
-• не обещать быстрый заработок, гарантии, безопасность и конкретную прибыль;
-• должно быть понятно, что именно продвигается;
-• текст на креативе не должен быть копией продающей истории или оффера.
-
-Выдай 12 идей креативов в таблице:
-1. Текст на баннере.
-2. Визуальная сцена.
-3. Что должен понять модератор.
-4. Почему это кликабельно.
-5. Чего избегать.
-
-Дополнительно:
-• 5 вариантов CTA;
-• 5 вариантов композиции для Canva 1080x1080 и 16:9;
-• 3 промпта для генерации фонового изображения в ChatGPT/Gemini без текста на картинке;
-• отдельную инструкцию, какой текст нанести в Canva поверх изображения.`;
-  }, [creativeHeadline, creativeAudience, creativeMethod, creativeVisual, creativeDecor, creativeTone]);
+    if (landingRuntimeData.landingName) p += 15;
+    if (landingRuntimeData.landingCode) p += 15;
+    if (landingRuntimeData.counterId) p += 15;
+    if (landingRuntimeData.serverOnlyAdGoalCredential) p += 15;
+    if (creativeHeadline && creativeMethod) p += 20;
+    if (canPre) p += 20;
+    return Math.min(100, p);
+  }, [canPre, landingRuntimeData, creativeHeadline, creativeMethod]);
 
   const bg = dark ? 'bg-slate-950' : 'bg-slate-50';
   const card = dark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200';
   const text = dark ? 'text-white' : 'text-slate-900';
   const textMuted = dark ? 'text-slate-400' : 'text-slate-500';
+
+  if (!authorizedClient) {
+    return <LoginGate dark={dark} onLogin={handleLogin} />;
+  }
 
   return (
     <div className={`min-h-screen ${bg} p-3 md:p-6 transition-colors`}>
@@ -1966,773 +6379,319 @@ ${creativeTone || 'Пользователь не заполнил. Исполь�
           <div className="relative flex items-start justify-between gap-4">
             <div className="flex-1">
               <div className="inline-flex items-center gap-2 bg-yellow-400 text-slate-900 px-3 py-1 rounded-full text-xs font-black uppercase mb-3">
-                <Wand2 className="w-3 h-3" /> Конструктор воронки 2.0
+                <Wand2 className="w-3 h-3" /> Конструктор лендингов
               </div>
-              <h1 className="text-2xl md:text-4xl font-black mb-2 leading-tight">Полная воронка <span className="text-yellow-400">РСЯ → Бот → Воронка → Оффер</span></h1>
-              <p className="text-sm md:text-base text-slate-300 max-w-3xl">Креативы, объявления, предлендинг, продающая история, оффер — всё в одном инструменте. С пресетами, превью и инструкциями.</p>
+              <h1 className="text-2xl md:text-4xl font-black mb-2 leading-tight">Конструктор <span className="text-yellow-400">лендингов</span></h1>
               {progress > 0 && (
                 <div className="mt-4 bg-white/10 rounded-full h-2 overflow-hidden backdrop-blur">
                   <div className="bg-gradient-to-r from-yellow-400 to-emerald-400 h-full transition-all" style={{ width: `${progress}%` }}></div>
                 </div>
               )}
-              {progress > 0 && <p className="text-xs text-slate-400 mt-1">Готовность воронки: {progress}%</p>}
+              {progress > 0 && <p className="text-xs text-slate-400 mt-1">Готовность лендинга: {progress}%</p>}
             </div>
-            <button onClick={() => setDark(!dark)} className="bg-white/10 hover:bg-white/20 p-2.5 rounded-xl transition-colors backdrop-blur" title={dark ? 'Светлая тема' : 'Тёмная тема'}>
-              {dark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </button>
+            <div className="flex flex-col items-end gap-2">
+              <button onClick={() => setDark(!dark)} className="bg-white/10 hover:bg-white/20 p-2.5 rounded-xl transition-colors backdrop-blur" title={dark ? 'Светлая тема' : 'Тёмная тема'}>
+                {dark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+              </button>
+              <div className="rounded-2xl bg-white/10 px-3 py-2 text-right text-xs text-slate-200 backdrop-blur">
+                <div className="font-black">{authorizedClient.label || authorizedClient.login}</div>
+                <div>{quota.unlimited ? 'Без лимитов' : `Баннеры ${usage.banners}/${bannerLimit}, предленды ${usage.prelandings}/${prelandingLimit}`}</div>
+                <button type="button" onClick={handleLogout} className="mt-1 text-[11px] font-black text-yellow-300 hover:text-yellow-200">Выйти</button>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* TABS */}
-        <div className={`flex flex-wrap gap-1.5 mb-4 sticky top-2 z-20 ${dark ? 'bg-slate-950/80' : 'bg-slate-50/80'} backdrop-blur p-2 -m-2 rounded-2xl`}>
-          <Tab active={tab === 'how'} onClick={() => setTab('how')} icon={Route} dark={dark}>Путеводитель</Tab>
-          <Tab active={tab === 'ads'} onClick={() => setTab('ads')} icon={Megaphone} dark={dark}>Заголовки РСЯ</Tab>
-          <Tab active={tab === 'creative'} onClick={() => setTab('creative')} icon={ImageIcon} dark={dark}>Креативы</Tab>
-          <Tab active={tab === 'pre'} onClick={() => setTab('pre')} icon={Wand2} dark={dark}>Предлендинг</Tab>
-          <Tab active={tab === 'sale'} onClick={() => setTab('sale')} icon={User} dark={dark}>Продающая история</Tab>
-          <Tab active={tab === 'offer'} onClick={() => setTab('offer')} icon={Target} dark={dark}>Оффер</Tab>
-          <Tab active={tab === 'docs'} onClick={() => setTab('docs')} icon={FileText} dark={dark}>Документы</Tab>
-          <Tab active={tab === 'bonus'} onClick={() => setTab('bonus')} icon={Sparkles} dark={dark}>Бонусы</Tab>
-          <Tab active={tab === 'install'} onClick={() => setTab('install')} icon={Rocket} dark={dark}>Установка BotHelp</Tab>
-          <Tab active={tab === 'launch'} onClick={() => setTab('launch')} icon={TrendingUp} dark={dark}>Запуск РСЯ</Tab>
+        <div className={`mb-4 sticky top-2 z-20 ${dark ? 'bg-slate-950/80' : 'bg-slate-50/80'} backdrop-blur p-2 -m-2 rounded-2xl`}>
+          <div className="flex flex-wrap gap-2">
+            <Tab active={tab === 'creative'} onClick={() => setTab('creative')} icon={Lightbulb} dark={dark}>Креативы</Tab>
+            <Tab active={tab === 'pre'} onClick={() => setTab('pre')} icon={Wand2} dark={dark}>Предлендинг</Tab>
+            <Tab active={tab === 'how'} onClick={() => setTab('how')} icon={BookOpen} dark={dark}>Инструкция</Tab>
+          </div>
         </div>
 
-        {/* === КАК ПОЛЬЗОВАТЬСЯ === */}
+        {/* === ПАРАМЕТРЫ ДИРЕКТА === */}
         {tab === 'how' && (
-          <div className="space-y-4">
-            <div className={`${card} rounded-3xl p-6 md:p-8 shadow-sm border`}>
-              <h2 className={`text-2xl font-black mb-4 ${text}`}>🎯 Полная схема воронки</h2>
-              <div className="grid md:grid-cols-5 gap-2 mb-6">
-                {[['📢', 'Заголовки', 'Смысл для РСЯ'], ['🎨', 'Креатив', 'Баннер под заголовок'], ['🚀', 'Предлендинг', 'Прогрев 8 мин'], ['📖', 'Продающая', 'Длинный лонгрид'], ['💰', 'Оффер', '990₽ или консультация']].map((s, i) => (
-                  <div key={i} className={`${dark ? 'bg-slate-800' : 'bg-slate-50'} border-2 ${dark ? 'border-slate-700' : 'border-slate-200'} rounded-xl p-3 text-center relative`}>
-                    <div className="text-2xl mb-1">{s[0]}</div>
-                    <div className={`font-black text-xs mb-1 ${text}`}>{s[1]}</div>
-                    <div className={`text-[10px] ${textMuted} leading-tight`}>{s[2]}</div>
-                    {i < 4 && <div className="hidden md:block absolute -right-2 top-1/2 -translate-y-1/2 text-slate-400 text-lg z-10">→</div>}
-                  </div>
-                ))}
-              </div>
-
-              <div className={`${dark ? 'bg-yellow-500/10 border-yellow-500/30' : 'bg-yellow-50 border-yellow-300'} border-2 rounded-xl p-4 mb-4`}>
-                <h4 className={`font-black mb-1 flex items-center gap-2 ${text}`}><AlertCircle className="w-4 h-4 text-yellow-500" /> Главное правило</h4>
-                <p className={`text-sm ${dark ? 'text-slate-300' : 'text-slate-700'}`}>Тексты предлендинга, продающей истории и оффера не редактируются — выверены и работают в связке. Меняются только: имя, возраст, фото, 3 ссылки.</p>
-              </div>
-
-              <h3 className={`text-xl font-black mb-3 ${text}`}>Маршрут запуска проекта</h3>
-              <div className="space-y-2">
-                {ROADMAP_STEPS.map((s, i) => (
-                  <div key={i} className={`flex items-start gap-3 p-3 rounded-xl ${dark ? 'bg-slate-800' : 'bg-slate-50'}`}>
-                    <div className="w-7 h-7 rounded-full bg-slate-900 text-white flex items-center justify-center font-black text-xs flex-shrink-0">{i + 1}</div>
-                    <div className="flex-1">
-                      <div className={`font-black text-sm ${text}`}>{s.title}</div>
-                      <div className={`text-xs ${textMuted} mt-0.5`}>{s.desc}</div>
-                    </div>
-                    <button onClick={() => openRoadmapStep(s)} className={`px-3 py-2 rounded-lg text-[11px] font-black flex-shrink-0 ${dark ? 'bg-slate-900 text-yellow-400 hover:bg-slate-700' : 'bg-white text-blue-600 hover:bg-blue-50 border border-slate-200'}`}>Открыть</button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div id="project-panel" className={`${card} scroll-mt-6 rounded-3xl p-6 shadow-sm border`}>
-              <h3 className={`text-xl font-black mb-2 flex items-center gap-2 ${text}`}><Target className="w-5 h-5 text-emerald-600" /> Рабочая панель проекта</h3>
-              <p className={`text-xs ${textMuted} mb-4`}>Заполните эти поля по мере сборки. Данные сохраняются в браузере и помогают не терять ссылки между шагами.</p>
-              <div className="grid md:grid-cols-2 gap-3">
-                {PROJECT_FIELDS.map(([key, label, placeholder]) => (
-                  <Field key={key} label={label} value={projectData[key] || ''} onChange={(value) => setProjectValue(key, value)} placeholder={placeholder} dark={dark} />
-                ))}
-              </div>
-              <div className="grid md:grid-cols-3 gap-2 mt-4">
-                <button onClick={() => { setPrivacyUrl(projectData.privacyLink || privacyUrl); setPersonalUrl(projectData.personalLink || personalUrl); setAdsUrl(projectData.adsConsentLink || adsUrl); setTab('docs'); }} className="px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black">Заполнить документы</button>
-                <button onClick={() => setTab('pre')} className="px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-black">Собрать предлендинг</button>
-                <button onClick={() => { setOffer(projectData.offerLink || offer); setTab('sale'); }} className="px-4 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black">Собрать историю</button>
-              </div>
-              <div className={`${dark ? 'bg-amber-500/10 border-amber-500/30 text-slate-300' : 'bg-amber-50 border-amber-200 text-slate-700'} border rounded-xl p-3 text-xs mt-4`}>
-                API-токен Метрики относится к чувствительным данным. Не публикуйте его в скриншотах, чатах и общих документах.
-              </div>
-            </div>
-
-            <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
-              <h3 className={`text-xl font-black mb-3 flex items-center gap-2 ${text}`}><BookOpen className="w-5 h-5 text-blue-600" /> Пошаговые инструкции из шаблонов</h3>
-              <p className={`text-xs ${textMuted} mb-4`}>Открывайте блоки по порядку и выполняйте каждый пункт. Это маршрут сборки проекта от домена до запуска РСЯ.</p>
-              <div className="space-y-2">
-                {STEP_INSTRUCTIONS.map((section, i) => (
-                  <details
-                    key={i}
-                    id={`guide-section-${i}`}
-                    open={openGuideIndex === i}
-                    onToggle={(event) => {
-                      if (event.currentTarget.open) setOpenGuideIndex(i);
-                      if (!event.currentTarget.open && openGuideIndex === i) setOpenGuideIndex(null);
-                    }}
-                    className={`${dark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} scroll-mt-6 border rounded-xl overflow-hidden`}
-                  >
-                    <summary className={`cursor-pointer p-4 font-black text-sm flex items-center justify-between gap-3 ${text}`}>
-                      <span className="flex items-center gap-2">
-                        <span className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center text-xs">{i + 1}</span>
-                        {section.title}
-                      </span>
-                      <span className={`text-[10px] px-2 py-1 rounded-full ${dark ? 'bg-slate-900 text-slate-300' : 'bg-white text-slate-600'}`}>{section.tag}</span>
-                    </summary>
-                    <div className={`px-4 pb-4 border-t ${dark ? 'border-slate-700' : 'border-slate-200'}`}>
-                      <ol className="space-y-2 mt-4">
-                        {section.steps.map((step, idx) => (
-                          <li key={idx} className="flex gap-3">
-                            <span className={`w-6 h-6 rounded-md flex items-center justify-center text-[11px] font-black flex-shrink-0 ${dark ? 'bg-slate-900 text-yellow-400' : 'bg-white text-blue-600'}`}>{idx + 1}</span>
-                            <span className={`text-xs leading-relaxed ${dark ? 'text-slate-300' : 'text-slate-700'}`}>{step}</span>
-                          </li>
-                        ))}
-                      </ol>
-                      <div className={`${dark ? 'bg-blue-500/10 border-blue-500/30 text-slate-300' : 'bg-blue-50 border-blue-200 text-slate-700'} border rounded-lg p-3 text-xs mt-4`}>
-                        <strong>Важно:</strong> {section.note}
-                      </div>
-                      {section.actionTab && (
-                        <button
-                          onClick={() => setTab(section.actionTab)}
-                          className="mt-3 px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-black"
-                        >
-                          {section.actionLabel || 'Перейти к нужному разделу'}
-                        </button>
-                      )}
-                      {section.visualSteps && (
-                        <div className="mt-4 space-y-3">
-                          <h4 className={`text-sm font-black ${text}`}>Скриншоты из инструкции</h4>
-                          <div className="grid md:grid-cols-2 gap-3">
-                            {section.visualSteps.map((item, idx) => (
-                              <div key={idx} className={`${dark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'} border rounded-xl overflow-hidden`}>
-                                <div className={`p-3 border-b ${dark ? 'border-slate-700 bg-slate-950/50' : 'border-slate-200 bg-slate-50'}`}>
-                                  <div className={`font-black text-xs mb-1 ${text}`}>{item.title}</div>
-                                  <p className={`text-[11px] leading-relaxed ${textMuted}`}>{item.desc}</p>
-                                </div>
-                                <div className="grid gap-3 p-3">
-                                  {(item.images || [item.image]).filter(Boolean).map((src, imgIdx) => (
-                                    <div key={src} className={`${dark ? 'bg-slate-950 border-slate-700' : 'bg-white border-slate-200'} border rounded-lg p-2`}>
-                                      <div className={`text-[10px] font-black mb-2 ${dark ? 'text-yellow-300' : 'text-blue-600'}`}>Шаг {idx + 1}.{imgIdx + 1}: {item.title}</div>
-                                      <img src={src} alt={`${item.title} ${imgIdx + 1}`} className="max-w-full w-auto max-h-[360px] mx-auto object-contain rounded-md" loading="lazy" />
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </details>
-                ))}
-              </div>
-            </div>
-
-            <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
-              <h3 className={`text-xl font-black mb-3 flex items-center gap-2 ${text}`}><ExternalLink className="w-5 h-5 text-blue-600" /> Рабочие ссылки проекта</h3>
-              <div className="grid md:grid-cols-2 gap-3">
-                {RESOURCE_LINKS.map((item, i) => (
-                  <a key={i} href={item[1]} target="_blank" rel="noopener noreferrer" className={`group p-4 rounded-xl border-2 transition-all ${dark ? 'border-slate-700 bg-slate-800 hover:border-blue-500' : 'border-slate-200 bg-white hover:border-blue-400 hover:shadow-md'}`}>
-                    <div className={`font-black text-sm mb-1 flex items-center justify-between gap-2 ${text}`}>
-                      <span>{item[0]}</span>
-                      <ExternalLink className="w-4 h-4 opacity-50 group-hover:opacity-100" />
-                    </div>
-                    <div className={`text-xs ${textMuted} mb-2`}>{item[2]}</div>
-                    <div className="text-[10px] text-blue-500 font-mono break-all">{item[1]}</div>
-                  </a>
-                ))}
-              </div>
-            </div>
-
-            <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
-              <h3 className={`text-xl font-black mb-3 flex items-center gap-2 ${text}`}><Bot className="w-5 h-5 text-emerald-600" /> Логика ботов Telegram и MAX</h3>
-              <div className="grid md:grid-cols-3 gap-3">
-                {[
-                  ['1. Импорт', 'Загрузить шаблон цепочки в BotHelp по ссылкам выше.'],
-                  ['2. Первое сообщение', 'В первом сообщении бота поставить ссылку на продающую историю.'],
-                  ['3. 30 дней прогрева', 'Цепочка напоминает, возвращает к истории и ведёт на оффер.']
-                ].map((s, i) => (
-                  <div key={i} className={`${dark ? 'bg-slate-800 border-slate-700' : 'bg-emerald-50 border-emerald-200'} border-2 rounded-xl p-4`}>
-                    <div className={`font-black text-sm mb-1 ${text}`}>{s[0]}</div>
-                    <p className={`text-xs ${dark ? 'text-slate-300' : 'text-slate-700'}`}>{s[1]}</p>
-                  </div>
-                ))}
-              </div>
-              <div className={`mt-4 ${dark ? 'bg-blue-500/10 border-blue-500/30' : 'bg-blue-50 border-blue-200'} border-2 rounded-xl p-4`}>
-                <p className={`text-xs ${dark ? 'text-slate-300' : 'text-slate-700'}`}><strong>MAX:</strong> сначала подключается профиль организации, потом создаётся бот и отправляется на модерацию. Токен и подключение к BotHelp используются после одобрения.</p>
-              </div>
-            </div>
-
-            <div id="metrics-guide" className={`${card} scroll-mt-6 rounded-3xl p-6 shadow-sm border`}>
-              <h3 className={`text-xl font-black mb-3 flex items-center gap-2 ${text}`}><TrendingUp className="w-5 h-5 text-blue-600" /> Метрика, цели и офлайн-конверсии</h3>
-              <div className="space-y-2">
-                {[
-                  ['1. Создайте счётчик', 'В Яндекс.Метрике создайте счётчик. На втором шаге BotHelp разрешает не устанавливать код на сайт: цель будет работать по JavaScript-событию из мини-лендинга.'],
-                  ['2. Включите аналитику BotHelp', 'В мини-лендинге включите "Отслеживать подписку через аналитику" и вставьте номер счётчика в поле Yandex.Metrica. Для MAX учитывайте ограничения BotHelp и отдельно смотрите статистику переходов/бота.'],
-                  ['3. Скопируйте событие BotHelp', 'В настройках лендинга BotHelp показывает имя события. Сохраните его в рабочую панель, например subscription_ml_7.'],
-                  ['4. Создайте цель в Метрике', 'В Метрике откройте "Цели" -> "Добавить цель" -> тип "JavaScript-событие" -> вставьте идентификатор BotHelp один в один.'],
-                  ['5. Используйте правильную ссылку', 'Для рекламы берите новую ссылку bhurl.ru или ссылку на собственном домене. Старые bothelp.io-ссылки могут ломать корректную фиксацию цели.'],
-                  ['6. Включите офлайн-конверсии', 'В Метрике включите "Загрузка данных" -> "Офлайн-конверсии". После включения доступ может появиться не сразу, это нормально.'],
-                  ['7. Получите OAuth-токен', 'Создайте приложение Yandex OAuth, выдайте права metrika:read и metrika:write, получите токен и храните его только в рабочих настройках.'],
-                  ['8. Передайте событие из бота', 'В нужном шаге BotHelp добавьте действие "Передать данные о событии в Яндекс.Метрику" и заполните номер счётчика, токен и идентификатор цели.']
-                ].map((item, i) => (
-                  <div key={i} className={`flex gap-3 p-3 rounded-xl ${dark ? 'bg-slate-800' : 'bg-slate-50'}`}>
-                    <div className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center font-black text-xs flex-shrink-0">{i + 1}</div>
-                    <div>
-                      <div className={`font-black text-sm ${text}`}>{item[0]}</div>
-                      <p className={`text-xs ${textMuted}`}>{item[1]}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className={`${dark ? 'bg-blue-500/10 border-blue-500/30 text-slate-300' : 'bg-blue-50 border-blue-200 text-slate-700'} border rounded-xl p-3 text-xs mt-4`}>
-                По логике BotHelp сначала собираем Yandex Client ID через мини-лендинг, а потом передаём офлайн-конверсию из бота. Файл/события отправляются в Метрику не мгновенно, поэтому проверку делайте через несколько часов.
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-emerald-500 to-green-600 rounded-3xl p-6 text-white">
-              <h3 className="text-xl font-black mb-3">📊 Зачем нужна вся воронка</h3>
-              <div className="grid md:grid-cols-2 gap-3 text-sm">
-                <div className="bg-white/20 rounded-xl p-3 backdrop-blur"><strong>🔥 РСЯ креатив</strong> — пробивает баннерную слепоту, цепляет глаз</div>
-                <div className="bg-white/20 rounded-xl p-3 backdrop-blur"><strong>🎯 Объявление</strong> — даёт высокий CTR, дешёвый клик</div>
-                <div className="bg-white/20 rounded-xl p-3 backdrop-blur"><strong>🚀 Предлендинг</strong> — отсекает нецелевых, прогревает за 8 мин</div>
-                <div className="bg-white/20 rounded-xl p-3 backdrop-blur"><strong>📖 Продающая</strong> — переводит интерес в желание купить</div>
-                <div className="bg-white/20 rounded-xl p-3 backdrop-blur md:col-span-2"><strong>💰 Оффер</strong> — закрывает сделку: участие за 990₽ или альтернативное партнёрское действие через личную консультацию</div>
-              </div>
+          <div className={`${card} rounded-3xl p-6 md:p-8 shadow-sm border`}>
+            <h2 className={`text-2xl font-black mb-4 ${text}`}>Параметры URL для Директа</h2>
+            <div className={`w-full overflow-x-auto whitespace-pre-wrap font-mono text-[12px] leading-relaxed break-words rounded-xl p-4 ${dark ? 'bg-slate-950/70 text-blue-100' : 'bg-slate-50 text-slate-800'}`}>{YANDEX_DIRECT_URL_PARAMS}</div>
+            <div className="mt-4 max-w-sm">
+              <CopyBtn text={YANDEX_DIRECT_URL_PARAMS} label="Скопировать URL-параметры" dark={dark} />
             </div>
           </div>
         )}
 
         {/* === КРЕАТИВЫ === */}
         {tab === 'creative' && (
-          <div className="space-y-4">
-            <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
-              <h2 className={`text-2xl font-black mb-2 ${text}`}>🎨 Создание креативов для РСЯ</h2>
-              <p className={`text-sm ${textMuted} mb-4`}>Креатив делается только после заголовков. В РСЯ то, что написано на баннере и в заголовке, помогает алгоритму понять, какую аудиторию искать.</p>
-
-              <div className={`${dark ? 'bg-blue-500/10 border-blue-500/30' : 'bg-blue-50 border-blue-200'} border-2 rounded-xl p-4 mb-4`}>
-                <h3 className={`font-black mb-2 flex items-center gap-2 ${text}`}><Lightbulb className="w-5 h-5 text-blue-500" /> Порядок работы</h3>
-                <p className={`text-sm ${dark ? 'text-slate-300' : 'text-slate-700'}`}>Сначала во вкладке <strong>"Заголовки РСЯ"</strong> собираем смыслы и выбираем 15 заголовков. Потом каждый креатив создаём под один конкретный заголовок, чтобы баннер, объявление и предлендинг говорили об одном и том же.</p>
-              </div>
-
-              <div className={`${dark ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-emerald-50 border-emerald-200'} border-2 rounded-xl p-4 mb-4`}>
-                <h3 className={`font-black mb-2 flex items-center gap-2 ${text}`}><Copy className="w-5 h-5 text-emerald-600" /> Что писать в контекстном прологе</h3>
-                <p className={`text-sm ${dark ? 'text-slate-300' : 'text-slate-700'} mb-3`}>Это каркас, а не готовый шаблон. Заполните его своими словами, чтобы баннеры не были одинаковыми у всех. В новом чате для баннеров сначала вставьте заполненный контекст, потом загрузите фото, потом вставляйте по одному заголовку.</p>
-                <div className="grid lg:grid-cols-[1fr_260px] gap-3 items-start">
-                  <pre className={`text-[11px] leading-relaxed whitespace-pre-wrap max-h-72 overflow-y-auto rounded-xl p-4 border ${dark ? 'bg-slate-950 border-slate-800 text-slate-300' : 'bg-white border-emerald-100 text-slate-700'}`}>{creativeContextPrompt}</pre>
-                  <div className="space-y-2">
-                    <CopyBtn text={creativeContextPrompt} label="Скопировать каркас контекста" dark={dark} />
-                    <div className={`${dark ? 'bg-slate-900 text-slate-400 border-slate-800' : 'bg-white text-slate-600 border-emerald-100'} border rounded-xl p-3 text-xs`}>
-                      После этого берите заголовок 1, вставляйте в поле ниже и копируйте промпт креатива. Потом заголовок 2, 3 и так до 15.
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <h3 className={`text-lg font-black mb-3 ${text}`}>📐 Алгоритм создания креатива</h3>
-              <div className="space-y-3 mb-6">
-                {[
-                  ['Выбери один заголовок', 'Не пачку сразу. Один заголовок = один креатив = одна гипотеза.'],
-                  ['Разложи заголовок', 'Что в нём главное: боль, объект продвижения, возражение, инструмент или маршрут запуска.'],
-                  ['Сформулируй объект продвижения', 'Напишите своими словами, что увидит человек после клика. Без туманных "способов" и "схем".'],
-                  ['Создай визуал через ИИ', 'ChatGPT/Gemini помогает придумать сцену, фон, лицо персонажа, предметы и композицию.'],
-                  ['Собери финал в Canva', 'Форматы: 1080x1080 и 16:9. Текст можно добавить в Canva или аккуратно проверить после генерации ИИ.'],
-                  ['Сверь с посадочной', 'То, что написано на креативе, должно повторяться на предлендинге или раскрываться в первом экране.']
-                ].map((s, i) => (
-                  <div key={i} className={`flex items-start gap-3 p-3 rounded-xl ${dark ? 'bg-slate-800' : 'bg-slate-50'}`}>
-                    <div className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center font-black text-xs flex-shrink-0">{i + 1}</div>
-                    <div>
-                      <div className={`font-black text-sm ${text}`}>{s[0]}</div>
-                      <div className={`text-xs ${textMuted}`}>{s[1]}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className={`${dark ? 'bg-red-500/10 border-red-500/30' : 'bg-red-50 border-red-200'} border-2 rounded-xl p-4`}>
-                <h3 className={`font-black mb-2 flex items-center gap-2 ${text}`}><AlertCircle className="w-5 h-5 text-red-500" /> ВАЖНЫЙ НЮАНС</h3>
-                <p className={`text-sm ${dark ? 'text-slate-300' : 'text-slate-700'}`}>Креатив можно делать через ИИ и доводить в Canva. Если генератор плохо пишет русский текст, используйте ИИ для фона/лица/сцены, а финальный заголовок нанесите в Canva крупным читаемым шрифтом.</p>
-              </div>
-
-              <div className={`${dark ? 'bg-amber-500/10 border-amber-500/30' : 'bg-amber-50 border-amber-200'} border-2 rounded-xl p-4 mt-4`}>
-                <h3 className={`font-black mb-2 flex items-center gap-2 ${text}`}><ShieldCheck className="w-5 h-5 text-amber-600" /> Для модерации РСЯ</h3>
-                <p className={`text-sm ${dark ? 'text-slate-300' : 'text-slate-700'}`}>Не показывайте банковские карты, платежки, скрины переводов, долги, кредиты и обещания мгновенного заработка. На баннере должно быть понятно, что человек увидит после клика, без гарантий результата.</p>
-              </div>
-            </div>
-
-            {/* Материалы и логика креатива */}
-            <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
-              <h3 className={`text-lg font-black mb-3 ${text}`}>🧩 Из чего собирать креатив</h3>
-              <div className="grid md:grid-cols-2 gap-3">
-                {CREATIVE_GUIDE.map((block, i) => (
-                  <div key={i} className={`${dark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} border rounded-xl p-4`}>
-                    <h4 className={`font-black text-sm mb-3 ${text}`}>{block.title}</h4>
-                    <div className="space-y-2">
-                      {block.items.map((item, idx) => (
-                        <div key={idx} className="flex gap-2">
-                          <Check className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
-                          <p className={`text-xs leading-relaxed ${dark ? 'text-slate-300' : 'text-slate-700'}`}>{item}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Чеклист хорошего креатива */}
-            <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
-              <h3 className={`text-lg font-black mb-3 ${text}`}>✅ Чек-лист хорошего креатива</h3>
-              <div className="grid md:grid-cols-2 gap-2">
-                {[
-                  '✓ Квадрат 1:1 (1080×1080px)',
-                  '✓ Живое реалистичное фото (не пластик)',
-                  '✓ Лицо человека крупным планом',
-                  '✓ Эмоция считывается за 0.5 сек',
-                  '✓ Контрастный фон',
-                  '✓ Текст КРУПНЫЙ, по центру или сбоку',
-                  '✓ Не более 7 слов на картинке',
-                  '✓ Главный заголовок = боль + конкретный метод',
-                  '✓ Цветной акцент (жёлтая плашка под текстом)',
-                  '✓ Без мелких деталей (читается на телефоне)',
-                  '✓ Без watermark и логотипов сервисов',
-                  '✓ Креатив совпадает с первым экраном предлендинга'
-                ].map((item, i) => (
-                  <div key={i} className={`p-2 rounded-lg ${dark ? 'bg-slate-800' : 'bg-emerald-50'} text-sm font-bold ${text}`}>{item}</div>
-                ))}
-              </div>
-            </div>
-
-            {/* Генератор креативов под заголовок */}
-            <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
-              <h3 className={`text-lg font-black mb-3 ${text}`}>🧠 Промпт на креатив под выбранный заголовок</h3>
-              <p className={`text-xs ${textMuted} mb-4`}>Вставь сюда один заголовок из финального списка. Конструктор соберёт промпт, который даст идеи баннеров без копирования оффера и без модерационных рисков.</p>
-              <div className="space-y-3">
-                <Field label="Выбранный заголовок" hint="из вкладки Заголовки РСЯ" value={creativeHeadline} onChange={setCreativeHeadline} placeholder="Вставьте один финальный заголовок" dark={dark} />
-                <TextArea label="ЦА / сегмент" hint="кому показываем этот креатив" value={creativeAudience} onChange={setCreativeAudience} rows={2} placeholder="Вставьте сегмент из ДНК клиента" dark={dark} />
-                <TextArea label="Объект продвижения / что увидит человек" hint="для ясности модерации" value={creativeMethod} onChange={setCreativeMethod} rows={2} placeholder="Опишите своими словами, что именно продвигается и куда ведёт клик" dark={dark} />
-                <TextArea label="Что есть для визуала" hint="фото, скрины, схема, рабочее место" value={creativeVisual} onChange={setCreativeVisual} rows={2} placeholder="Фото персонажа, фон, стиль, схема, предметы, рабочая сцена..." dark={dark} />
-                <Field label="Украшения / стиль картинки" hint="что добавить визуально" value={creativeDecor} onChange={setCreativeDecor} placeholder="Например: жёлтая плашка, чистый фон, ноутбук, схема из стрелок" dark={dark} />
-                <Field label="Тон креатива" value={creativeTone} onChange={setCreativeTone} placeholder="Например: спокойный, честный, без давления" dark={dark} />
-              </div>
-              <div className="mt-4">
-                {!creativeHeadline ? (
-                  <div className={`${dark ? 'bg-slate-800' : 'bg-slate-50'} rounded-xl p-4 text-center`}>
-                    <AlertCircle className="w-7 h-7 mx-auto mb-2 text-yellow-500" />
-                    <p className={`text-sm ${textMuted}`}>Вставь выбранный заголовок — появится готовый промпт для генерации креативов.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <CopyBtn text={creativePrompt} label={`Скопировать промпт (${creativePrompt.length} симв.)`} big />
-                    <details className={`${dark ? 'bg-slate-800' : 'bg-slate-50'} rounded-xl`}>
-                      <summary className={`cursor-pointer p-3 font-bold text-sm flex items-center justify-between ${text}`}>
-                        <span className="flex items-center gap-2"><Eye className="w-4 h-4" /> Посмотреть промпт</span>
-                        <ChevronDown className="w-4 h-4" />
-                      </summary>
-                      <pre className={`p-3 text-[10px] whitespace-pre-wrap leading-relaxed max-h-80 overflow-y-auto border-t ${dark ? 'border-slate-700 text-slate-300' : 'border-slate-200 text-slate-700'}`}>{creativePrompt}</pre>
-                    </details>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* === ОБЪЯВЛЕНИЯ === */}
-        {tab === 'ads' && (
-          <div className="space-y-4">
-            <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
-              <h2 className={`text-2xl font-black mb-2 ${text}`}>📢 Сборка заголовков для РСЯ</h2>
-              <p className={`text-sm ${textMuted} mb-4`}>Здесь сначала собираем смыслы и заголовки. Только после отбора заголовков делаем креативы, потому что баннер должен усиливать конкретный посыл, а не жить отдельно.</p>
-
-              <div className={`${dark ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-emerald-50 border-emerald-200'} border-2 rounded-2xl p-4 mb-4`}>
-                <h3 className={`font-black mb-2 flex items-center gap-2 ${text}`}><Target className="w-5 h-5 text-emerald-600" /> Если у вас уже есть 90 заголовков, 5 текстов и 8 быстрых ссылок</h3>
-                <p className={`text-xs ${dark ? 'text-slate-300' : 'text-slate-700'} mb-3`}>Дальше не нужно гадать. Идёте строго по механике ниже: вставили черновики → отобрали 15 → собрали матрицу → каждый заголовок отдельно отправили в креативы → загрузили в Директ.</p>
-                <div className="grid md:grid-cols-3 gap-2">
-                  {AFTER_GENERATION_FLOW.map((step, i) => (
-                    <div key={i} className={`${dark ? 'bg-slate-900/70' : 'bg-white'} rounded-xl p-3 border ${dark ? 'border-slate-700' : 'border-emerald-100'}`}>
-                      <div className={`font-black text-xs mb-1 ${text}`}>{step[0]}</div>
-                      <p className={`text-[11px] ${textMuted}`}>{step[1]}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className={`${dark ? 'bg-yellow-400/10 border-yellow-400/30' : 'bg-yellow-50 border-yellow-300'} border-2 rounded-2xl p-4 mb-4`}>
-                <h3 className={`font-black mb-3 flex items-center gap-2 ${text}`}><AlertCircle className="w-5 h-5 text-yellow-500" /> Самое важное: стартовая структура одна</h3>
-                <div className="grid md:grid-cols-3 gap-2">
-                  {RSYA_SIMPLE_RULES.map((item, i) => (
-                    <div key={i} className={`${dark ? 'bg-slate-900/70' : 'bg-white'} rounded-xl p-3 border ${dark ? 'border-slate-700' : 'border-yellow-100'}`}>
-                      <div className={`font-black text-xs mb-1 ${text}`}>{item[0]}</div>
-                      <p className={`text-[11px] ${textMuted}`}>{item[1]}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className={`${dark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} border rounded-2xl p-4 mb-4`}>
-                <h3 className={`font-black mb-3 flex items-center gap-2 ${text}`}><BookOpen className="w-5 h-5 text-blue-500" /> Как отвечать на вопросы ДНК клиента</h3>
-                <p className={`text-xs ${textMuted} mb-3`}>Это не шаблоны для копирования. Это подсказки, ЧТО именно написать. Каждый участник отвечает своей головой, своим языком и под свой заход, иначе объявления станут одинаковыми и быстро выгорят.</p>
-                <div className="grid md:grid-cols-2 gap-2">
-                  {DNA_EXAMPLES.map((item, i) => (
-                    <div key={i} className={`${dark ? 'bg-slate-900' : 'bg-white'} rounded-xl p-3`}>
-                      <div className={`font-black text-xs mb-1 ${text}`}>{item[0]}</div>
-                      <p className={`text-[11px] ${textMuted}`}>{item[1]}</p>
-                    </div>
-                  ))}
-                </div>
-                <div className={`${dark ? 'bg-blue-500/10 border-blue-500/30' : 'bg-blue-50 border-blue-200'} border rounded-xl p-3 mt-3`}>
-                  <p className={`text-xs ${dark ? 'text-slate-300' : 'text-slate-700'} mb-3`}><strong>Если ДНК получилось на 54 страницы:</strong> это не ошибка. Скопируйте этот промпт и попросите нейросеть сделать короткую выжимку для рекламы. Потом уже по этой выжимке думайте над своими углами.</p>
-                  <CopyBtn text={dnaSummaryPrompt} label="Скопировать промпт: сжать ДНК до 1 страницы" dark={dark} />
-                </div>
-              </div>
-
-              <div className={`${dark ? 'bg-purple-500/10 border-purple-500/30' : 'bg-purple-50 border-purple-200'} border-2 rounded-2xl p-4 mb-4`}>
-                <h3 className={`font-black mb-3 flex items-center gap-2 ${text}`}><Lightbulb className="w-5 h-5 text-purple-500" /> Частые вопросы, из-за которых начинается каша</h3>
-                <div className="grid md:grid-cols-2 gap-2">
-                  {RSYA_FAQ.map((item, i) => (
-                    <div key={i} className={`${dark ? 'bg-slate-900/70' : 'bg-white'} rounded-xl p-3 border ${dark ? 'border-slate-700' : 'border-purple-100'}`}>
-                      <div className={`font-black text-xs mb-1 ${text}`}>{item[0]}</div>
-                      <p className={`text-[11px] ${textMuted}`}>{item[1]}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className={`${dark ? 'bg-red-500/10 border-red-500/30' : 'bg-red-50 border-red-200'} border-2 rounded-xl p-4 mb-4`}>
-                <h3 className={`font-black mb-2 flex items-center gap-2 ${text}`}><ShieldCheck className="w-4 h-4 text-red-500" /> Инструкция для прохождения модерации</h3>
-                <p className={`text-xs ${dark ? 'text-slate-300' : 'text-slate-700'} mb-3`}>По правилам Яндекса в объявлениях о заработке нельзя обещать быстрый доход, гарантии, безопасность и нереалистичную прибыль. Также объект продвижения должен быть понятен: что именно человек увидит после клика.</p>
-                <div className="grid md:grid-cols-2 gap-2">
-                  {MODERATION_RULES.map((rule, i) => (
-                    <div key={i} className={`${dark ? 'bg-slate-900/60' : 'bg-white'} rounded-lg p-3`}>
-                      <div className={`font-black text-xs mb-1 ${text}`}>{rule[0]}</div>
-                      <div className={`text-[11px] ${textMuted}`}>{rule[1]}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className={`${dark ? 'bg-blue-500/10 border-blue-500/30' : 'bg-blue-50 border-blue-200'} border-2 rounded-xl p-4 mb-4`}>
-                <h3 className={`font-black mb-3 flex items-center gap-2 ${text}`}><Lightbulb className="w-4 h-4 text-blue-500" /> Правильный процесс</h3>
-                <div className="grid md:grid-cols-3 gap-2">
-                  {HEADLINE_WORKFLOW.map((step, i) => (
-                    <div key={i} className={`${dark ? 'bg-slate-900/60' : 'bg-white'} rounded-lg p-3`}>
-                      <div className={`font-black text-xs mb-1 ${text}`}>{step[0]}</div>
-                      <p className={`text-[11px] ${textMuted}`}>{step[1]}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className={`${dark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} border rounded-xl p-4 mb-4`}>
-                <h3 className={`font-black mb-3 ${text}`}>Стили заголовков, которые нужно протестировать</h3>
-                <p className={`text-xs ${textMuted} mb-3`}>Выбирайте не один стиль, а несколько. Так вы тестируете, на что аудитория реагирует лучше: прямой оффер, боль, историю, миф или инструмент.</p>
-                <div className="grid md:grid-cols-2 gap-2">
-                  {HEADLINE_ANGLES.map((angle, i) => (
-                    <div key={i} className={`${dark ? 'bg-slate-900' : 'bg-white'} rounded-lg p-3`}>
-                      <div className={`font-black text-xs mb-1 ${text}`}>{angle[0]}</div>
-                      <p className={`text-[11px] ${textMuted}`}>{angle[1]}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <TextArea label="ПРОДУКТ / УСЛУГА" hint="что продвигаем" value={adProduct} onChange={setAdProduct} rows={3} placeholder="Опишите продукт своими словами: формат, что человек увидит, куда ведёт реклама, какой следующий шаг..." dark={dark} />
-                <TextArea label="ЦЕЛЕВАЯ АУДИТОРИЯ" hint="данные из ДНК клиента" value={adAudience} onChange={setAdAudience} rows={3} placeholder="Вставьте сегмент из промпта ДНК клиента: кто эти люди, возраст, ситуация, что они уже пробовали..." dark={dark} />
-                <TextArea label="БОЛИ КЛИЕНТОВ" hint="из ДНК клиента" value={adPain} onChange={setAdPain} rows={3} placeholder="Вставьте боли, страхи, прошлые неудачи, фразы клиента и триггерные ситуации..." dark={dark} />
-                <TextArea label="ГЛАВНОЕ ПРЕИМУЩЕСТВО" hint="почему человеку стоит перейти" value={adBenefit} onChange={setAdBenefit} rows={2} placeholder="Опишите отличие продукта без гарантий и обещаний результата..." dark={dark} />
-                <Field label="НИША / ОБЪЕКТ ПРОДВИЖЕНИЯ" hint="для ясности модерации" value={adNiche} onChange={setAdNiche} placeholder="Напишите своими словами, что именно продвигается" dark={dark} />
-              </div>
-            </div>
-
-            {/* Готовый промт */}
-            <div className="bg-gradient-to-br from-slate-900 to-blue-900 rounded-3xl p-6 text-white">
-              <h3 className="text-lg font-black mb-3 flex items-center gap-2"><Wand2 className="w-5 h-5" /> Готовый промт: анализ → 70 заголовков → 15 для старта</h3>
-              {!adProduct || !adAudience ? (
-                <div className="bg-white/10 rounded-xl p-4 text-center">
-                  <AlertCircle className="w-8 h-8 mx-auto mb-2 text-yellow-400" />
-                  <p className="text-sm">Заполни минимум "Продукт" и "Аудитория"</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <CopyBtn text={adPrompt} label={`Скопировать промт (${adPrompt.length} симв.)`} big />
-                  <details className="bg-black/30 rounded-xl">
-                    <summary className="cursor-pointer p-3 font-bold text-sm flex items-center justify-between">
-                      <span className="flex items-center gap-2"><Eye className="w-4 h-4" /> Посмотреть промт</span>
-                      <ChevronDown className="w-4 h-4" />
-                    </summary>
-                    <pre className="p-3 text-[10px] whitespace-pre-wrap leading-relaxed max-h-80 overflow-y-auto border-t border-white/10">{adPrompt}</pre>
-                  </details>
-                  <div className="bg-white/10 rounded-xl p-3 text-xs space-y-1">
-                    <p><strong className="text-yellow-400">→</strong> Открой ChatGPT/Claude/Gemini</p>
-                    <p><strong className="text-yellow-400">→</strong> Вставь промт, получи 70 заголовков по стилям</p>
-                    <p><strong className="text-yellow-400">→</strong> Выбери 15 заголовков для старта и только потом иди во вкладку "Креативы"</p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
-              <h3 className={`text-lg font-black mb-2 flex items-center gap-2 ${text}`}><ListChecks className="w-5 h-5 text-emerald-600" /> Что делать после генерации: точная инструкция</h3>
-              <p className={`text-xs ${textMuted} mb-4`}>Этот блок для ситуации, когда нейросеть уже выдала черновики. Вставьте их сюда и копируйте промпты по порядку.</p>
-
-              <div className="grid md:grid-cols-3 gap-3 mb-4">
-                <TextArea label="1. Все 90 заголовков" hint="вставьте как есть" value={generatedHeadlines} onChange={setGeneratedHeadlines} rows={8} placeholder={"1. ...\n2. ...\n3. ..."} dark={dark} />
-                <TextArea label="2. 5 текстов объявлений" hint="если есть" value={generatedTexts} onChange={setGeneratedTexts} rows={8} placeholder={"Текст 1...\nТекст 2..."} dark={dark} />
-                <TextArea label="3. 8 быстрых ссылок" hint="текст + описание" value={generatedQuickLinks} onChange={setGeneratedQuickLinks} rows={8} placeholder={"Ссылка 1 — описание...\nСсылка 2 — описание..."} dark={dark} />
-              </div>
-
-              <div className="grid lg:grid-cols-2 gap-4">
-                <div className={`${dark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} border rounded-2xl p-4`}>
-                  <div className={`font-black text-sm mb-1 ${text}`}>Шаг А. Отобрать 15 заголовков</div>
-                  <p className={`text-xs ${textMuted} mb-3`}>Берёте 90 заголовков и получаете: 15 финальных, 3 группы по 5, текст на баннер и риск модерации.</p>
-                  {!headlineSelectionPrompt ? (
-                    <div className={`${dark ? 'bg-slate-900' : 'bg-white'} rounded-xl p-4 text-center`}>
-                      <AlertCircle className="w-6 h-6 mx-auto mb-2 text-yellow-500" />
-                      <p className={`text-xs ${textMuted}`}>Вставьте хотя бы 90 заголовков — появится промпт отбора.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <CopyBtn text={headlineSelectionPrompt} label={`Скопировать промпт отбора (${headlineSelectionPrompt.length} симв.)`} dark={dark} />
-                      <details className={`${dark ? 'bg-slate-900' : 'bg-white'} rounded-xl`}>
-                        <summary className={`cursor-pointer p-3 font-bold text-sm flex items-center justify-between ${text}`}>
-                          <span className="flex items-center gap-2"><Eye className="w-4 h-4" /> Посмотреть промпт</span>
-                          <ChevronDown className="w-4 h-4" />
-                        </summary>
-                        <pre className={`p-3 text-[10px] whitespace-pre-wrap leading-relaxed max-h-72 overflow-y-auto border-t ${dark ? 'border-slate-700 text-slate-300' : 'border-slate-200 text-slate-700'}`}>{headlineSelectionPrompt}</pre>
-                      </details>
-                    </div>
-                  )}
-                </div>
-
-                <div className={`${dark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} border rounded-2xl p-4`}>
-                  <div className={`font-black text-sm mb-1 ${text}`}>Шаг Б. Собрать матрицу для Директа</div>
-                  <p className={`text-xs ${textMuted} mb-3`}>После Шага А вставьте сюда ответ нейросети с 15 заголовками. Получите таблицу для кабинета: 3 группы, 15 объявлений, какие креативы делать.</p>
-                  <TextArea label="Финальные 15 заголовков после отбора" value={finalHeadlines} onChange={setFinalHeadlines} rows={5} placeholder="Вставьте ответ нейросети после Шага А: таблицу с 15 заголовками..." dark={dark} />
-                  <div className="mt-3">
-                    {!adMatrixPrompt ? (
-                      <div className={`${dark ? 'bg-slate-900' : 'bg-white'} rounded-xl p-4 text-center`}>
-                        <AlertCircle className="w-6 h-6 mx-auto mb-2 text-yellow-500" />
-                        <p className={`text-xs ${textMuted}`}>Вставьте финальные 15 заголовков — появится промпт матрицы.</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        <CopyBtn text={adMatrixPrompt} label={`Скопировать промпт матрицы (${adMatrixPrompt.length} симв.)`} dark={dark} />
-                        <details className={`${dark ? 'bg-slate-900' : 'bg-white'} rounded-xl`}>
-                          <summary className={`cursor-pointer p-3 font-bold text-sm flex items-center justify-between ${text}`}>
-                            <span className="flex items-center gap-2"><Eye className="w-4 h-4" /> Посмотреть промпт</span>
-                            <ChevronDown className="w-4 h-4" />
-                          </summary>
-                          <pre className={`p-3 text-[10px] whitespace-pre-wrap leading-relaxed max-h-72 overflow-y-auto border-t ${dark ? 'border-slate-700 text-slate-300' : 'border-slate-200 text-slate-700'}`}>{adMatrixPrompt}</pre>
-                        </details>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className={`${dark ? 'bg-blue-500/10 border-blue-500/30' : 'bg-blue-50 border-blue-200'} border rounded-xl p-3 mt-4`}>
-                <p className={`text-xs ${dark ? 'text-slate-300' : 'text-slate-700'}`}><strong>Дальше:</strong> из таблицы берёте первый заголовок, переходите во вкладку "Креативы", вставляете его в поле "Выбранный заголовок" и копируете промпт картинки. Так повторяете 15 раз.</p>
-                <button onClick={() => setTab('creative')} className="mt-3 px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-black">Перейти к креативам</button>
-              </div>
-            </div>
-
-            {/* Памятка по лимитам */}
-            <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
-              <h3 className={`text-lg font-black mb-3 ${text}`}>📏 Лимиты Яндекс.Директа (запомни!)</h3>
-              <div className="grid md:grid-cols-2 gap-2">
-                {[
-                  ['Заголовок 1', 'до 56 символов'],
-                  ['Заголовок 2', 'до 30 символов'],
-                  ['Текст объявления', 'до 81 символа'],
-                  ['Быстрая ссылка (текст)', 'до 30 символов'],
-                  ['Быстрая ссылка (описание)', 'до 60 символов'],
-                  ['Уточнения', 'до 25 символов'],
-                  ['Отображаемая ссылка', 'до 20 символов'],
-                  ['Видеообъявление текст', 'до 35 символов']
-                ].map((item, i) => (
-                  <div key={i} className={`p-3 rounded-lg ${dark ? 'bg-slate-800' : 'bg-slate-50'} flex items-center justify-between`}>
-                    <span className={`text-sm font-bold ${text}`}>{item[0]}</span>
-                    <span className={`text-xs ${textMuted} font-mono`}>{item[1]}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Структура кабинета */}
-            <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
-              <h3 className={`text-lg font-black mb-3 ${text}`}>🏗️ Правильная структура кабинета РСЯ</h3>
-              <div className={`${dark ? 'bg-amber-500/10 border-amber-500/30' : 'bg-amber-50 border-amber-300'} border-2 rounded-xl p-4 mb-4`}>
-                <p className={`text-sm font-bold ${text}`}>⚠️ Если свалить все объявления в одну кучу — автостратегии Яндекса сойдут с ума и сольют бюджет.</p>
-              </div>
-              <div className="space-y-2">
-                {[
-                  ['📂 КАМПАНИЯ', 'одна глобальная гипотеза (тест оффера)', 'bg-blue-500'],
-                  ['📁 ГРУППА ОБЪЯВЛЕНИЙ', 'один узкий сегмент или одна боль', 'bg-purple-500'],
-                  ['📄 ОБЪЯВЛЕНИЕ', 'варианты креативов для этого сегмента', 'bg-emerald-500']
-                ].map((item, i) => (
-                  <div key={i} className={`flex items-center gap-3 p-3 rounded-xl ${dark ? 'bg-slate-800' : 'bg-slate-50'}`}>
-                    <div className={`w-2 h-12 rounded-full ${item[2]}`}></div>
-                    <div>
-                      <div className={`font-black text-sm ${text}`}>{item[0]}</div>
-                      <div className={`text-xs ${textMuted}`}>{item[1]}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className={`mt-4 ${dark ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-emerald-50 border-emerald-300'} border-2 rounded-xl p-4`}>
-                <h4 className={`font-black text-sm mb-1 ${text}`}>🚀 Аккуратный старт</h4>
-                <p className={`text-xs ${dark ? 'text-slate-300' : 'text-slate-700'}`}>Запускай ОДНУ кампанию с бюджетом 5 000₽/неделя. Не тестируй сразу 2-3 кампании — алгоритм запутается.</p>
-              </div>
-            </div>
+          <div>
+            <AIBannerStudio
+              dark={dark}
+              seedHeadline={creativeHeadline}
+              seedAdText={creativeMethod}
+              onHeadlineChange={setCreativeHeadline}
+              onAdTextChange={setCreativeMethod}
+              currentPhoto={photo}
+              onPhotoPicked={setPhoto}
+              onApplyIdea={applyAiIdeaToFlow}
+              preferredPersona={gender === 'female' ? 'woman' : gender === 'male' ? 'man' : 'mixed'}
+            />
           </div>
         )}
 
         {/* === ПРЕДЛЕНДИНГ === */}
         {tab === 'pre' && (
           <div className="space-y-4">
-            {/* ПРЕСЕТЫ */}
-            <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className={`text-xl font-black ${text} flex items-center gap-2`}><Sparkles className="w-5 h-5 text-yellow-500" /> Готовые пресеты (один клик)</h2>
-                <button onClick={resetAll} className={`text-xs font-bold ${textMuted} hover:underline flex items-center gap-1`}><RotateCcw className="w-3 h-3" /> Сброс</button>
+            <AtmospaceLandingConstructor
+              dark={dark}
+              value={landingRuntimeData}
+              onChange={(updater) => {
+                setLandingRuntimeArtifact(null);
+                setLandingRuntimeData(updater);
+              }}
+            />
+
+            <div className={`${dark ? 'bg-red-500/10 border-red-500/40' : 'bg-red-50 border-red-300'} border-2 rounded-3xl p-6 shadow-sm`}>
+              <div className="flex items-start gap-3 mb-4">
+                <AlertCircle className="w-6 h-6 text-red-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <h2 className={`text-xl font-black ${text}`}>Режим генерации предлендинга</h2>
+                  <p className={`text-sm ${dark ? 'text-red-100' : 'text-red-900'}`}>
+                    Доступны семь форматов предлендинга. Каждый берёт заголовок и описание клиента как основу, собирает смысловые блоки без брендов и готовит HTML для вставки в Tilda.
+                  </p>
+                </div>
               </div>
-              <p className={`text-xs ${textMuted} mb-3`}>Кликни на пресет → все настройки выставятся автоматически</p>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
-                {PRESETS.map((p) => (
-                  <button key={p.id} onClick={() => applyPreset(p)} className={`text-left rounded-xl p-3 border-2 transition-all ${dark ? 'border-slate-700 hover:border-slate-500 bg-slate-800' : 'border-slate-200 hover:border-slate-400 bg-white'}`}>
-                    <div className="text-2xl mb-1">{p.emoji}</div>
-                    <div className={`font-black text-xs mb-0.5 ${text}`}>{p.name}</div>
-                    <div className={`text-[10px] ${textMuted} leading-tight`}>{p.desc}</div>
+              <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-3">
+                {MANUAL_PRELANDING_MODES.map((mode) => (
+                  <button
+                    key={mode.id}
+                    onClick={() => {
+                      setManualPrelandingMode(mode.id);
+                      const modePresets = mode.id === 'heroBlocks'
+                        ? HERO_BLOCKS_PRESETS
+                        : mode.id === 'natureEditorial'
+                          ? NATURE_EDITORIAL_PRESETS
+                          : mode.id === 'minimalCompare'
+                            ? MINIMAL_COMPARE_PRESETS
+                            : mode.id === 'directionQuiz'
+                              ? DIRECTION_QUIZ_PRESETS
+                              : mode.id === 'personalRouteQuiz'
+                                ? PERSONAL_ROUTE_QUIZ_PRESETS
+                                : mode.id === 'barrierProfileQuiz'
+                                  ? BARRIER_PROFILE_QUIZ_PRESETS
+                                  : CORE_METHOD_PRESETS;
+                      const currentPresetStillFits = modePresets.some((preset) => preset.id === activePresetId);
+                      if (!currentPresetStillFits) {
+                        if (mode.id === 'templateStage') applyCoreMethodTemplate(1);
+                        else applyPreset(modePresets[0]);
+                      }
+                      if (prelandingSync) setPrelandingSync(null);
+                    }}
+                    className={`text-left rounded-2xl border-2 p-4 transition-all ${
+                      manualPrelandingMode === mode.id
+                        ? 'border-red-500 bg-red-500 text-white shadow-lg'
+                        : dark
+                          ? 'border-slate-700 bg-slate-900 text-slate-100 hover:border-red-400'
+                          : 'border-red-100 bg-white text-slate-900 hover:border-red-300'
+                    }`}
+                  >
+                    <div className="font-black text-base mb-1">{mode.title}</div>
+                    <div className={`text-xs leading-relaxed ${manualPrelandingMode === mode.id ? 'text-white/90' : textMuted}`}>{mode.desc}</div>
                   </button>
                 ))}
               </div>
-            </div>
-
-            {/* LIVE PREVIEW */}
-            <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
-              <h2 className={`text-xl font-black ${text} flex items-center gap-2 mb-3`}><Eye className="w-5 h-5" /> Живое превью</h2>
-              <LivePreview tpl={tpl} style={style} palette={palette} dark={dark} />
+              <div className="mt-5 grid md:grid-cols-2 gap-3">
+                <TextArea
+                  label="Заголовок предлендинга"
+                  hint="первый экран и смысл посадочной"
+                  value={creativeHeadline}
+                  onChange={setCreativeHeadline}
+                  rows={2}
+                  placeholder="Например: Зарплата пришла — а денег снова почти нет?"
+                  dark={dark}
+                />
+                <TextArea
+                  label="Текст / подзаголовок предлендинга"
+                  hint="коротко: какой сценарий разбирает бот"
+                  value={creativeMethod}
+                  onChange={setCreativeMethod}
+                  rows={2}
+                  placeholder="Например: Разберитесь, почему деньги заканчиваются раньше срока и что каждый месяц возвращает вас к нулю."
+                  dark={dark}
+                />
+              </div>
+              <p className={`mt-3 text-xs font-bold ${dark ? 'text-red-100' : 'text-red-900'}`}>
+                Все форматы сохраняют ваш заголовок и текст, определяют конкретный сценарий и собирают под него разные офферы, блоки и визуальные сцены. Общие заготовки поверх смысла не подставляются.
+              </p>
             </div>
 
             {/* Шаг 1 */}
-            <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
-              <h2 className={`text-xl font-black mb-3 ${text}`}>1. Текст шаблона</h2>
-              <div className="grid md:grid-cols-3 gap-3">
-                {TPL.map((t) => (
-                  <button key={t.id} onClick={() => setTpl(t.id)} className={`text-left rounded-2xl p-4 border-2 ${tpl === t.id ? 'border-blue-500 bg-blue-50 shadow-md' : (dark ? 'border-slate-700 hover:border-slate-500 bg-slate-800' : 'border-slate-200 hover:border-slate-300 bg-white')}`}>
-                    <div className={`inline-block bg-gradient-to-r ${t.c} text-white text-[10px] font-black uppercase px-2 py-0.5 rounded mb-2`}>{t.a}</div>
-                    <h3 className={`font-black text-sm mb-2 ${tpl === t.id ? 'text-slate-900' : text}`}>{t.h}</h3>
-                    <div className="flex flex-wrap gap-1">
-                      {t.p.map((p, i) => <span key={i} className={`text-[10px] font-bold ${tpl === t.id ? 'bg-white border-slate-300 text-slate-900' : (dark ? 'bg-slate-700 border-slate-600 text-slate-300' : 'bg-white border-slate-200 text-slate-700')} border px-1.5 py-0.5 rounded-full`}>✕ {p}</span>)}
-                    </div>
-                    {tpl === t.id && <div className="mt-2 text-xs font-black text-emerald-600 flex items-center gap-1"><Check className="w-3 h-3" /> Выбран</div>}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Шаг 2: Стиль */}
-            <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
-              <h2 className={`text-xl font-black mb-3 ${text}`}>2. Стиль ({STYLES.length} вариантов)</h2>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 max-h-96 overflow-y-auto">
-                {STYLES.map((s) => (
-                  <button key={s[0]} onClick={() => setStyle(s[0])} className={`text-left rounded-xl p-3 border-2 ${style === s[0] ? 'border-slate-900 bg-slate-100' : (dark ? 'border-slate-700 hover:border-slate-500 bg-slate-800' : 'border-slate-200 hover:border-slate-400 bg-white')}`}>
-                    <div className="text-xl mb-1">{s[2]}</div>
-                    <div className={`font-black text-xs mb-0.5 ${style === s[0] ? 'text-slate-900' : text}`}>{s[1]}</div>
-                    <div className={`text-[10px] ${style === s[0] ? 'text-slate-600' : textMuted} leading-tight`}>{s[3]}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Шаг 3: Палитра */}
-            <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
-              <h2 className={`text-xl font-black mb-3 ${text}`}>3. Палитра ({PALETTES.length})</h2>
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
-                {PALETTES.map((p) => (
-                  <button key={p[0]} onClick={() => setPalette(p[0])} className={`rounded-xl p-2 border-2 ${palette === p[0] ? 'border-slate-900 scale-[1.03]' : (dark ? 'border-slate-700 hover:border-slate-500' : 'border-slate-200 hover:border-slate-400')}`}>
-                    <div className="flex gap-0.5 mb-1.5 h-10 rounded-lg overflow-hidden">{p[3].map((c, i) => <div key={i} className="flex-1" style={{ background: c }} />)}</div>
-                    <div className={`text-[10px] font-black ${text} flex items-center gap-1`}><span>{p[2]}</span><span className="truncate">{p[1]}</span></div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Эффекты + типо */}
-            <div className="grid md:grid-cols-2 gap-3">
+            {manualPrelandingMode === 'templateStage' && (
               <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
-                <h2 className={`text-base font-black mb-2 ${text}`}>4. Эффекты ({effects.length}/{EFFECTS.length})</h2>
-                <div className="space-y-1 max-h-64 overflow-y-auto pr-2">
-                  {EFFECTS.map((e) => (
-                    <label key={e[0]} className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer border ${effects.includes(e[0]) ? 'border-blue-500 bg-blue-50' : (dark ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-100 hover:bg-slate-50')}`}>
-                      <input type="checkbox" checked={effects.includes(e[0])} onChange={() => toggleEf(e[0])} className="accent-blue-600" />
-                      <span className={`text-xs font-bold flex-1 ${effects.includes(e[0]) ? 'text-slate-900' : text}`}>{e[1]}</span>
-                    </label>
-                  ))}
+                <h2 className={`text-xl font-black mb-2 ${text}`}>Формат 1: метод + 3 блока</h2>
+                <p className={`text-sm ${textMuted} mb-4`}>Каждая карточка привязана к своему углу, дизайну, палитре, типографике и структуре. Выбрали сценарий → сгенерировали картинки и Tilda HTML.</p>
+                <div className="grid md:grid-cols-3 gap-3">
+                  {TPL.map((t) => {
+                    const linkedPreset = CORE_METHOD_PRESETS.find((preset) => preset.tpl === t.id) || CORE_METHOD_PRESETS[0];
+                    const isSelected = tpl === t.id;
+                    return (
+                    <button key={t.id} onClick={() => applyCoreMethodTemplate(t.id)} className={`text-left rounded-2xl p-4 border-2 ${isSelected ? 'border-blue-500 bg-blue-50 shadow-md' : (dark ? 'border-slate-700 hover:border-slate-500 bg-slate-800' : 'border-slate-200 hover:border-slate-300 bg-white')}`}>
+                      <div className={`inline-block bg-gradient-to-r ${t.c} text-white text-[10px] font-black uppercase px-2 py-0.5 rounded mb-2`}>{t.a}</div>
+                      <h3 className={`font-black text-sm mb-2 ${isSelected ? 'text-slate-900' : text}`}>{t.t}</h3>
+                      <div className={`mb-2 rounded-xl border px-3 py-2 text-[11px] font-bold ${isSelected ? 'border-blue-200 bg-white text-slate-700' : (dark ? 'border-slate-700 bg-slate-900 text-slate-300' : 'border-slate-100 bg-slate-50 text-slate-600')}`}>
+                        {linkedPreset.emoji} Дизайн: {linkedPreset.name}
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {t.p.map((p, i) => <span key={i} className={`text-[10px] font-bold ${isSelected ? 'bg-white border-slate-300 text-slate-900' : (dark ? 'bg-slate-700 border-slate-600 text-slate-300' : 'bg-white border-slate-200 text-slate-700')} border px-1.5 py-0.5 rounded-full`}>{p}</span>)}
+                      </div>
+                      {isSelected && <div className="mt-2 text-xs font-black text-emerald-600 flex items-center gap-1"><Check className="w-3 h-3" /> Сценарий и дизайн выбраны</div>}
+                    </button>
+                  )})}
                 </div>
               </div>
+            )}
 
-              <div className="space-y-3">
-                <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
-                  <h2 className={`text-base font-black mb-2 ${text}`}>Типографика</h2>
-                  <div className="space-y-1">
-                    {TYPOS.map((t) => (
-                      <label key={t[0]} className={`flex items-start gap-2 p-2 rounded-lg cursor-pointer border ${typo === t[0] ? 'border-slate-900 bg-slate-100' : (dark ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-100')}`}>
-                        <input type="radio" checked={typo === t[0]} onChange={() => setTypo(t[0])} className="mt-0.5 accent-slate-900" />
-                        <div><div className={`font-black text-xs ${typo === t[0] ? 'text-slate-900' : text}`}>{t[1]}</div><div className={`text-[10px] ${typo === t[0] ? 'text-slate-600' : textMuted}`}>{t[2]}</div></div>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-                <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
-                  <h2 className={`text-base font-black mb-2 ${text}`}>Структура</h2>
-                  <div className="space-y-1">
-                    {LAYOUTS.map((l) => (
-                      <label key={l[0]} className={`flex items-start gap-2 p-2 rounded-lg cursor-pointer border ${layout === l[0] ? 'border-slate-900 bg-slate-100' : (dark ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-100')}`}>
-                        <input type="radio" checked={layout === l[0]} onChange={() => setLayout(l[0])} className="mt-0.5 accent-slate-900" />
-                        <div><div className={`font-black text-xs ${layout === l[0] ? 'text-slate-900' : text}`}>{l[1]}</div><div className={`text-[10px] ${layout === l[0] ? 'text-slate-600' : textMuted}`}>{l[2]}</div></div>
-                      </label>
-                    ))}
-                  </div>
-                </div>
+            {manualPrelandingMode !== 'templateStage' && (
+            <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className={`text-xl font-black ${text} flex items-center gap-2`}>
+                  <Sparkles className="w-5 h-5 text-yellow-500" />
+                  {manualPrelandingMode === 'minimalCompare'
+                    ? 'Формат 4: тихое сравнение'
+                    : manualPrelandingMode === 'natureEditorial'
+                      ? 'Формат 3: nature editorial'
+                      : manualPrelandingMode === 'directionQuiz'
+                        ? 'Формат 5: квиз-направление'
+                        : manualPrelandingMode === 'personalRouteQuiz'
+                          ? 'Формат 6: личный маршрут'
+                          : manualPrelandingMode === 'barrierProfileQuiz'
+                            ? 'Формат 7: профиль барьера'
+                            : 'Формат 2: hero-картинка + блоки'}
+                </h2>
+                <button onClick={resetAll} className={`text-xs font-bold ${textMuted} hover:underline flex items-center gap-1`}><RotateCcw className="w-3 h-3" /> Сброс</button>
+              </div>
+              <p className={`text-xs ${textMuted} mb-3`}>
+                {manualPrelandingMode === 'minimalCompare'
+                  ? 'Для этого режима оставлены 3 минималистичных варианта. HTML собирается без фото и без ожидания OpenAI-картинок: только текст, микро-смыслы и CTA.'
+                  : manualPrelandingMode === 'natureEditorial'
+                    ? 'Для этого режима оставлены 3 editorial-варианта. Каждый задаёт журнальную палитру, типографику, структуру и отдельный визуальный маршрут для AI-фото.'
+                    : manualPrelandingMode === 'directionQuiz'
+                      ? 'Интерактивный квиз из 4 вопросов. По заголовку и тексту собирается диагностика направления, итог и одна смысловая AI-сцена.'
+                      : manualPrelandingMode === 'personalRouteQuiz'
+                        ? 'Личный маршрут из 5 вопросов. Ответы формируют персональный итог, а одна AI-сцена поддерживает смысл первого экрана.'
+                        : manualPrelandingMode === 'barrierProfileQuiz'
+                          ? 'Пять вопросов выявляют повторяющийся сценарий срыва, показывают профиль барьера и дают один реалистичный первый шаг. Одна AI-сцена поддерживает смысл первого экрана.'
+                          : 'Для этого режима оставлены только 3 рабочих варианта. Каждый сразу выставляет стиль, палитру, типографику, структуру и промпт для живых AI-фото.'}
+              </p>
+              <div className="grid md:grid-cols-3 gap-2">
+                {visiblePrelandingPresets.map((p) => {
+                  const isSelected = activePresetId === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => applyPreset(p)}
+                      className={`text-left rounded-xl p-3 border-2 transition-all ${
+                        isSelected
+                          ? 'border-blue-500 bg-blue-50 shadow-md ring-2 ring-blue-100'
+                          : (dark ? 'border-slate-700 hover:border-slate-500 bg-slate-800' : 'border-slate-200 hover:border-slate-400 bg-white')
+                      }`}
+                    >
+                      <div className="text-2xl mb-1">{p.emoji}</div>
+                      <div className={`font-black text-xs mb-0.5 ${isSelected ? 'text-slate-900' : text}`}>{p.name}</div>
+                      <div className={`text-[10px] ${isSelected ? 'text-slate-600' : textMuted} leading-tight`}>{p.desc}</div>
+                      {isSelected && <div className="mt-2 text-[10px] font-black text-emerald-600 flex items-center gap-1"><Check className="w-3 h-3" /> Выбран как база</div>}
+                    </button>
+                  );
+                })}
               </div>
             </div>
-
-            {/* Промт */}
-            <div className="bg-gradient-to-br from-slate-900 to-blue-900 rounded-3xl p-6 text-white shadow-xl">
-              <h2 className="text-xl font-black mb-3 flex items-center gap-2"><Wand2 className="w-5 h-5" /> Готовый промт</h2>
-              {!canPre ? (
-                <div className="bg-white/10 rounded-xl p-4 text-center">
-                  <AlertCircle className="w-8 h-8 mx-auto mb-2 text-yellow-400" />
-                  <p className="text-sm">Заполни шаги выше: {!tpl && '✕ текст '}{!style && '✕ стиль '}{!palette && '✕ палитра'}</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <CopyBtn text={prompt} label={`Скопировать промт (${prompt.length} симв.)`} big />
-                  <details className="bg-black/30 rounded-xl">
-                    <summary className="cursor-pointer p-3 font-bold text-sm flex items-center justify-between">
-                      <span className="flex items-center gap-2"><Eye className="w-4 h-4" /> Посмотреть промт</span>
-                      <ChevronDown className="w-4 h-4" />
-                    </summary>
-                    <pre className="p-3 text-[10px] whitespace-pre-wrap leading-relaxed max-h-80 overflow-y-auto border-t border-white/10">{prompt}</pre>
-                  </details>
-                  <div className="bg-white/10 rounded-xl p-3 text-xs space-y-1">
-                    <p><strong className="text-yellow-400">→</strong> Открой ChatGPT/Claude/Gemini</p>
-                    <p><strong className="text-yellow-400">→</strong> Вставь промт, получи HTML</p>
-                    <p><strong className="text-yellow-400">→</strong> Вставь HTML в Body мини-лендинга BotHelp</p>
-                  </div>
-                </div>
-              )}
-            </div>
+            )}
 
             <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-3xl p-6 text-white shadow-xl">
-              <h2 className="text-xl font-black mb-3 flex items-center gap-2"><Copy className="w-5 h-5" /> Готовый HTML для BotHelp</h2>
-              {!canPre ? (
+              <h2 className="text-xl font-black mb-3 flex items-center gap-2"><Copy className="w-5 h-5" /> Готовый HTML для Tilda</h2>
+              {isAiPrelandingBuilding ? (
+                <div className="bg-white/15 rounded-xl p-4 text-center">
+                  <Sparkles className="w-8 h-8 mx-auto mb-2 text-yellow-200 animate-pulse" />
+                  <p className="text-sm font-bold">{prelandingAiStatus || (manualPrelandingMode === 'minimalCompare'
+                    ? 'Собираю минималистичный HTML. Старый код скрыт, чтобы его не вставить повторно.'
+                    : isQuizPrelandingMode
+                      ? 'OpenAI генерирует одну смысловую hero-картинку. Старый код скрыт, чтобы его не вставить повторно.'
+                      : 'OpenAI генерирует 3 разные картинки. Старый код скрыт, чтобы его не вставить повторно.')}</p>
+                  <p className="mt-2 text-xs text-white/80">{manualPrelandingMode === 'minimalCompare' ? 'HTML появится автоматически после подготовки варианта.' : 'После публикации изображений HTML появится автоматически.'}</p>
+                </div>
+              ) : isAiPrelandingInvalidated ? (
                 <div className="bg-white/15 rounded-xl p-4 text-center">
                   <AlertCircle className="w-8 h-8 mx-auto mb-2 text-yellow-200" />
-                  <p className="text-sm">Выбери текст, стиль и палитру - конструктор соберёт готовый HTML без обращения к ИИ.</p>
+                  <p className="text-sm">Старый HTML очищен. Сгенерируйте новый код и дождитесь успешного завершения.</p>
+                </div>
+              ) : !hasPrelandingKeys ? (
+                <div className="bg-white/15 rounded-xl p-4 text-center">
+                  <AlertCircle className="w-8 h-8 mx-auto mb-2 text-yellow-200" />
+                  <p className="text-sm">Заполните верхние поля сборки: {prelandingRuntimeMissing.join(', ')}.</p>
+                </div>
+              ) : !(prelandingTemplateReady && style && palette) ? (
+                <div className="bg-white/15 rounded-xl p-4 text-center">
+                  <AlertCircle className="w-8 h-8 mx-auto mb-2 text-yellow-200" />
+                  <p className="text-sm">{prelandingNeedsTemplate ? 'Выберите один из 3 шаблонов, стиль и палитру. После этого запустите генерацию AI-картинок и HTML.' : 'Выберите стиль и палитру. После этого запустите генерацию AI-картинок и HTML.'}</p>
+                </div>
+              ) : !prelandingAiImagesReady ? (
+                <div className="bg-white/15 rounded-xl p-4 text-center">
+                  <Sparkles className="w-8 h-8 mx-auto mb-2 text-yellow-200" />
+                  <p className="text-sm font-bold">{manualPrelandingMode === 'minimalCompare'
+                    ? 'HTML появится после подготовки минималистичного формата. Картинки для этого режима не нужны.'
+                    : isQuizPrelandingMode
+                      ? 'HTML появится после публикации одной смысловой hero-картинки. Если OpenAI зависнет, конструктор сам перезапустит попытку.'
+                      : 'HTML появится после публикации трёх AI-картинок: hero, блок ценности и CTA. Если OpenAI зависнет, конструктор сам перезапустит попытку.'}</p>
+                  <button
+                    type="button"
+                    onClick={handleGeneratePrelandingAiImages}
+                    disabled={!canGeneratePrelandingAi}
+                    className="mt-4 rounded-2xl bg-yellow-300 px-5 py-3 text-sm font-black text-slate-950 shadow-lg hover:bg-yellow-200 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {manualPrelandingMode === 'minimalCompare'
+                      ? 'Собрать HTML'
+                      : isQuizPrelandingMode
+                        ? 'Сгенерировать hero-картинку и HTML'
+                        : 'Сгенерировать AI-картинки и HTML'}
+                  </button>
+                  {quota.prelandingBlocked && (
+                    <p className="mt-3 text-xs font-bold text-yellow-100">Лимит AI-предлендингов исчерпан: {quota.prelandingsUsed || 0}/{quota.prelandingLimit || 0}.</p>
+                  )}
+                  {prelandingAiError && (
+                    <p className="mt-3 rounded-xl bg-red-500/25 p-3 text-xs font-bold text-white">{prelandingAiError}</p>
+                  )}
+                  {prelandingAiStatus && !prelandingAiError && (
+                    <p className="mt-3 rounded-xl bg-white/10 p-3 text-xs font-bold text-white">{prelandingAiStatus}</p>
+                  )}
+                </div>
+              ) : prelandingHtmlValidation.errors.length ? (
+                <div className="bg-white/15 rounded-xl p-4">
+                  <AlertCircle className="w-8 h-8 mx-auto mb-2 text-yellow-200" />
+                  <p className="text-center text-sm font-black">HTML заблокирован автоматической проверкой.</p>
+                  <div className="mt-3 space-y-2">
+                    {prelandingHtmlValidation.errors.map((item, index) => (
+                      <div key={index} className="rounded-lg bg-red-500/25 p-2 text-xs font-bold text-white">{item}</div>
+                    ))}
+                  </div>
+                  <p className="mt-3 text-center text-xs text-white/80">Исправьте поля клиента или перегенерируйте код. Кнопка копирования появится только после чистой проверки.</p>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <div className="grid md:grid-cols-2 gap-2">
-                    <CopyBtn text={prelandingHtml} label={`Скопировать HTML (${Math.round(prelandingHtml.length / 1000)}KB)`} big />
-                    <DownloadBtn filename="prelanding-bothelp.html" content={prelandingHtml} label="Скачать .html файл" />
+                  {prelandingAiStatus && (
+                    <div className="rounded-xl bg-white/15 p-3 text-xs font-bold text-white">{prelandingAiStatus}</div>
+                  )}
+                  {prelandingHtmlValidation.warnings.length > 0 && (
+                    <div className="rounded-xl bg-yellow-300/20 p-3 text-xs font-bold text-yellow-50">
+                      <div className="mb-1 text-white">Предупреждения проверки:</div>
+                      {prelandingHtmlValidation.warnings.map((item, index) => (
+                        <div key={index}>• {item}</div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="rounded-xl bg-emerald-300/20 p-3 text-xs font-black text-white">
+                    Проверка пройдена: Tilda HTML собран на Atmospace runtime, с publicLandingKey, /init, /click и безопасными CTA.
+                  </div>
+                  <div className="grid md:grid-cols-1 gap-2">
+                    <CopyBtn text={prelandingHtml} label="Скопировать HTML-код" big />
                   </div>
                   <details className="bg-black/25 rounded-xl">
                     <summary className="cursor-pointer p-3 font-bold text-sm flex items-center justify-between">
@@ -2741,402 +6700,14 @@ ${creativeTone || 'Пользователь не заполнил. Исполь�
                     </summary>
                     <pre className="p-3 text-[9px] whitespace-pre-wrap leading-relaxed max-h-80 overflow-y-auto border-t border-white/10">{prelandingHtml}</pre>
                   </details>
-                  <div className="bg-white/15 rounded-xl p-3 text-xs space-y-1">
-                    <p><strong className="text-yellow-200">Куда вставлять:</strong> BotHelp → Мини-лендинг → Расширенные настройки → Вставить HTML-код → Body.</p>
-                    <p><strong className="text-yellow-200">Важно:</strong> кнопки Telegram/MAX и политика остаются системными блоками BotHelp, этот HTML их стилизует и аккуратно поднимает под карточку.</p>
-                  </div>
                 </div>
               )}
             </div>
           </div>
         )}
 
-        {/* === ПРОДАЮЩАЯ === */}
-        {tab === 'sale' && (
-          <div className="space-y-4">
-            <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
-              <h2 className={`text-2xl font-black mb-3 ${text}`}>📖 Продающая история</h2>
-              <p className={`text-sm ${textMuted} mb-4`}>Эталонный HTML внутри. Заполни поля → конструктор подставит данные → копируй или скачивай готовый код.</p>
-
-              <div className={`${dark ? 'bg-amber-500/10 border-amber-500/30' : 'bg-amber-50 border-amber-200'} border-2 rounded-xl p-3 mb-4 flex items-start gap-2`}>
-                <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                <p className={`text-xs ${dark ? 'text-amber-200' : 'text-amber-900'}`}><strong>Текст и верстка не меняются!</strong> Подставляются только личные поля и финальная ссылка.</p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 mb-4">
-                <button onClick={() => setGender('male')} className={`p-3 rounded-xl border-2 font-black text-sm ${gender === 'male' ? 'border-blue-500 bg-blue-50 text-slate-900' : (dark ? 'border-slate-700 bg-slate-800 text-slate-300' : 'border-slate-200 text-slate-700')}`}>👨 Мужская версия</button>
-                <button onClick={() => setGender('female')} className={`p-3 rounded-xl border-2 font-black text-sm ${gender === 'female' ? 'border-pink-500 bg-pink-50 text-slate-900' : (dark ? 'border-slate-700 bg-slate-800 text-slate-300' : 'border-slate-200 text-slate-700')}`}>👩 Женская версия</button>
-              </div>
-
-              <div className="grid md:grid-cols-2 gap-3">
-                <Field label="Имя и фамилия" hint="Например: Павел Андрюшенков" value={name} onChange={setName} placeholder="Иван Иванов" dark={dark} />
-                <Field label="Возраст" hint="без слова 'лет'" value={age} onChange={setAge} placeholder="35" dark={dark} />
-                <Field label="Краткое имя" hint="как друзья называют" value={shortName} onChange={setShortName} placeholder="Ваня" dark={dark} />
-                <Field label="Ссылка на ваше фото" hint="прямая ссылка на jpg/png" value={photo} onChange={setPhoto} placeholder="https://..." dark={dark} />
-                <div className="md:col-span-2"><Field label="Ссылка на оффер" hint="финальная кнопка истории" value={offer} onChange={setOffer} placeholder="https://oksanakorchagina.ru/3" dark={dark} /></div>
-              </div>
-
-              <div className="flex gap-2 mt-4">
-                <button onClick={fillSaleDemo} className={`flex-1 px-4 py-3 rounded-xl border-2 font-black text-xs ${dark ? 'border-slate-700 hover:bg-slate-800 text-slate-300' : 'border-slate-200 hover:bg-slate-50 text-slate-700'}`}>📝 Заполнить демо</button>
-                <button onClick={resetSale} className={`px-4 py-3 rounded-xl border-2 font-black text-xs flex items-center gap-1 ${dark ? 'border-slate-700 hover:bg-slate-800 text-slate-300' : 'border-slate-200 hover:bg-slate-50 text-slate-700'}`}><RotateCcw className="w-3 h-3" /> Сброс</button>
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-slate-900 to-blue-900 rounded-3xl p-6 text-white">
-              <h3 className="text-lg font-black mb-3 flex items-center gap-2"><Copy className="w-5 h-5" /> Готовый HTML ({Math.round(saleHtml.length / 1000)}KB)</h3>
-              <div className="grid md:grid-cols-2 gap-2 mb-3">
-                <CopyBtn text={saleHtml} label={`Скопировать HTML ${gender === 'male' ? '👨' : '👩'}`} big />
-                <DownloadBtn filename={`prodayushaya-istoriya-${gender}.html`} content={saleHtml} label="Скачать .html файл" />
-              </div>
-              <details className="bg-black/30 rounded-xl">
-                <summary className="cursor-pointer p-3 font-bold text-sm flex items-center justify-between">
-                  <span className="flex items-center gap-2"><Eye className="w-4 h-4" /> Превью кода</span>
-                  <ChevronDown className="w-4 h-4" />
-                </summary>
-                <pre className="p-3 text-[9px] whitespace-pre-wrap leading-relaxed max-h-80 overflow-y-auto border-t border-white/10">{saleHtml}</pre>
-              </details>
-              <div className="bg-white/10 rounded-xl p-3 text-xs mt-3">
-                <strong className="text-yellow-400">📍 Куда вставлять:</strong> BotHelp → Мини-лендинг → "Вставить HTML-код" → Body
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* === ОФФЕР === */}
-        {tab === 'offer' && (
-          <div className="space-y-4">
-            <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
-              <h2 className={`text-2xl font-black mb-3 ${text}`}>💰 Оффер (Практикум)</h2>
-              <p className={`text-sm ${textMuted} mb-4`}>HTML внутри. Введи 3 ссылки → копируй или скачивай готовый код.</p>
-
-              <div className={`${dark ? 'bg-amber-500/10 border-amber-500/30' : 'bg-amber-50 border-amber-200'} border-2 rounded-xl p-3 mb-4 flex items-start gap-2`}>
-                <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                <p className={`text-xs ${dark ? 'text-amber-200' : 'text-amber-900'}`}><strong>Текст, цена 990₽, отзывы и команда — не редактируются!</strong> Меняются только 3 личные ссылки.</p>
-              </div>
-
-              <div className="space-y-3">
-                <Field label="① Ссылка на оплату GetCourse" hint="ваша партнёрская ссылка на 990₽" value={pay} onChange={setPay} placeholder="https://voronkapodkluch.getcourse.ru/page2?gcao=54688&gcpc=421e3" dark={dark} />
-                <Field label="② Ваш Telegram" hint="https://t.me/your_username" value={tg} onChange={setTg} placeholder="https://t.me/your_username" dark={dark} />
-                <Field label="③ Ваш MAX" hint="ссылка на профиль MAX" value={max} onChange={setMax} placeholder="https://iimax.ru/your_username" dark={dark} />
-              </div>
-
-              <div className="flex gap-2 mt-4">
-                <button onClick={fillOfferDemo} className={`flex-1 px-4 py-3 rounded-xl border-2 font-black text-xs ${dark ? 'border-slate-700 hover:bg-slate-800 text-slate-300' : 'border-slate-200 hover:bg-slate-50 text-slate-700'}`}>📝 Заполнить демо</button>
-                <button onClick={resetOffer} className={`px-4 py-3 rounded-xl border-2 font-black text-xs flex items-center gap-1 ${dark ? 'border-slate-700 hover:bg-slate-800 text-slate-300' : 'border-slate-200 hover:bg-slate-50 text-slate-700'}`}><RotateCcw className="w-3 h-3" /> Сброс</button>
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-yellow-400 to-amber-500 rounded-3xl p-6 text-slate-900">
-              <h3 className="text-lg font-black mb-3 flex items-center gap-2"><Copy className="w-5 h-5" /> Готовый HTML ({Math.round(offerHtml.length / 1000)}KB)</h3>
-              <div className="grid md:grid-cols-2 gap-2 mb-3">
-                <CopyBtn text={offerHtml} label="Скопировать HTML оффера" big dark />
-                <DownloadBtn filename="offer-praktikum.html" content={offerHtml} label="Скачать .html файл" />
-              </div>
-              <details className="bg-black/20 rounded-xl">
-                <summary className="cursor-pointer p-3 font-bold text-sm flex items-center justify-between">
-                  <span className="flex items-center gap-2"><Eye className="w-4 h-4" /> Превью кода</span>
-                  <ChevronDown className="w-4 h-4" />
-                </summary>
-                <pre className="p-3 text-[9px] whitespace-pre-wrap leading-relaxed max-h-80 overflow-y-auto border-t border-black/10">{offerHtml}</pre>
-              </details>
-            </div>
-          </div>
-        )}
-
-        {/* === ДОКУМЕНТЫ === */}
-        {tab === 'docs' && (
-          <div className="space-y-4">
-            <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
-              <h2 className={`text-2xl font-black mb-3 flex items-center gap-2 ${text}`}><ShieldCheck className="w-6 h-6 text-emerald-600" /> Документы для предлендинга РСЯ</h2>
-              <p className={`text-sm ${textMuted} mb-4`}>Эти документы публикуются отдельными мини-лендингами: политика, согласие на обработку персональных данных и согласие на рекламные сообщения. Потом их ссылки вставляются в настройки пользовательских соглашений предлендинга.</p>
-
-              <div className={`${dark ? 'bg-amber-500/10 border-amber-500/30' : 'bg-amber-50 border-amber-200'} border-2 rounded-xl p-3 mb-4 flex items-start gap-2`}>
-                <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                <p className={`text-xs ${dark ? 'text-amber-200' : 'text-amber-900'}`}><strong>Это шаблоны из ваших исходных документов.</strong> Перед публикацией проверьте реквизиты и разместите каждый документ по отдельной ссылке.</p>
-              </div>
-
-              <div className="grid md:grid-cols-2 gap-3">
-                <Field label="Дата редакции" hint="например 29.04.2026" value={docDate} onChange={setDocDate} placeholder="29.04.2026" dark={dark} />
-                <Field label="Статус" hint="ИП / самозанятый / ООО" value={status} onChange={setStatus} placeholder="ИП" dark={dark} />
-                <div className="md:col-span-2"><Field label="Оператор" hint="ФИО ИП / самозанятого / юрлица" value={operatorName} onChange={setOperatorName} placeholder="ИП Иванов Иван Иванович" dark={dark} /></div>
-                <Field label="ИНН" value={inn} onChange={setInn} placeholder="123456789012" dark={dark} />
-                <Field label="ОГРНИП / ОГРН" hint="если есть" value={ogrn} onChange={setOgrn} placeholder="123456789012345" dark={dark} />
-                <Field label="Email" value={email} onChange={setEmail} placeholder="hello@example.ru" dark={dark} />
-                <Field label="Телефон" value={phone} onChange={setPhone} placeholder="+7 900 000-00-00" dark={dark} />
-              </div>
-
-              <div className="grid md:grid-cols-3 gap-3 mt-4">
-                <Field label="Ссылка на Политику" value={privacyUrl} onChange={setPrivacyUrl} placeholder="https://..." dark={dark} />
-                <Field label="Ссылка на согласие ПДн" value={personalUrl} onChange={setPersonalUrl} placeholder="https://..." dark={dark} />
-                <Field label="Ссылка на рекламное согласие" value={adsUrl} onChange={setAdsUrl} placeholder="https://..." dark={dark} />
-              </div>
-
-              <div className="flex gap-2 mt-4">
-                <button onClick={fillDocsDemo} className={`flex-1 px-4 py-3 rounded-xl border-2 font-black text-xs ${dark ? 'border-slate-700 hover:bg-slate-800 text-slate-300' : 'border-slate-200 hover:bg-slate-50 text-slate-700'}`}>📝 Заполнить демо</button>
-                <button onClick={resetDocs} className={`px-4 py-3 rounded-xl border-2 font-black text-xs flex items-center gap-1 ${dark ? 'border-slate-700 hover:bg-slate-800 text-slate-300' : 'border-slate-200 hover:bg-slate-50 text-slate-700'}`}><RotateCcw className="w-3 h-3" /> Сброс</button>
-              </div>
-            </div>
-
-            <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
-              <h3 className={`text-lg font-black mb-3 ${text}`}>Фраза для чекбокса / блока согласий</h3>
-              <div className={`${dark ? 'bg-slate-800' : 'bg-slate-50'} rounded-xl p-4 mb-3`}>
-                <p className={`text-sm ${text}`}>{policyLabel}</p>
-              </div>
-              <CopyBtn text={policyLabel} label="Скопировать фразу" />
-            </div>
-
-            {[
-              ['privacy', legalDocs.privacy],
-              ['personal', legalDocs.personal],
-              ['ads', legalDocs.ads]
-            ].map(([key, content]) => (
-              <div key={key} className={`${card} rounded-3xl p-6 shadow-sm border`}>
-                <h3 className={`text-lg font-black mb-3 ${text}`}>{DOC_TEMPLATES[key].title}</h3>
-                <div className="grid md:grid-cols-2 gap-2 mb-3">
-                  <CopyBtn text={content} label="Скопировать текст документа" />
-                  <DownloadBtn filename={DOC_TEMPLATES[key].filename} content={content} label="Скачать .txt" />
-                </div>
-                <details className={`${dark ? 'bg-slate-800' : 'bg-slate-50'} rounded-xl`}>
-                  <summary className={`cursor-pointer p-3 font-bold text-sm flex items-center justify-between ${text}`}>
-                    <span className="flex items-center gap-2"><Eye className="w-4 h-4" /> Посмотреть документ</span>
-                    <ChevronDown className="w-4 h-4" />
-                  </summary>
-                  <pre className={`p-3 text-[10px] whitespace-pre-wrap leading-relaxed max-h-96 overflow-y-auto border-t ${dark ? 'border-slate-700 text-slate-300' : 'border-slate-200 text-slate-700'}`}>{content}</pre>
-                </details>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* === БОНУСЫ === */}
-        {tab === 'bonus' && (
-          <div className="space-y-4">
-            <div className="bg-gradient-to-br from-violet-700 via-slate-900 to-blue-900 rounded-3xl p-6 md:p-8 text-white shadow-2xl">
-              <div className="inline-flex items-center gap-2 bg-yellow-400 text-slate-900 px-3 py-1 rounded-full text-xs font-black uppercase mb-3">
-                <Sparkles className="w-3 h-3" /> Подарок внутри продукта
-              </div>
-              <h2 className="text-2xl md:text-4xl font-black mb-3">Бонусная библиотека промптов</h2>
-              <div className="grid md:grid-cols-2 gap-3">
-                <div className="bg-white/10 rounded-2xl p-4 backdrop-blur">
-                  <div className="text-3xl font-black text-yellow-300">{BONUS_PROMPTS.length}</div>
-                  <div className="text-xs text-slate-300 font-bold uppercase">промптов в библиотеке</div>
-                </div>
-                <div className="bg-white/10 rounded-2xl p-4 backdrop-blur">
-                  <div className="text-3xl font-black text-emerald-300">250 000₽+</div>
-                  <div className="text-xs text-slate-300 font-bold uppercase">оценочная ценность</div>
-                </div>
-              </div>
-            </div>
-
-            <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
-              <h3 className={`text-xl font-black mb-3 ${text}`}>Как пользоваться библиотекой</h3>
-              <div className="grid md:grid-cols-4 gap-3">
-                {[
-                  ['1. Открой', 'Нажми на карточку нужного промпта.'],
-                  ['2. Прочитай', 'Проверь, подходит ли он под текущую задачу.'],
-                  ['3. Скопируй', 'Кнопка копирует тело промпта без изменений.'],
-                  ['4. Примени', 'Подставь свои данные, лендинг, ЦА или продукт.']
-                ].map((item, i) => (
-                  <div key={i} className={`${dark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} border rounded-xl p-4`}>
-                    <div className={`font-black text-sm mb-1 ${text}`}>{item[0]}</div>
-                    <p className={`text-xs ${textMuted}`}>{item[1]}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid gap-3">
-              {BONUS_PROMPTS.map((prompt, i) => (
-                <details key={i} className={`${card} border rounded-2xl shadow-sm overflow-hidden group`}>
-                  <summary className="cursor-pointer list-none p-4 md:p-5">
-                    <div className="flex flex-col md:flex-row md:items-center gap-3 justify-between">
-                      <div className="flex items-start gap-3">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black flex-shrink-0 ${dark ? 'bg-yellow-400 text-slate-900' : 'bg-slate-900 text-white'}`}>{i + 1}</div>
-                        <div>
-                          <div className={`font-black text-base md:text-lg ${text}`}>{prompt.title}</div>
-                          <p className={`text-xs ${textMuted} mt-1`}>{prompt.description}</p>
-                          <div className="flex flex-wrap gap-2 mt-2">
-                            <span className={`text-[10px] px-2 py-1 rounded-full font-black ${dark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>{prompt.category}</span>
-                            <span className="text-[10px] px-2 py-1 rounded-full font-black bg-emerald-500/15 text-emerald-500">ценность: {prompt.value}</span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className={`flex items-center gap-2 text-xs font-black ${dark ? 'text-yellow-300' : 'text-blue-600'}`}>
-                        Открыть промпт <ChevronDown className="w-4 h-4 transition-transform group-open:rotate-180" />
-                      </div>
-                    </div>
-                  </summary>
-                  <div className={`border-t ${dark ? 'border-slate-800 bg-slate-950/40' : 'border-slate-100 bg-slate-50'} p-4 md:p-5`}>
-                    <div className="grid md:grid-cols-[1fr_220px] gap-3 items-start">
-                      <pre className={`text-[11px] leading-relaxed whitespace-pre-wrap max-h-[520px] overflow-y-auto rounded-xl p-4 border ${dark ? 'bg-slate-950 border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-700'}`}>{prompt.text}</pre>
-                      <div className="space-y-2">
-                        <CopyBtn text={prompt.text} label="Скопировать промпт" dark={dark} />
-                        <DownloadBtn filename={`${String(i + 1).padStart(2, '0')}-${prompt.title.toLowerCase().replace(/[^a-zа-яё0-9]+/gi, '-')}.txt`} content={prompt.text} label="Скачать .txt" />
-                        <div className={`${dark ? 'bg-slate-900 text-slate-400' : 'bg-white text-slate-500'} rounded-xl p-3 text-xs border ${dark ? 'border-slate-800' : 'border-slate-200'}`}>
-                          Название адаптировано, тело промпта сохранено из исходной библиотеки.
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </details>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* === УСТАНОВКА === */}
-        {tab === 'install' && (
-          <div className={`${card} rounded-3xl p-6 md:p-8 shadow-sm border`}>
-            <h2 className={`text-2xl font-black mb-4 flex items-center gap-2 ${text}`}><Rocket className="w-6 h-6 text-blue-600" /> Установка в BotHelp</h2>
-            <div className="space-y-3">
-              {[
-                ['Создайте Мини-лендинг', 'BotHelp → "Инструменты роста" (↗ слева) → "Новый инструмент" → "Мини-лендинг"'],
-                ['Заполните название', 'Например: "Предлендинг РСЯ", "Продающая история", "Оффер Практикум". Поля "Заголовок" и "Описание" — ПУСТЫМИ!'],
-                ['Включите HTML-код', 'Прокрутите вниз → "Расширенные настройки" → включите тумблер "Вставить HTML-код"'],
-                ['Вставьте код в Body', 'Скопируйте готовый HTML из конструктора и вставьте в окно Body. Head используйте только при подключённом собственном домене BotHelp.'],
-                ['Только для предлендинга: аналитика', 'Включите "Отслеживать подписку через аналитику" → впишите номер счётчика Яндекс.Метрики → скопируйте событие вида subscription_ml_7'],
-                ['Только для предлендинга: кнопки мессенджеров', 'Добавьте кнопку Telegram/MAX только после подключения канала: выберите канал, бота/авторассылку и стартовый шаг'],
-                ['Документы и согласия', 'Включите "Настроить пользовательские соглашения" → добавьте до 5 документов. В нашей связке: Политика, ПДн, рекламное согласие'],
-                ['Проверьте автогалочку', 'Предлендинг оставляет блок политики видимым, но автоматически отмечает чекбокс, чтобы не терять конверсию'],
-                ['Сохраните', 'Зелёная кнопка "СОХРАНИТЬ" → справа сверху появится ссылка на мини-лендинг. В рекламу ставьте bhurl.ru или собственный домен']
-              ].map((s, i) => (
-                <div key={i} className={`flex gap-3 p-4 rounded-xl ${dark ? 'bg-slate-800' : 'bg-slate-50'}`}>
-                  <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-black text-sm flex-shrink-0">{i + 1}</div>
-                  <div>
-                    <h4 className={`font-black text-sm mb-0.5 ${text}`}>{s[0]}</h4>
-                    <p className={`text-xs ${textMuted} leading-relaxed`}>{s[1]}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className={`mt-6 ${dark ? 'bg-slate-800 border-slate-700' : 'bg-blue-50 border-blue-200'} border-2 rounded-xl p-4`}>
-              <h4 className={`font-black text-sm mb-3 flex items-center gap-2 ${text}`}><Bot className="w-4 h-4 text-blue-600" /> Импорт цепочек сообщений</h4>
-              <div className="grid md:grid-cols-2 gap-2">
-                <a href="https://bothelp.io/f/0db8f39436a" target="_blank" rel="noopener noreferrer" className={`p-3 rounded-lg font-black text-xs ${dark ? 'bg-slate-900 text-slate-200 hover:bg-slate-700' : 'bg-white text-slate-900 hover:bg-slate-100'} flex items-center justify-between gap-2`}>
-                  Telegram шаблон <ExternalLink className="w-4 h-4" />
-                </a>
-                <a href="https://bothelp.io/f/480233785ed" target="_blank" rel="noopener noreferrer" className={`p-3 rounded-lg font-black text-xs ${dark ? 'bg-slate-900 text-slate-200 hover:bg-slate-700' : 'bg-white text-slate-900 hover:bg-slate-100'} flex items-center justify-between gap-2`}>
-                  MAX шаблон <ExternalLink className="w-4 h-4" />
-                </a>
-              </div>
-              <p className={`text-xs ${textMuted} mt-3`}>В первом сообщении бота поставьте ссылку на продающую историю. Дальше цепочка прогрева ведёт человека к офферу в течение 30 дней.</p>
-            </div>
-            <div className={`mt-6 ${dark ? 'bg-slate-800 border-slate-700' : 'bg-yellow-50 border-yellow-200'} border-2 rounded-xl p-4`}>
-              <h4 className={`font-black text-sm mb-2 flex items-center gap-2 ${text}`}>⚙️ Что НЕ меняем в шаблонах</h4>
-              <div className={`grid md:grid-cols-3 gap-2 text-xs ${dark ? 'text-slate-300' : 'text-slate-700'}`}>
-                <div className={`${dark ? 'bg-slate-900' : 'bg-white'} rounded-lg p-3 border ${dark ? 'border-slate-700' : 'border-yellow-100'}`}><strong>Предлендинг:</strong> выбираем готовый текст/стиль в конструкторе и вставляем HTML как есть.</div>
-                <div className={`${dark ? 'bg-slate-900' : 'bg-white'} rounded-lg p-3 border ${dark ? 'border-slate-700' : 'border-yellow-100'}`}><strong>Продающая история:</strong> меняются только имя, возраст, короткое имя, фото и ссылка на оффер.</div>
-                <div className={`${dark ? 'bg-slate-900' : 'bg-white'} rounded-lg p-3 border ${dark ? 'border-slate-700' : 'border-yellow-100'}`}><strong>Оффер:</strong> меняются только GetCourse, Telegram и MAX. Цена и структура не редактируются.</div>
-              </div>
-            </div>
-            <div className={`mt-6 ${dark ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-emerald-50 border-emerald-200'} border-2 rounded-xl p-4`}>
-              <h4 className={`font-black text-sm mb-2 flex items-center gap-2 ${text}`}>✅ Готово</h4>
-              <p className={`text-xs ${dark ? 'text-slate-300' : 'text-slate-700'}`}>У вас 3 мини-лендинга в BotHelp. РСЯ запускайте на ссылку <strong>предлендинга</strong>. Из чат-бота высылайте ссылку на <strong>продающую историю</strong>. С неё кнопка ведёт на <strong>оффер</strong>.</p>
-            </div>
-          </div>
-        )}
-
-        {/* === ЗАПУСК РСЯ === */}
-        {tab === 'launch' && (
-          <div className="space-y-4">
-            <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
-              <h2 className={`text-2xl font-black mb-3 flex items-center gap-2 ${text}`}><TrendingUp className="w-6 h-6 text-blue-600" /> Запуск кампании в Яндекс.Директ</h2>
-              <p className={`text-sm ${textMuted} mb-4`}>Когда у тебя есть креативы, объявления и ссылка на предлендинг — самое время запускать рекламу.</p>
-
-              <h3 className={`text-lg font-black mb-3 ${text}`}>📋 Чек-лист подготовки</h3>
-              <div className="grid md:grid-cols-2 gap-2 mb-6">
-                {[
-                  '✓ Зарегистрирован Яндекс ID для Директа',
-                  '✓ Подключена Яндекс.Метрика к домену',
-                  '✓ Настроены цели в Метрике',
-                  '✓ Готово 5-10 креативов 1080×1080',
-                  '✓ Отобраны 15 заголовков',
-                  '✓ Подготовлены 5 текстов объявлений',
-                  '✓ Подготовлены 15 баннеров',
-                  '✓ 8 быстрых ссылок',
-                  '✓ Опубликованы 3 документа согласий',
-                  '✓ Опубликован предлендинг в BotHelp',
-                  '✓ Бюджет 5000₽/неделя минимум',
-                  '✓ Подключён способ оплаты Яндекс.Директа'
-                ].map((item, i) => (
-                  <div key={i} className={`p-3 rounded-lg ${dark ? 'bg-slate-800' : 'bg-emerald-50'} text-sm font-bold ${text}`}>{item}</div>
-                ))}
-              </div>
-
-              <div className={`${dark ? 'bg-yellow-400/10 border-yellow-400/30' : 'bg-yellow-50 border-yellow-300'} border-2 rounded-xl p-4 mb-4`}>
-                <h3 className={`font-black mb-2 flex items-center gap-2 ${text}`}><AlertCircle className="w-5 h-5 text-yellow-500" /> Не создавайте 3 кампании</h3>
-                <p className={`text-sm ${dark ? 'text-slate-300' : 'text-slate-700'}`}><strong>Первый запуск:</strong> 1 кампания → 3 группы → 15 объявлений → 15 баннеров. Три группы находятся внутри одной кампании. Если сделать 3 кампании, бюджет распылится и обучение Яндекса пойдёт хуже.</p>
-              </div>
-
-              <h3 className={`text-lg font-black mb-3 ${text}`}>🚀 Пошаговый запуск</h3>
-              <div className="space-y-3">
-                {[
-                  ['Зайди в direct.yandex.ru', 'Войди под аккаунтом, который будешь использовать для рекламы. Лучше создать отдельный — на случай блокировок.'],
-                  ['Создай ОДНУ новую кампанию', '"Конверсии и трафик" → "Реклама в РСЯ" → "Создать кампанию". Не создавай 3 кампании.'],
-                  ['Назови кампанию по гипотезе', 'Например: "Тест-1: Боль курсов | Шаблон-1 | Финтех-стиль". Так ты отличишь её от других.'],
-                  ['Стратегия: автостратегия', 'Выбери "Оптимизация конверсий". Цель — конверсия из Метрики: событие BotHelp вида subscription_ml_7 или ваша офлайн-цель из бота.'],
-                  ['Бюджет', '5000₽ в неделю на старт. После обучения алгоритма (7-14 дней) можно увеличивать.'],
-                  ['Регион показа', 'РФ (без Крыма) или конкретный регион вашего таргета'],
-                  ['Создай 3 группы внутри кампании', 'Каждая группа = один узкий сегмент или одна боль: "устали от курсов", "не получается запустить проект", "нет понятной системы".'],
-                  ['Загрузи 15 объявлений', 'В каждой группе 5 объявлений. Для каждого объявления свой заголовок и свой баннер. Тексты и быстрые ссылки можно повторять.'],
-                  ['Укажи ссылку', 'Ссылка на твой предлендинг из BotHelp'],
-                  ['Отправь на модерацию', 'Обычно проходит за 1-3 часа. Иногда требуют документы.'],
-                  ['После запуска — НЕ ТРОГАЙ', 'Дай алгоритму обучиться 7-14 дней. Изменения сбивают обучение.']
-                ].map((s, i) => (
-                  <div key={i} className={`flex gap-3 p-4 rounded-xl ${dark ? 'bg-slate-800' : 'bg-slate-50'}`}>
-                    <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-black text-sm flex-shrink-0">{i + 1}</div>
-                    <div>
-                      <h4 className={`font-black text-sm mb-0.5 ${text}`}>{s[0]}</h4>
-                      <p className={`text-xs ${textMuted} leading-relaxed`}>{s[1]}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
-              <h3 className={`text-lg font-black mb-3 ${text}`}>📊 Метрики, за которыми следить</h3>
-              <div className="space-y-2">
-                {[
-                  ['CTR (кликабельность)', 'Норма: 0.5-1.5% для РСЯ. Ниже — креативы плохие.'],
-                  ['CPC (цена клика)', 'Норма для России: 5-30₽. Выше 50₽ — пересматривай объявления.'],
-                  ['CR (конверсия в лид)', 'Норма: 5-15% с предлендинга в бота. Ниже — переделывай предлендинг.'],
-                  ['CPL (цена лида)', 'Цель: 100-300₽ за подписчика бота. Выше — оптимизируй воронку.'],
-                  ['Окупаемость', 'Считай: сколько заработал с одного оплаченного клиента / сколько потратил на 100 кликов'],
-                ].map((item, i) => (
-                  <div key={i} className={`p-3 rounded-lg ${dark ? 'bg-slate-800' : 'bg-slate-50'} flex items-start justify-between gap-3`}>
-                    <span className={`text-sm font-bold ${text}`}>{item[0]}</span>
-                    <span className={`text-xs ${textMuted} text-right max-w-md`}>{item[1]}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
-              <h3 className={`text-lg font-black mb-3 ${text}`}>⚠️ Частые ошибки новичков</h3>
-              <div className="space-y-2">
-                {[
-                  ['Меняют объявления каждый день', 'Алгоритм обучается 7-14 дней. Постоянные правки сбивают обучение → дорогие лиды.'],
-                  ['Запускают сразу 10 кампаний', 'Бюджет распыляется. Лучше одна кампания с 5к₽/неделя, чем десять по 500₽.'],
-                  ['Не настраивают цели в Метрике', 'Без целей алгоритм не понимает, кого приводить. Лиды дорожают в 3-5 раз.'],
-                  ['Используют только нейросетевые картинки', 'Они одинаково "пластиковые". Чередуй с реальными фото — пробивают баннерную слепоту.'],
-                  ['Льют на главную страницу', 'Главная не конвертит холодный трафик! Только специальный предлендинг под РСЯ.']
-                ].map((item, i) => (
-                  <div key={i} className={`p-3 rounded-lg ${dark ? 'bg-red-500/10 border border-red-500/30' : 'bg-red-50 border border-red-200'}`}>
-                    <div className={`font-black text-sm mb-1 ${text}`}>❌ {item[0]}</div>
-                    <div className={`text-xs ${dark ? 'text-slate-300' : 'text-slate-700'}`}>{item[1]}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className={`text-center text-xs ${textMuted} mt-8 pb-4`}>Конструктор воронки 2.0 — Креативы → РСЯ → Бот → Продающая история → Оффер</div>
+        <div className={`text-center text-xs ${textMuted} mt-8 pb-4`}>Конструктор лендингов — Креативы → Предлендинг → Инструкция</div>
       </div>
     </div>
   );
 }
-
-
-

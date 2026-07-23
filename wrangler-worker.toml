@@ -1,0 +1,16 @@
+name = "constructor-api"
+main = "cloudflare-api-worker.js"
+compatibility_date = "2026-05-09"
+workers_dev = true
+
+routes = [
+  { pattern = "constructoratmosfera.com/api/*", zone_name = "constructoratmosfera.com" },
+  { pattern = "www.constructoratmosfera.com/api/*", zone_name = "constructoratmosfera.com" }
+]
+
+[vars]
+SUPABASE_CLIENTS_TABLE = "clients"
+
+[[kv_namespaces]]
+binding = "CONSTRUCTOR_ACCESS"
+id = "ed666d733cfd4afeb42ffae5fbeedf95"
