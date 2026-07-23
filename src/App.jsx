@@ -416,7 +416,7 @@ function makeClientId(number, displayName) {
 /* ================== ТЕКСТЫ ПРЕДЛЕНДИНГА ================== */
 const CLIENT_PRELANDING_CORE_TEXT = `Каркас предлендинга строится вокруг заголовка и текста клиента.
 
-Это не брендовый лендинг и не страница с готовой легендой. Конструктор берёт смысл объявления, выбирает один из семи форматов и собирает короткую посадочную страницу под переход в мессенджер.
+Это не брендовый лендинг и не страница с готовой легендой. Конструктор берёт смысл объявления, выбирает один из шести форматов и собирает короткую посадочную страницу под переход в мессенджер.
 
 Узнаете сценарий
 1. Человек видит знакомую боль или желание
@@ -1225,6 +1225,9 @@ function prelandingModeTitle(mode = '') {
   if (mode === 'heroBlocks') return 'Формат 2 / Hero-картинка + блоки';
   if (mode === 'natureEditorial') return 'Формат 3 / Nature editorial';
   if (mode === 'minimalCompare') return 'Формат 4 / Тихое сравнение';
+  if (mode === 'directionQuiz') return 'Формат 5 / Квиз-направление';
+  if (mode === 'barrierProfileQuiz') return 'Формат 6 / Профиль барьера';
+  if (mode === 'personalRouteQuiz') return 'Сохранённый формат / Личный маршрут';
   return 'Формат 1 / Метод + 3 блока';
 }
 
@@ -2392,13 +2395,8 @@ const MANUAL_PRELANDING_MODES = [
     desc: 'Интерактивный разбор из 4 вопросов: человек видит свою точку опоры и переходит в Telegram/MAX.'
   },
   {
-    id: 'personalRouteQuiz',
-    title: 'Формат 6 / Личный маршрут',
-    desc: 'Пять честных вопросов, персональный итог и единый безопасный переход в Telegram/MAX.'
-  },
-  {
     id: 'barrierProfileQuiz',
-    title: 'Формат 7 / Профиль барьера',
+    title: 'Формат 6 / Профиль барьера',
     desc: 'Пять вопросов о повторяющемся сбое, персональный профиль и первый реалистичный шаг.'
   }
 ];
@@ -5187,7 +5185,7 @@ function AtmospaceLandingConstructor({ dark, value, onChange }) {
           </div>
           <h2 className={`text-2xl font-black ${text}`}>Настройки для HTML</h2>
           <p className={`mt-1 max-w-3xl text-sm ${textMuted}`}>
-            Заполните четыре поля из кабинета Atmospace. Заголовок, текст и один из семи форматов выбираются ниже; готовый Tilda HTML появится в зелёном блоке.
+            Заполните четыре поля из кабинета Atmospace. Заголовок, текст и один из шести форматов выбираются ниже; готовый Tilda HTML появится в зелёном блоке.
           </p>
         </div>
         <div className={`rounded-2xl border px-4 py-3 text-xs ${panel}`}>
@@ -6498,7 +6496,7 @@ export default function Constructor() {
                 <div>
                   <h2 className={`text-xl font-black ${text}`}>Режим генерации предлендинга</h2>
                   <p className={`text-sm ${dark ? 'text-red-100' : 'text-red-900'}`}>
-                    Доступны семь форматов предлендинга. Каждый берёт заголовок и описание клиента как основу, собирает смысловые блоки без брендов и готовит HTML для вставки в Tilda.
+                    Доступны шесть форматов предлендинга. Каждый берёт заголовок и описание клиента как основу, собирает смысловые блоки без брендов и готовит HTML для вставки в Tilda.
                   </p>
                 </div>
               </div>
@@ -6604,9 +6602,9 @@ export default function Constructor() {
                       : manualPrelandingMode === 'directionQuiz'
                         ? 'Формат 5: квиз-направление'
                         : manualPrelandingMode === 'personalRouteQuiz'
-                          ? 'Формат 6: личный маршрут'
+                          ? 'Сохранённый формат: личный маршрут'
                           : manualPrelandingMode === 'barrierProfileQuiz'
-                            ? 'Формат 7: профиль барьера'
+                            ? 'Формат 6: профиль барьера'
                             : 'Формат 2: hero-картинка + блоки'}
                 </h2>
                 <button onClick={resetAll} className={`text-xs font-bold ${textMuted} hover:underline flex items-center gap-1`}><RotateCcw className="w-3 h-3" /> Сброс</button>

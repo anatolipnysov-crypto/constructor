@@ -32,10 +32,8 @@ const quizRenderer = source.slice(quizRendererStart, quizRendererEnd);
   "title: 'Формат 4 / Тихое сравнение'",
   "id: 'directionQuiz'",
   "title: 'Формат 5 / Квиз-направление'",
-  "id: 'personalRouteQuiz'",
-  "title: 'Формат 6 / Личный маршрут'",
   "id: 'barrierProfileQuiz'",
-  "title: 'Формат 7 / Профиль барьера'",
+  "title: 'Формат 6 / Профиль барьера'",
   'renderCoreMethodInlinePrelanding({',
   'renderHeroSceneBlocksPrelanding({',
   'renderNatureEditorialPrelanding({',
@@ -58,9 +56,13 @@ const quizRenderer = source.slice(quizRendererStart, quizRendererEnd);
   assert(source.includes(snippet), `Source must include ${snippet}`);
 });
 
-assert(source.includes('один из семи форматов'), 'Constructor copy must describe all seven available formats.');
-assert(source.includes('Доступны семь форматов предлендинга'), 'Mode selector must describe all seven available formats.');
+assert(source.includes('один из шести форматов'), 'Constructor copy must describe all six available formats.');
+assert(source.includes('Доступны шесть форматов предлендинга'), 'Mode selector must describe all six available formats.');
 assert(!source.includes('один из четырёх форматов'), 'Stale four-format copy must not remain in the constructor.');
+assert(!source.includes("title: 'Формат 6 / Личный маршрут'"), 'Legacy personal-route quiz must stay hidden from the six-format selector.');
+assert(source.includes("mode === 'personalRouteQuiz'"), 'Legacy personal-route quiz renderer must remain available for saved projects.');
+assert(source.includes("if (mode === 'directionQuiz') return 'Формат 5 / Квиз-направление';"), 'Direction quiz must keep its own server-side variant name.');
+assert(source.includes("if (mode === 'barrierProfileQuiz') return 'Формат 6 / Профиль барьера';"), 'Barrier profile must keep its own server-side variant name.');
 
 [
   'prelandingVisualSceneSets',
@@ -227,8 +229,7 @@ const built = fs.readFileSync(path.join(distAssetsDir, bundle), 'utf8');
   'Формат 3 / Nature editorial',
   'Формат 4 / Тихое сравнение',
   'Формат 5 / Квиз-направление',
-  'Формат 6 / Личный маршрут',
-  'Формат 7 / Профиль барьера',
+  'Формат 6 / Профиль барьера',
   'Готовый HTML для Tilda',
   'window.ATMOSPACE_LANDING_CONFIG',
   'sergey-constructor-atmospace-v1',
@@ -254,4 +255,4 @@ const built = fs.readFileSync(path.join(distAssetsDir, bundle), 'utf8');
   assert(!pattern.test(built), `Built bundle must not match ${pattern}`);
 });
 
-console.log('Atmospace prelanding seven-format test passed');
+console.log('Atmospace prelanding six-format test passed');
