@@ -94,6 +94,15 @@ export function buildQuizRuntimeScript(project, publishConfig, {
     const registrationButton = runtimeRoot.querySelector('.quiz-registration__button');
     const registrationStatus = runtimeRoot.querySelector('.quiz-registration__status');
     const answeredGoalIndexes = new Set();
+    const pageInstanceId = randomReference();
+    const runtimeErrorMessage = 'Не удалось подготовить продолжение. Попробуйте ещё раз.';
+    const initEndpoint = config.apiBaseUrl + '/api/landing-runtime/init';
+    const clickEndpoint = config.apiBaseUrl + '/api/landing-runtime/click';
+    let registrationUrl = '';
+    let initInFlight = false;
+    let initCompleted = false;
+    let landingOpenedSent = false;
+    let quizStartSent = false;
     let quizCompletedSent = false;
     let registrationNavigationStarted = false;
 
@@ -105,19 +114,6 @@ export function buildQuizRuntimeScript(project, publishConfig, {
         return Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('');
       }
       return String(Date.now()) + '-' + Math.random().toString(16).slice(2);
-    }
-
-    function readPageInstanceId() {
-      const storageKey = 'atmospace-quiz-page-' + config.publicLandingKey.slice(0, 24);
-      try {
-        const current = window.sessionStorage.getItem(storageKey);
-        if (current) return current;
-        const created = randomReference();
-        window.sessionStorage.setItem(storageKey, created);
-        return created;
-      } catch {
-        return randomReference();
-      }
     }
 
     function readAdvertisingContext() {
@@ -145,78 +141,127 @@ export function buildQuizRuntimeScript(project, publishConfig, {
       const value = Number.parseInt(String(config.counterId), 10);
       return Number.isInteger(value) && value > 0 ? value : null;
     })();
-    const pendingMetrikaGoals = [];
-    let metrikaFlushScheduled = false;
 
-    function finishPendingMetrikaGoals() {
-      while (pendingMetrikaGoals.length > 0) {
-        const item = pendingMetrikaGoals.shift();
-        item.done();
+    function loadMetrika() {
+      return new Promise((resolve) => {
+        if (!metrikaCounterId) return resolve();
+        if (typeof window.ym === 'function') return resolve();
+        window.ym = window.ym || function () {
+          (window.ym.a = window.ym.a || []).push(arguments);
+        };
+        window.ym.l = 1 * new Date();
+        const script = document.createElement('script');
+        script.async = true;
+        script.src = 'https://mc.yandex.ru/metrika/tag.js';
+        script.onload = resolve;
+        script.onerror = resolve;
+        document.head.appendChild(script);
+      });
+    }
+
+    function initMetrika() {
+      return loadMetrika().then(() => {
+        if (!metrikaCounterId || typeof window.ym !== 'function') return;
+        window.__atmospaceMetrikaInited = window.__atmospaceMetrikaInited || {};
+        if (window.__atmospaceMetrikaInited[metrikaCounterId]) return;
+        window.__atmospaceMetrikaInited[metrikaCounterId] = true;
+        window.ym(metrikaCounterId, 'init', {
+          clickmap: true,
+          trackLinks: true,
+          accurateTrackBounce: true,
+          webvisor: true,
+        });
+      });
+    }
+
+    function reachGoal(goalName, params) {
+      initMetrika().then(() => {
+        if (!metrikaCounterId || typeof window.ym !== 'function') return;
+        try {
+          window.ym(metrikaCounterId, 'reachGoal', goalName, params || {});
+        } catch {
+          // Browser analytics must never block the quiz or registration.
+        }
+      });
+    }
+
+    function buildBasePayload() {
+      const advertising = readAdvertisingContext();
+      return {
+        public_landing_key: config.publicLandingKey,
+        page_instance_id: pageInstanceId,
+        page_url: window.location.href,
+        landing_variant_code: config.landingVariantCode,
+        landing_variant_name: config.landingVariantName,
+        referrer: document.referrer || null,
+        runtime_version: 'atmospace-long-quiz-v2',
+        browser_language: navigator.language || null,
+        browser_client_time: new Date().toISOString(),
+        counter_id: String(config.counterId),
+        ...advertising,
+      };
+    }
+
+    function sendEvent(eventName) {
+      return fetch(clickEndpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...buildBasePayload(), event_name: eventName }),
+        mode: 'cors',
+        credentials: 'omit',
+        keepalive: true,
+      }).catch(() => undefined);
+    }
+
+    function setRetryVisible(visible) {
+      let retry = runtimeRoot.querySelector('[data-atmospace-runtime-retry]');
+      if (!retry && registrationStatus) {
+        retry = document.createElement('button');
+        retry.type = 'button';
+        retry.setAttribute('data-atmospace-runtime-retry', '');
+        retry.textContent = 'Попробовать ещё раз';
+        registrationStatus.insertAdjacentElement('afterend', retry);
+        retry.addEventListener('click', () => initializeLanding());
+      }
+      if (retry) retry.hidden = !visible;
+    }
+
+    function setRegistrationError() {
+      registrationUrl = '';
+      if (registrationStatus) registrationStatus.textContent = runtimeErrorMessage;
+      if (registrationButton) registrationButton.disabled = true;
+      setRetryVisible(true);
+    }
+
+    function isTrustedRegistrationUrl(value) {
+      try {
+        const url = new URL(value);
+        return url.protocol === 'https:'
+          && (url.hostname === 'atmospace.pro' || url.hostname.endsWith('.atmospace.pro'));
+      } catch {
+        return false;
       }
     }
 
-    function flushPendingMetrikaGoals() {
-      if (!metrikaCounterId || typeof window.ym !== 'function') {
-        return false;
-      }
-
-      while (pendingMetrikaGoals.length > 0) {
-        const item = pendingMetrikaGoals.shift();
-        try {
-          window.ym(metrikaCounterId, 'reachGoal', item.goalName, {}, item.done);
-        } catch {
-          item.done();
-        }
-      }
+    function applyRegistrationLink(links) {
+      const candidate = links && links.registration;
+      if (typeof candidate !== 'string' || !isTrustedRegistrationUrl(candidate)) return false;
+      registrationUrl = candidate;
+      if (registrationStatus) registrationStatus.textContent = 'Всё готово.';
+      if (registrationButton) registrationButton.disabled = false;
+      setRetryVisible(false);
+      runtimeRoot.dispatchEvent(new CustomEvent('atmospace:registration-ready', {
+        detail: { registrationUrl },
+      }));
       return true;
     }
 
-    function scheduleMetrikaFlush() {
-      if (metrikaFlushScheduled || pendingMetrikaGoals.length === 0) return;
-      metrikaFlushScheduled = true;
-      let attempts = 0;
-
-      const tick = () => {
-        if (flushPendingMetrikaGoals()) {
-          metrikaFlushScheduled = false;
-          return;
-        }
-
-        attempts += 1;
-        if (attempts >= 40) {
-          finishPendingMetrikaGoals();
-          metrikaFlushScheduled = false;
-          return;
-        }
-
-        window.setTimeout(tick, 250);
-      };
-
-      if (document.readyState === 'complete') {
-        tick();
-      } else {
-        window.addEventListener('load', tick, { once: true });
-      }
+    function markQuizStarted() {
+      if (quizStartSent) return;
+      quizStartSent = true;
+      sendEvent('quiz_start_click');
+      reachGoal('quiz_start_click');
     }
-
-    function reachGoal(goalName, callback) {
-      let callbackCalled = false;
-      const done = () => {
-        if (callbackCalled) return;
-        callbackCalled = true;
-        if (typeof callback === 'function') callback();
-      };
-
-      if (!metrikaCounterId) {
-        done();
-        return;
-      }
-
-      pendingMetrikaGoals.push({ goalName, done });
-      scheduleMetrikaFlush();
-    }
-
-    reachGoal('landing_view');
 
     function updateQuizGoals(input) {
       const questionSection = input.closest('.quiz-question');
@@ -224,7 +269,7 @@ export function buildQuizRuntimeScript(project, publishConfig, {
       const questionIndex = questions.indexOf(questionSection);
       if (questionIndex >= 0 && !answeredGoalIndexes.has(questionIndex)) {
         answeredGoalIndexes.add(questionIndex);
-        reachGoal('quiz_question_' + String(questionIndex + 1) + '_answered');
+        reachGoal('question_answered', { questionNumber: questionIndex + 1 });
       }
 
       const answeredCount = form
@@ -239,91 +284,50 @@ export function buildQuizRuntimeScript(project, publishConfig, {
     form?.addEventListener('change', (event) => {
       const input = event.target;
       if (!(input instanceof HTMLInputElement) || input.type !== 'radio') return;
+      markQuizStarted();
       updateQuizGoals(input);
     });
 
-    function setRegistrationError(message) {
-      if (registrationStatus) registrationStatus.textContent = message;
-      if (registrationButton) registrationButton.disabled = true;
-    }
-
-    function isTrustedRegistrationUrl(value) {
-      try {
-        const url = new URL(value);
-        return url.protocol === 'https:'
-          && (url.hostname === 'atmospace.pro' || url.hostname.endsWith('.atmospace.pro'));
-      } catch {
-        return false;
-      }
-    }
-
-    function enableRegistration(registrationUrl) {
-      if (!isTrustedRegistrationUrl(registrationUrl)) {
-        setRegistrationError('Сейчас не удалось открыть регистрацию. Попробуйте ещё раз чуть позже.');
-        return;
-      }
-
-      runtimeRoot.dispatchEvent(new CustomEvent('atmospace:registration-ready', {
-        detail: { registrationUrl },
-      }));
-
-      if (registrationStatus) registrationStatus.textContent = 'Всё готово.';
-      if (!registrationButton) return;
-      registrationButton.disabled = false;
-
-      registrationButton.addEventListener('click', (event) => {
-        if (registrationNavigationStarted) return;
-        registrationNavigationStarted = true;
-        event.preventDefault();
-        event.stopImmediatePropagation();
-
-        let navigated = false;
-        const navigate = () => {
-          if (navigated) return;
-          navigated = true;
-          window.location.assign(registrationUrl);
-        };
-
-        window.setTimeout(navigate, 800);
-        reachGoal('registration_click', navigate);
-      }, true);
-    }
-
     async function initializeLanding() {
-      const advertising = readAdvertisingContext();
-      const payload = {
-        public_landing_key: config.publicLandingKey,
-        page_instance_id: readPageInstanceId(),
-        page_url: window.location.href,
-        landing_variant_code: config.landingVariantCode,
-        landing_variant_name: config.landingVariantName,
-        referrer: document.referrer || null,
-        runtime_version: 'atmospace-long-quiz-v1',
-        browser_language: navigator.language || null,
-        browser_client_time: new Date().toISOString(),
-        counter_id: String(config.counterId),
-        ...advertising,
-      };
+      if (initInFlight || initCompleted) return;
+      initInFlight = true;
+      setRetryVisible(false);
+      if (registrationStatus) registrationStatus.textContent = 'Подготавливаем продолжение…';
+      if (!landingOpenedSent) {
+        landingOpenedSent = true;
+        sendEvent('landing_opened');
+      }
 
       try {
-        const response = await fetch(config.apiBaseUrl + '/api/landing-runtime/init', {
+        const response = await fetch(initEndpoint, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(buildBasePayload()),
           mode: 'cors',
           credentials: 'omit',
         });
         const data = await response.json().catch(() => null);
-        const registrationUrl = data?.data?.links?.registration;
-        if (!response.ok || data?.ok !== true || !registrationUrl) {
-          throw new Error('registration_not_ready');
-        }
-        enableRegistration(registrationUrl);
+        const links = data?.data?.links;
+        if (!response.ok || data?.ok !== true || !applyRegistrationLink(links)) throw new Error('not_ready');
+        initCompleted = true;
       } catch {
-        setRegistrationError('Сейчас не удалось открыть регистрацию. Попробуйте ещё раз чуть позже.');
+        setRegistrationError();
+      } finally {
+        initInFlight = false;
       }
     }
 
+    registrationButton?.setAttribute('data-atmospace-registration-link', '');
+    registrationButton?.addEventListener('click', (event) => {
+      event.preventDefault();
+      if (!registrationUrl || registrationNavigationStarted) return;
+      registrationNavigationStarted = true;
+      reachGoal('registration_started');
+      window.setTimeout(() => window.location.assign(registrationUrl), 180);
+    }, true);
+
+    initMetrika();
+    reachGoal('landing_view');
     initializeLanding();
   })();
   </script>`

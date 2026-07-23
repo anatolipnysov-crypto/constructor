@@ -2,18 +2,10 @@ const METRIKA_MANAGEMENT_BASE_URL = 'https://api-metrika.yandex.net/management/v
 
 export const ATMOSPACE_METRIKA_GOALS = Object.freeze([
   { target: 'landing_view', name: 'Квиз — посещение' },
-  { target: 'quiz_question_1_answered', name: 'Квиз — ответ на вопрос 1' },
-  { target: 'quiz_question_2_answered', name: 'Квиз — ответ на вопрос 2' },
-  { target: 'quiz_question_3_answered', name: 'Квиз — ответ на вопрос 3' },
-  { target: 'quiz_question_4_answered', name: 'Квиз — ответ на вопрос 4' },
-  { target: 'quiz_question_5_answered', name: 'Квиз — ответ на вопрос 5' },
-  { target: 'quiz_question_6_answered', name: 'Квиз — ответ на вопрос 6' },
-  { target: 'quiz_question_7_answered', name: 'Квиз — ответ на вопрос 7' },
+  { target: 'quiz_start_click', name: 'Квиз — начало' },
+  { target: 'question_answered', name: 'Квиз — ответ на вопрос' },
   { target: 'quiz_completed', name: 'Квиз — завершён' },
-  { target: 'registration_click', name: 'Квиз — переход к регистрации' },
-  { target: 'registration_success', name: 'Регистрация завершена' },
-  { target: 'notifications_connected', name: 'Уведомления подключены' },
-  { target: 'payment_success', name: 'Оплата подтверждена' },
+  { target: 'registration_started', name: 'Квиз — переход к регистрации' },
 ])
 
 function normalizeText(value, maxLength) {

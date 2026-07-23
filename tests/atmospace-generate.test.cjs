@@ -12,6 +12,7 @@ const atmospaceComponent = app.slice(
 );
 
 const failures = [];
+const CLICK_HELPER_NAMES = ['sendEvent', 'sendRuntimeEvent'];
 
 function expect(condition, message) {
   if (!condition) failures.push(message);
@@ -29,6 +30,100 @@ function namedFunctionSource(source, signature) {
   if (start === -1) return '';
   const next = source.indexOf('\nfunction ', start + signature.length);
   return source.slice(start, next === -1 ? source.length : next);
+}
+
+function literalCalls(source, functionName) {
+  const calls = [];
+  const pattern = new RegExp(`${functionName}\\(\\s*['\"]([^'\"]+)['\"]`, 'g');
+  let match;
+  while ((match = pattern.exec(source))) calls.push(match[1]);
+  return calls;
+}
+
+function hasRegistrationStartedHandoff(source) {
+  const directHandoff = /(?:reachGoal|sendMetrikaGoal)\(\s*["']registration_started["'][\s\S]{0,1000}window\.location\.(?:assign\(registrationUrl\)|href\s*=\s*registrationUrl)/;
+  const callbackHandoff = /function\s+(\w+)\s*\(\)\s*\{[\s\S]{0,500}window\.location\.(?:assign\(registrationUrl\)|href\s*=\s*registrationUrl)[\s\S]{0,1000}(?:reachGoal|sendMetrikaGoal)\(\s*["']registration_started["']\s*,[\s\S]{0,300}\b\1\s*\)/;
+  return directHandoff.test(source) || callbackHandoff.test(source);
+}
+
+function hasExactRegistrationPassthrough(source) {
+  return /(?:var|let|const)\s+candidate\s*=\s*(?:(?:links\s*&&\s*links\.registration)|(?:links\?\.registration)|(?:links\s*&&\s*typeof\s+links\.registration\s*===\s*["']string["']\s*\?\s*links\.registration\s*:\s*["']{2}))\s*;?[\s\S]{0,120}registrationUrl\s*=\s*candidate\s*;?/.test(source);
+}
+
+function assertFinalRuntimeContract(name, runtime) {
+  for (const marker of [
+    'data-atmospace-quiz-link',
+    'data-atmospace-registration-link',
+    'links.registration',
+    'https://mc.yandex.ru/metrika/tag.js',
+    'landing_view',
+    'quiz_start_click',
+    'question_answered',
+    'questionNumber',
+    'quiz_completed',
+    'registration_started',
+  ]) {
+    expect(runtime.includes(marker), `${name}: final runtime must include ${marker}`);
+  }
+
+  expect(
+    hasExactRegistrationPassthrough(runtime),
+    `${name}: links.registration must be stored unchanged`,
+  );
+  expect(
+    /window\.location\.assign\(registrationUrl\)/.test(runtime),
+    `${name}: registration must navigate with the stored registrationUrl`,
+  );
+  expect(
+    !/buildQuizUrl|pathname\s*=\s*["']\/quiz["']|["']\/quiz(?:[?#"']|$)/.test(runtime),
+    `${name}: runtime must not build or route to a separate /quiz page`,
+  );
+  expect(
+    !/registrationUrl\s*(?:\+=|=\s*registrationUrl\s*\+)|registrationUrl\.searchParams|searchParams\.(?:set|append)\([^)]*(?:utm_|yclid)/i.test(runtime),
+    `${name}: runtime must not alter links.registration`,
+  );
+
+  const clickEvents = [...new Set(CLICK_HELPER_NAMES.flatMap((helperName) => literalCalls(runtime, helperName)))].sort();
+  expect(
+    JSON.stringify(clickEvents) === JSON.stringify(['landing_opened', 'quiz_start_click']),
+    `${name}: /click may receive only landing_opened and quiz_start_click (found ${clickEvents.join(', ') || 'none'})`,
+  );
+  expect(
+    /(?:reachGoal|sendMetrikaGoal)\(\s*["']question_answered["']\s*,\s*\{[\s\S]{0,180}questionNumber/.test(runtime),
+    `${name}: question_answered must carry questionNumber`,
+  );
+  expect(
+    hasRegistrationStartedHandoff(runtime),
+    `${name}: registration_started must precede registration navigation`,
+  );
+
+  expect(/(?:var|let|const)\s+pageInstanceId\s*=\s*makePageInstanceId\(\);/.test(runtime), `${name}: runtime must create pageInstanceId once`);
+  expect((runtime.match(/(?:var|let|const)\s+pageInstanceId\s*=\s*makePageInstanceId\(\);/g) || []).length === 1, `${name}: runtime must contain one pageInstanceId declaration`);
+  expect((runtime.match(/=\s*makePageInstanceId\(\)/g) || []).length === 1, `${name}: retry must reuse the same pageInstanceId`);
+  expect(/retry/i.test(runtime), `${name}: runtime must expose a retry path`);
+  expect(!/sessionStorage|localStorage/i.test(runtime), `${name}: runtime must not persist pageInstanceId or quiz answers in browser storage`);
+
+  const payloadBodies = [
+    runtime.match(/function\s+buildBasePayload\s*\([^)]*\)\s*\{[\s\S]*?\n\s*\}/)?.[0] || '',
+    ...CLICK_HELPER_NAMES.map((helperName) => (
+      runtime.match(new RegExp(`function\\s+${helperName}\\s*\\([^)]*\\)\\s*\\{[\\s\\S]*?\\n\\s*\\}`))?.[0] || ''
+    )),
+  ];
+  for (const payloadBody of payloadBodies) {
+    expect(
+      !/\banswers?\b|quiz_answers?|selectedOption|optionText|questionText|resultKey|quiz_result/i.test(payloadBody),
+      `${name}: init/click payload must not contain quiz answers`,
+    );
+  }
+
+  expect(
+    !/data-atmospace-messenger|messenger_button_clicked|links\.telegram|links\.max|r\.bothelp\.io|bothelp|telegram/i.test(runtime),
+    `${name}: runtime must not contain Telegram/MAX/BotHelp`,
+  );
+  expect(
+    !/registration_click|quiz_question_\d+_answered|registration_success|payment_success|notifications_connected/i.test(runtime),
+    `${name}: runtime must not contain obsolete or trusted server-only goals`,
+  );
 }
 
 for (const [name, source] of [['worker', worker], ['local api', localApi]]) {
@@ -59,24 +154,20 @@ for (const [name, source] of [['worker', worker], ['local api', localApi]]) {
   for (const utm of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term']) {
     expect(source.includes(`${utm}:getParam("${utm}")||null`), `${name}: runtime must capture nullable ${utm}`);
   }
-  expect(runtime.includes('sendEvent("landing_opened",null)'), `${name}: runtime must track landing_opened with null messenger`);
-  expect(runtime.includes('sendEvent("messenger_button_clicked",messenger)'), `${name}: runtime must track messenger clicks`);
-  expect(/messenger\s*:\s*messenger\s*\|\|\s*null/.test(runtime), `${name}: click payload must keep messenger nullable`);
-  expect(/!links\.telegram\s*\|\|\s*!links\.max/.test(runtime), `${name}: runtime must require both messenger links`);
-  expect(!runtime.includes('readyLinks[messenger]||readyLinks.telegram'), `${name}: runtime must not substitute Telegram for another messenger`);
-  expect(!runtime.includes('readyLinks[messenger]||readyLinks.max'), `${name}: runtime must not substitute MAX for another messenger`);
-  expect(runtime.includes('atmospace-policy-consent'), `${name}: runtime must enforce policy consent`);
-  expect(runtime.includes('var pageInstanceId = makePageInstanceId();'), `${name}: runtime must create page_instance_id once per load`);
-  expect((runtime.match(/var pageInstanceId\s*=\s*makePageInstanceId\(\);/g) || []).length === 1, `${name}: runtime must contain one page_instance_id declaration`);
-  expect(!runtime.includes('sessionStorage'), `${name}: page_instance_id must not persist in sessionStorage`);
+  assertFinalRuntimeContract(name, runtime);
   expect(!runtime.includes('https://web.telegram.org/k/#'), `${name}: Telegram Web placeholder must not leak into HTML`);
   expect(runtime.includes('Сейчас переход временно недоступен. Попробуйте ещё раз чуть позже.'), `${name}: missing exact visible runtime failure message`);
   expect(source.includes('page_instance_id_contract_invalid'), `${name}: validator must enforce page_instance_id contract`);
-  expect(source.includes('telegram_web_link_forbidden'), `${name}: validator must reject Telegram Web placeholder`);
+  expect(source.includes('data-atmospace-quiz-link'), `${name}: validator/runtime bundle must contain the ordinary quiz CTA marker`);
+  expect(source.includes('quiz_start_click'), `${name}: validator/runtime bundle must contain the quiz start event`);
+  expect(source.includes('question_answered'), `${name}: validator/runtime bundle must contain the safe answer goal`);
+  expect(source.includes('registration_started'), `${name}: validator/runtime bundle must contain the registration start goal`);
+  expect(source.includes('https://mc.yandex.ru/metrika/tag.js'), `${name}: validator/runtime bundle must contain the official Metrika loader`);
+  expect(source.includes('links.registration'), `${name}: validator/runtime bundle must require the registration handoff`);
   expect(source.includes('protected_value_leaked'), `${name}: runtime validator must block protected value leakage`);
   expect(source.includes('protected_field_name_leaked'), `${name}: runtime validator must block protected field name leakage`);
-  expect(source.includes('nullable_messenger_contract_missing'), `${name}: validator must enforce nullable messenger semantics`);
-  expect(source.includes('both_messenger_links_required'), `${name}: validator must require both messenger links`);
+  expect(!source.includes('nullable_messenger_contract_missing'), `${name}: obsolete nullable messenger validation must be removed`);
+  expect(!source.includes('both_messenger_links_required'), `${name}: obsolete dual messenger validation must be removed`);
   expect(source.includes('landing_name_missing'), `${name}: validator must require landing name in runtime config`);
   expect(source.includes('landing_code_missing'), `${name}: validator must require landing code in runtime config`);
   expect(handler.includes('payload.landingName'), `${name}: handler must bind landing name into the runtime`);
@@ -106,14 +197,11 @@ expect(app.includes("serverOnlyAdGoalCredential: ''"), 'frontend: protected key 
 expect(app.includes('saveAtmospaceLandingArtifact'), 'frontend: missing safe local artifact history');
 expect(app.includes('runtimeStatus'), 'frontend: missing runtime status display/storage');
 const frontendRuntime = namedFunctionSource(app, 'function buildAtmospacePrelandingTrackingScript');
-expect(app.includes('id="atmospace-policy-consent"'), 'frontend: generated HTML must use the standard policy checkbox id');
 expect(frontendRuntime.includes('Сейчас переход временно недоступен. Попробуйте ещё раз чуть позже.'), 'frontend: missing exact visible runtime failure message');
 expect(!frontendRuntime.includes('https://web.telegram.org/k/#'), 'frontend: Telegram Web placeholder must not leak into generated HTML');
 expect(frontendRuntime.includes('landing_variant_code: cfg.landingCode'), 'frontend: init must send landing variant code');
 expect(frontendRuntime.includes('landing_variant_name: cfg.landingName'), 'frontend: init must send landing variant name');
-expect(frontendRuntime.includes("sendEvent('landing_opened', null)"), 'frontend: runtime must track landing_opened with null messenger');
-expect(frontendRuntime.includes("sendEvent('messenger_button_clicked', messenger)"), 'frontend: runtime must track messenger clicks');
-expect(frontendRuntime.includes('!links.telegram || !links.max'), 'frontend: runtime must require both messenger links');
+assertFinalRuntimeContract('frontend', frontendRuntime);
 expect(!/localStorage\.[^(]+\([^)]*serverOnlyAdGoalCredential|serverOnlyAdGoalCredential[\s\S]{0,160}localStorage/.test(app), 'frontend: protected key must not be stored in localStorage');
 expect(!/label="client_id|label="clientId|label="ID клиента/i.test(atmospaceComponent), 'frontend: Atmospace flow must not ask for client id');
 expect(!atmospaceComponent.includes('реферальный хвост'), 'frontend: outdated referral tail wording must not be shown');

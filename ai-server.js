@@ -225,7 +225,7 @@ function safeScriptJson(value) {
     .replace(/\u2029/g, '\\u2029');
 }
 
-function hasAtmospaceRuntime(source) {
+function hasLegacyAtmospaceRuntime(source) {
   const htmlSource = String(source || '');
   const requiredMarkers = [
     ATMOSPACE_INIT_PATH,
@@ -257,7 +257,7 @@ function hasAtmospaceRuntime(source) {
     && /!links\.telegram\s*\|\|\s*!links\.max/.test(htmlSource);
 }
 
-function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName, landingCode }) {
+function buildLegacyAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName, landingCode }) {
   const runtimeConfig = {
     publicLandingKey,
     counterId,
@@ -514,6 +514,371 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
 </script>`;
 }
 
+function hasAtmospaceRuntime(source) {
+  const htmlSource = String(source || '');
+  const requiredMarkers = [
+    ATMOSPACE_INIT_PATH,
+    ATMOSPACE_CLICK_PATH,
+    'public_landing_key',
+    'counter_id',
+    'landing_variant_code',
+    'landing_variant_name',
+    'browser_language',
+    'browser_client_time',
+    'advertising_click_ids',
+    'gclid',
+    'fbclid',
+    'msclkid',
+    'dclid',
+    'utm_source',
+    'utm_medium',
+    'utm_campaign',
+    'utm_content',
+    'utm_term',
+    'landing_opened',
+    'quiz_start_click',
+    'landing_view',
+    'question_answered',
+    'quiz_completed',
+    'registration_started',
+    'links.registration',
+    'data-atmospace-registration-link',
+    'data-atmospace-runtime-retry',
+    'https://mc.yandex.ru/metrika/tag.js'
+  ];
+  return requiredMarkers.every((marker) => htmlSource.includes(marker))
+    && htmlSource.includes('window.location.assign(registrationUrl)')
+    && !/data-atmospace-messenger|messenger_button_clicked|links\.telegram|links\.max/.test(htmlSource);
+}
+
+function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName, landingCode }) {
+  const runtimeConfig = {
+    publicLandingKey,
+    counterId,
+    landingName,
+    landingCode,
+    baseUrl: ATMOSPACE_API_BASE_URL,
+    initPath: ATMOSPACE_INIT_PATH,
+    clickPath: ATMOSPACE_CLICK_PATH,
+    runtimeVersion: ATMOSPACE_RUNTIME_VERSION
+  };
+
+  return `<script data-atmospace-runtime="${ATMOSPACE_RUNTIME_VERSION}">
+(function(){
+  "use strict";
+  var cfg=${safeScriptJson(runtimeConfig)};
+  var pageInstanceId=makePageInstanceId();
+  var registrationUrl="";
+  var registrationNavigationStarted=false;
+  var quizStartSent=false;
+  var answeredGoalIndexes={};
+  var initInFlight=false;
+  var initCompleted=false;
+  var landingOpenedSent=false;
+  var landingViewSent=false;
+  var metrikaReadyPromise=null;
+  var pendingMetrikaGoals=[];
+  var metrikaScriptUrl="https://mc.yandex.ru/metrika/tag.js";
+  var runtimeErrorMessage="Сейчас переход временно недоступен. Попробуйте ещё раз чуть позже.";
+  var registrationSelector="[data-atmospace-registration-link],[data-atmospace-cta]";
+  var quizSelector="[data-atmospace-quiz-link]";
+
+  function makePageInstanceId(){
+    try{
+      var bytes=new Uint8Array(10);
+      crypto.getRandomValues(bytes);
+      return "pi_"+Array.from(bytes,function(byte){return byte.toString(16).padStart(2,"0");}).join("");
+    }catch(error){
+      return "pi_"+Date.now()+"_"+Math.random().toString(36).slice(2,10);
+    }
+  }
+
+  function isLocalPreview(){
+    return window.location.protocol==="file:"||window.location.hostname==="localhost"||window.location.hostname==="127.0.0.1";
+  }
+
+  function getParam(name){
+    try{return new URL(window.location.href).searchParams.get(name)||"";}catch(error){return "";}
+  }
+
+  function collectAttribution(){
+    var clickIds={};
+    ["yclid","gclid","fbclid","msclkid","dclid"].forEach(function(key){
+      var value=getParam(key);
+      if(value)clickIds[key]=value;
+    });
+    return{
+      utm_source:getParam("utm_source")||null,
+      utm_medium:getParam("utm_medium")||null,
+      utm_campaign:getParam("utm_campaign")||null,
+      utm_content:getParam("utm_content")||null,
+      utm_term:getParam("utm_term")||null,
+      advertising_click_ids:clickIds
+    };
+  }
+
+  function basePayload(){
+    var attribution=collectAttribution();
+    return{
+      public_landing_key:cfg.publicLandingKey,
+      counter_id:cfg.counterId,
+      landing_variant_code:cfg.landingCode||"",
+      landing_variant_name:cfg.landingName||"",
+      page_instance_id:pageInstanceId,
+      page_url:window.location.href,
+      referrer:document.referrer||null,
+      runtime_version:cfg.runtimeVersion,
+      browser_language:navigator.language||null,
+      browser_client_time:new Date().toISOString(),
+      advertising_click_ids:attribution.advertising_click_ids,
+      utm_source:attribution.utm_source,
+      utm_medium:attribution.utm_medium,
+      utm_campaign:attribution.utm_campaign,
+      utm_content:attribution.utm_content,
+      utm_term:attribution.utm_term
+    };
+  }
+
+  function postJson(url,payload,keepalive){
+    if(!url||typeof fetch!=="function")return Promise.resolve(null);
+    return fetch(url,{
+      method:"POST",
+      headers:{"content-type":"application/json"},
+      body:JSON.stringify(payload),
+      keepalive:Boolean(keepalive)
+    }).then(function(response){
+      return response.json().catch(function(){return null;}).then(function(body){return{ok:response.ok,body:body};});
+    }).catch(function(){return null;});
+  }
+
+  function sendEvent(eventType){
+    if(eventType!=="landing_opened"&&eventType!=="quiz_start_click")return;
+    var payload=basePayload();
+    payload.event_type=eventType;
+    payload.client_time=new Date().toISOString();
+    var url=cfg.baseUrl+cfg.clickPath;
+    try{
+      var body=JSON.stringify(payload);
+      if(navigator.sendBeacon){
+        var blob=new Blob([body],{type:"application/json"});
+        if(navigator.sendBeacon(url,blob))return;
+      }
+    }catch(error){}
+    postJson(url,payload,true);
+  }
+
+  function flushMetrikaGoals(){
+    var counterId=Number.parseInt(String(cfg.counterId||""),10);
+    if(!Number.isInteger(counterId)||counterId<=0||typeof window.ym!=="function")return false;
+    while(pendingMetrikaGoals.length){
+      var item=pendingMetrikaGoals.shift();
+      try{window.ym(counterId,"reachGoal",item.goalName,item.params||{},item.done);}catch(error){item.done();}
+    }
+    return true;
+  }
+
+  function ensureMetrikaReady(){
+    var counterId=Number.parseInt(String(cfg.counterId||""),10);
+    if(!Number.isInteger(counterId)||counterId<=0||isLocalPreview())return Promise.resolve(false);
+    if(metrikaReadyPromise)return metrikaReadyPromise;
+    metrikaReadyPromise=new Promise(function(resolve){
+      window.ym=window.ym||function(){(window.ym.a=window.ym.a||[]).push(arguments);};
+      window.ym.l=window.ym.l||1*new Date();
+      window.__atmospaceMetrikaInited=window.__atmospaceMetrikaInited||{};
+      if(!window.__atmospaceMetrikaInited[counterId]){
+        window.__atmospaceMetrikaInited[counterId]=true;
+        window.ym(counterId,"init",{clickmap:true,trackLinks:true,accurateTrackBounce:true,webvisor:true});
+      }
+      var existing=document.querySelector('script[src="'+metrikaScriptUrl+'"]');
+      if(existing){
+        existing.addEventListener("load",function(){resolve(true);},{once:true});
+        existing.addEventListener("error",function(){resolve(false);},{once:true});
+        window.setTimeout(function(){resolve(typeof window.ym==="function");},2500);
+        return;
+      }
+      var script=document.createElement("script");
+      script.async=true;
+      script.src=metrikaScriptUrl;
+      script.setAttribute("data-atmospace-metrika","");
+      script.addEventListener("load",function(){resolve(true);},{once:true});
+      script.addEventListener("error",function(){resolve(false);},{once:true});
+      document.head.appendChild(script);
+    }).then(function(ready){flushMetrikaGoals();return ready;});
+    return metrikaReadyPromise;
+  }
+
+  function reachGoal(goalName,params,callback){
+    if(typeof params==="function"){callback=params;params={};}
+    var finished=false;
+    function done(){if(finished)return;finished=true;if(typeof callback==="function")callback();}
+    if(isLocalPreview()){done();return;}
+    pendingMetrikaGoals.push({goalName:goalName,params:params||{},done:done});
+    ensureMetrikaReady();
+    window.setTimeout(done,1200);
+  }
+
+  function getRuntimeMessageNode(){
+    var existing=document.querySelector("[data-atmospace-runtime-message]");
+    if(existing)return existing;
+    var firstButton=document.querySelector(registrationSelector)||document.querySelector(quizSelector);
+    if(!firstButton)return null;
+    var node=document.createElement("p");
+    node.setAttribute("data-atmospace-runtime-message","");
+    node.hidden=true;
+    node.style.cssText="display:none;margin:12px 0 0;color:#b91c1c;font-size:14px;line-height:1.45;font-weight:800;text-align:center;";
+    firstButton.insertAdjacentElement("afterend",node);
+    return node;
+  }
+
+  function setRuntimeMessage(message){
+    var node=getRuntimeMessageNode();
+    if(!node)return;
+    node.textContent=message||"";
+    node.hidden=!message;
+    node.style.display=message?"block":"none";
+  }
+
+  function getRetryButton(){
+    var existing=document.querySelector("[data-atmospace-runtime-retry]");
+    if(existing)return existing;
+    var message=getRuntimeMessageNode();
+    if(!message)return null;
+    var button=document.createElement("button");
+    button.type="button";
+    button.setAttribute("data-atmospace-runtime-retry","");
+    button.hidden=true;
+    button.textContent="Попробовать ещё раз";
+    button.style.cssText="display:none;min-height:46px;margin:12px auto 0;padding:10px 18px;border:0;border-radius:8px;background:#2563eb;color:#fff;font:inherit;font-weight:900;cursor:pointer;";
+    message.insertAdjacentElement("afterend",button);
+    button.addEventListener("click",function(){requestRegistration();});
+    return button;
+  }
+
+  function setRetryVisible(isVisible){
+    var button=getRetryButton();
+    if(!button)return;
+    button.hidden=!isVisible;
+    button.style.display=isVisible?"block":"none";
+  }
+
+  function setRegistrationState(state){
+    document.querySelectorAll(registrationSelector).forEach(function(button){
+      button.setAttribute("data-atmospace-state",state);
+      if(state==="ready"&&registrationUrl){
+        button.setAttribute("href",registrationUrl);
+        button.removeAttribute("aria-disabled");
+      }else{
+        button.setAttribute("href","#");
+        button.setAttribute("aria-disabled","true");
+      }
+    });
+  }
+
+  function isTrustedRegistrationUrl(value){
+    try{
+      var url=new URL(String(value||""));
+      return url.protocol==="https:"&&(url.hostname==="atmospace.pro"||url.hostname.endsWith(".atmospace.pro"));
+    }catch(error){return false;}
+  }
+
+  function applyRegistrationLink(links){
+    var candidate=links&&links.registration;
+    if(typeof candidate!=="string")return false;
+    if(!isTrustedRegistrationUrl(candidate))return false;
+    registrationUrl=candidate;
+    setRegistrationState("ready");
+    setRuntimeMessage("");
+    return true;
+  }
+
+  document.addEventListener("click",function(event){
+    var quizLink=event.target&&event.target.closest?event.target.closest(quizSelector):null;
+    if(quizLink&&!quizStartSent){
+      quizStartSent=true;
+      sendEvent("quiz_start_click");
+      reachGoal("quiz_start_click");
+    }
+    var option=event.target&&event.target.closest?event.target.closest("[data-atmospace-option]"):null;
+    if(option){
+      var panel=option.closest("[data-atmospace-question]");
+      var panels=Array.from(document.querySelectorAll("[data-atmospace-question]"));
+      var questionIndex=panels.indexOf(panel);
+      if(questionIndex>=0&&!answeredGoalIndexes[questionIndex]){
+        answeredGoalIndexes[questionIndex]=true;
+        reachGoal("question_answered",{questionNumber:questionIndex+1});
+        if(questionIndex===panels.length-1)reachGoal("quiz_completed");
+      }
+    }
+    var registrationLink=event.target&&event.target.closest?event.target.closest(registrationSelector):null;
+    if(!registrationLink)return;
+    event.preventDefault();
+    if(!registrationUrl||registrationNavigationStarted){
+      if(!registrationUrl)setRuntimeMessage(runtimeErrorMessage);
+      return;
+    }
+    registrationNavigationStarted=true;
+    reachGoal("registration_started");
+    window.setTimeout(function(){window.location.assign(registrationUrl);},180);
+  },true);
+
+  function sendLandingOpenedOnce(){
+    if(landingOpenedSent)return;
+    landingOpenedSent=true;
+    sendEvent("landing_opened");
+  }
+
+  function requestRegistration(){
+    if(initInFlight||initCompleted)return Promise.resolve();
+    if(isLocalPreview()){
+      setRetryVisible(false);
+      setRuntimeMessage("После публикации страница автоматически подготовит безопасный переход к регистрации.");
+      return Promise.resolve();
+    }
+    if(!cfg.publicLandingKey||!cfg.counterId){
+      setRegistrationState("error");
+      setRetryVisible(false);
+      setRuntimeMessage(runtimeErrorMessage);
+      return Promise.resolve();
+    }
+    initInFlight=true;
+    setRegistrationState("loading");
+    setRuntimeMessage("");
+    setRetryVisible(false);
+    sendLandingOpenedOnce();
+    return postJson(cfg.baseUrl+cfg.initPath,basePayload(),false).then(function(result){
+      var responseBody=result&&result.body?result.body:null;
+      var data=responseBody&&responseBody.ok&&responseBody.data?responseBody.data:null;
+      var links=data&&data.links?data.links:null;
+      if(!result||!result.ok||!applyRegistrationLink(links))throw new Error("landing_not_ready");
+      initCompleted=true;
+      initInFlight=false;
+      setRetryVisible(false);
+    }).catch(function(){
+      initInFlight=false;
+      setRegistrationState("error");
+      setRuntimeMessage(runtimeErrorMessage);
+      setRetryVisible(true);
+    });
+  }
+
+  function initRuntime(){
+    document.querySelectorAll(quizSelector).forEach(function(link){
+      if(!link.getAttribute("href"))link.setAttribute("href","#atmospace-mini-quiz");
+      link.setAttribute("data-atmospace-state","ready");
+      link.removeAttribute("aria-disabled");
+    });
+    setRegistrationState("loading");
+    ensureMetrikaReady();
+    if(!landingViewSent){landingViewSent=true;reachGoal("landing_view");}
+    requestRegistration();
+  }
+
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",initRuntime);
+  else initRuntime();
+})();
+</script>`;
+}
+
 function ensureAtmospaceRuntimeEmbed(embedCode, publicLandingKey, counterId, landingName, landingCode) {
   let htmlSource = String(embedCode || '');
   if (!htmlSource || hasAtmospaceRuntime(htmlSource)) return htmlSource;
@@ -528,7 +893,7 @@ function ensureAtmospaceRuntimeEmbed(embedCode, publicLandingKey, counterId, lan
   return `${htmlSource}\n${runtimeScript}`;
 }
 
-function validateAtmospaceEmbedCode({ embedCode, publicLandingKey, counterId, landingName, landingCode, protectedValue }) {
+function validateLegacyAtmospaceEmbedCode({ embedCode, publicLandingKey, counterId, landingName, landingCode, protectedValue }) {
   const source = String(embedCode || '');
   const errors = [];
   const requiredMarkers = [
@@ -568,10 +933,73 @@ function validateAtmospaceEmbedCode({ embedCode, publicLandingKey, counterId, la
   if (source.includes('readyLinks[messenger]||readyLinks.telegram') || source.includes('readyLinks[messenger]||readyLinks.max')) {
     errors.push('messenger_link_fallback_forbidden');
   }
-  if (!/messenger\s*:\s*messenger\s*\|\|\s*null/.test(source)) errors.push('nullable_messenger_contract_missing');
-  if (!/!links\.telegram\s*\|\|\s*!links\.max/.test(source)) errors.push('both_messenger_links_required');
+  if (!/messenger\s*:\s*messenger\s*\|\|\s*null/.test(source)) errors.push('legacy_requires_nullable_transport');
+  if (!/!links\.telegram\s*\|\|\s*!links\.max/.test(source)) errors.push('legacy_requires_two_transport_links');
   if (source.includes('https://web.telegram.org/k/#')) errors.push('telegram_web_link_forbidden');
   if (!source.includes('Сейчас переход временно недоступен. Попробуйте ещё раз чуть позже.')) errors.push('runtime_error_message_missing');
+  if (protectedValue && source.includes(protectedValue)) errors.push('protected_value_leaked');
+  if (source.includes('serverOnlyAdGoalCredential')) errors.push('protected_field_name_leaked');
+  return errors;
+}
+
+function validateAtmospaceEmbedCode({ embedCode, publicLandingKey, counterId, landingName, landingCode, protectedValue }) {
+  const source = String(embedCode || '');
+  const errors = [];
+  const requiredMarkers = [
+    'landing_variant_code',
+    'landing_variant_name',
+    'browser_language',
+    'browser_client_time',
+    'advertising_click_ids',
+    'yclid',
+    'gclid',
+    'fbclid',
+    'msclkid',
+    'dclid',
+    'utm_source',
+    'utm_medium',
+    'utm_campaign',
+    'utm_content',
+    'utm_term',
+    'landing_opened',
+    'quiz_start_click',
+    'landing_view',
+    'question_answered',
+    'questionNumber',
+    'quiz_completed',
+    'registration_started',
+    'links.registration',
+    'data-atmospace-quiz-link',
+    'data-atmospace-registration-link',
+    'data-atmospace-runtime-retry',
+    'isTrustedRegistrationUrl',
+    'window.location.assign(registrationUrl)',
+    'requestRegistration',
+    'https://mc.yandex.ru/metrika/tag.js',
+    'window.__atmospaceMetrikaInited'
+  ];
+  if (!source.trim()) errors.push('embed_code_empty');
+  if (!publicLandingKey || !source.includes(publicLandingKey)) errors.push('public_landing_key_missing');
+  if (!counterId || !source.includes(counterId)) errors.push('counter_id_missing');
+  if (!landingName || !source.includes(landingName)) errors.push('landing_name_missing');
+  if (!landingCode || !source.includes(landingCode)) errors.push('landing_code_missing');
+  if (!source.includes(`${ATMOSPACE_API_BASE_URL}${ATMOSPACE_INIT_PATH}`) && !source.includes(ATMOSPACE_INIT_PATH)) errors.push('runtime_init_missing');
+  if (!source.includes(`${ATMOSPACE_API_BASE_URL}${ATMOSPACE_CLICK_PATH}`) && !source.includes(ATMOSPACE_CLICK_PATH)) errors.push('runtime_click_missing');
+  requiredMarkers.forEach((marker) => {
+    if (!source.includes(marker)) errors.push(`runtime_marker_missing:${marker}`);
+  });
+  if ((source.match(/(?:var|const) pageInstanceId\s*=\s*makePageInstanceId\(\);/g) || []).length !== 1) errors.push('page_instance_id_contract_invalid');
+  if (source.includes('sessionStorage')) errors.push('page_instance_id_session_storage_forbidden');
+  if (/data-atmospace-messenger|messenger_button_clicked|links\.telegram|links\.max/.test(source)) errors.push('messenger_contract_forbidden');
+  if (/function\s+buildQuizUrl|pathname\s*=\s*['"]\/quiz['"]/.test(source)) errors.push('registration_link_rewrite_forbidden');
+  if (/\/api\/register/.test(source)) errors.push('direct_registration_endpoint_forbidden');
+  if (/registration_success|notifications_connected|payment_success|registration_click/.test(source)) errors.push('browser_server_goal_forbidden');
+  if (!source.includes('eventType!=="landing_opened"&&eventType!=="quiz_start_click"') && !source.includes("eventType !== 'landing_opened' && eventType !== 'quiz_start_click'")) errors.push('click_event_allowlist_missing');
+  if ((source.match(/window\.ym\([^\n]+["']init["']/g) || []).length !== 1) errors.push('metrika_init_contract_invalid');
+  if (source.includes('https://web.telegram.org/k/#')) errors.push('telegram_web_link_forbidden');
+  if (!source.includes('registrationUrl=candidate') && !source.includes('registrationUrl = candidate')) errors.push('canonical_registration_link_missing');
+  if (!source.includes('Сейчас переход временно недоступен. Попробуйте ещё раз чуть позже.')) errors.push('runtime_error_message_missing');
+  if (!source.includes('Сейчас переход временно недоступен. Попробуйте ещё раз чуть позже.')) errors.push('runtime_retry_message_missing');
   if (protectedValue && source.includes(protectedValue)) errors.push('protected_value_leaked');
   if (source.includes('serverOnlyAdGoalCredential')) errors.push('protected_field_name_leaked');
   return errors;

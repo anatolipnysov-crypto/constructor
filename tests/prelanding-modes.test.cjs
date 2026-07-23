@@ -20,10 +20,15 @@ const quizRendererEnd = source.indexOf('function renderPrelandingHtml', quizRend
 assert(quizRendererStart !== -1, 'renderInteractiveQuizPrelanding must exist.');
 assert(quizRendererEnd !== -1, 'renderPrelandingHtml must follow the quiz renderers.');
 const quizRenderer = source.slice(quizRendererStart, quizRendererEnd);
+const ordinaryRendererStart = source.indexOf('function renderCoreMethodInlinePrelanding');
+const ordinaryRendererEnd = source.indexOf('function renderInteractiveQuizPrelanding', ordinaryRendererStart);
+assert(ordinaryRendererStart !== -1, 'First ordinary prelanding renderer must exist.');
+assert(ordinaryRendererEnd !== -1, 'Interactive quiz renderer must follow the ordinary renderers.');
+const ordinaryRenderers = source.slice(ordinaryRendererStart, ordinaryRendererEnd);
 
 [
   "id: 'templateStage'",
-  "title: 'Формат 1 / Метод + 3 блока'",
+  "title: 'Формат 1 / Мини-тест + разбор'",
   "id: 'heroBlocks'",
   "title: 'Формат 2 / Hero-картинка + блоки'",
   "id: 'natureEditorial'",
@@ -47,8 +52,16 @@ const quizRenderer = source.slice(quizRendererStart, quizRendererEnd);
   'https://api.atmospace.pro',
   '/api/landing-runtime/init',
   '/api/landing-runtime/click',
-  'data-atmospace-messenger="telegram"',
-  'data-atmospace-messenger="max"',
+  'data-atmospace-quiz-link',
+  'data-atmospace-registration-link',
+  'links.registration',
+  'https://mc.yandex.ru/metrika/tag.js',
+  'landing_view',
+  'quiz_start_click',
+  'question_answered',
+  'questionNumber',
+  'quiz_completed',
+  'registration_started',
   'validateAtmospaceTildaHtml(prelandingHtml, prelandingHtmlConfig)',
   'buildAtmospaceLandingConfig({',
   'activeLandingRuntimeArtifact?.publicLandingKey'
@@ -161,14 +174,15 @@ assert(!bannerStudio.includes('lockTemplateCopy: true'), 'Banner to prelanding h
 });
 
 [
-  'renderAtmospaceMessengerButton',
   'buildAtmospacePrelandingTrackingScript',
-  'id="atmospace-policy-consent"',
-  'id="atmospace-policy-error"',
+  'data-atmospace-registration-link',
+  'atmospace:quiz-answer',
+  'atmospace:quiz-complete',
+  'questionNumber',
   'textContent=current.eyebrow',
   'options.replaceChildren()'
 ].forEach((snippet) => {
-  assert(quizRenderer.includes(snippet), `Quiz renderer must use the shared safe runtime contract: ${snippet}`);
+  assert(quizRenderer.includes(snippet), `Embedded quiz must use the registration handoff contract: ${snippet}`);
 });
 
 [
@@ -182,11 +196,6 @@ assert(!bannerStudio.includes('lockTemplateCopy: true'), 'Banner to prelanding h
   assert(quizRenderer.includes(snippet), `Barrier-profile quiz must include ${snippet}`);
 });
 
-assert(
-  !/id="atmospace-policy-consent"[^>]*checked/.test(quizRenderer),
-  'Quiz consent must require an explicit user action.'
-);
-
 [
   'window.FH_CONFIG',
   'DIRECTION_CONFIG',
@@ -194,10 +203,34 @@ assert(
   '/api/register',
   'data:image',
   'r.bothelp.io',
+  'renderAtmospaceMessengerButton',
   'supabase.co/functions/v1',
-  'fetch('
+  'fetch(',
+  'data-atmospace-messenger',
+  'messenger_button_clicked',
+  'Открыть разбор в Telegram',
+  'Открыть разбор в MAX',
+  'registration_click',
+  'registration_success',
+  'payment_success',
+  'sessionStorage',
+  'localStorage'
 ].forEach((snippet) => {
   assert(!quizRenderer.includes(snippet), `Quiz renderer must not include forbidden standalone integration: ${snippet}`);
+});
+
+[
+  'data-atmospace-messenger',
+  'messenger_button_clicked',
+  'Начать разбор в Telegram',
+  'Начать разбор в MAX',
+  'Начать в Telegram',
+  'Начать в MAX',
+  'registration_click',
+  'registration_success',
+  'payment_success'
+].forEach((snippet) => {
+  assert(!ordinaryRenderers.includes(snippet), `Ordinary prelandings must not include the old messenger contract: ${snippet}`);
 });
 
 [
@@ -224,7 +257,7 @@ assert(bundle, 'Built JS bundle not found. Run npm run build first.');
 
 const built = fs.readFileSync(path.join(distAssetsDir, bundle), 'utf8');
 [
-  'Формат 1 / Метод + 3 блока',
+  'Формат 1 / Мини-тест + разбор',
   'Формат 2 / Hero-картинка + блоки',
   'Формат 3 / Nature editorial',
   'Формат 4 / Тихое сравнение',
@@ -236,9 +269,16 @@ const built = fs.readFileSync(path.join(distAssetsDir, bundle), 'utf8');
   'https://api.atmospace.pro',
   '/api/landing-runtime/init',
   '/api/landing-runtime/click',
-  'data-atmospace-messenger',
-  'telegram',
-  'max',
+  'data-atmospace-quiz-link',
+  'data-atmospace-registration-link',
+  'links.registration',
+  'https://mc.yandex.ru/metrika/tag.js',
+  'landing_view',
+  'quiz_start_click',
+  'question_answered',
+  'questionNumber',
+  'quiz_completed',
+  'registration_started',
   'publicLandingKey',
   'counterId',
   'Проверка пройдена: Tilda HTML собран на Atmospace runtime'
@@ -250,7 +290,15 @@ const built = fs.readFileSync(path.join(distAssetsDir, bundle), 'utf8');
   /Готовый статический лендинг v1/,
   /Проверка пройдена: Tilda HTML собран на individual-core-v2/,
   /до BotHelp и smart-endpoint/,
-  /sotkatracker\.ru\/funnel-proxy\.php\?route=smart-endpoint/
+  /sotkatracker\.ru\/funnel-proxy\.php\?route=smart-endpoint/,
+  /data-atmospace-messenger/,
+  /messenger_button_clicked/,
+  /r\.bothelp\.io/,
+  /buildQuizUrl/,
+  /registration_click/,
+  /quiz_question_\d+_answered/,
+  /registration_success/,
+  /payment_success/
 ].forEach((pattern) => {
   assert(!pattern.test(built), `Built bundle must not match ${pattern}`);
 });

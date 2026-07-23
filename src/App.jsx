@@ -918,9 +918,46 @@ function buildAtmospaceLandingConfig({ projectData, ...fallback } = {}) {
   };
 }
 
-function renderAtmospaceMessengerButton(messenger, className, label) {
-  const safeMessenger = messenger === 'max' ? 'max' : 'telegram';
-  return `<a href="#" data-atmospace-messenger="${safeMessenger}" data-atmospace-state="loading" aria-disabled="true" target="_blank" rel="noopener noreferrer" class="${esc(className)}"><span>${esc(label)}</span></a>`;
+const ATMOSPACE_MINI_QUIZ = Object.freeze([
+  {
+    title: 'Сколько лет ты уже говоришь себе: «Ща,-ща, ещё немного — и всё изменится»?',
+    options: ['Меньше 1 года', '1-3 года', '3-5 лет', 'Больше 5 лет']
+  },
+  {
+    title: 'Если завтра тебя не станет, что самое неприятное про себя слышать?',
+    options: [
+      'Мда, он так много хотел, но так ничего и не сделал.',
+      'Обещал-обещал семье другое будущее, но так и не вывез.',
+      'Он не оставил семье ничего кроме долгов.',
+      'Он так и не стал тем, кем всегда хотел быть.'
+    ]
+  },
+  {
+    title: 'Представь прошло 5 лет. Ничего не изменилось. Что тяжелее всего признать?',
+    options: [
+      'Я так и не смог ничего добиться, просто сдался и смирился.',
+      'Я всё также работаю на других и обслуживаю чужую жизнь за зарплату.',
+      'Ребёнок вырос, но видит во мне НЕ авторитета, а уставшего пузатого скуфа, обиженного на жизнь.',
+      'Я вижу как другие живут так как хотел я, а у меня больше нет сил на новые попытки. Осталась только боль и обида, которую я каждый вечер заливаю пивом.'
+    ]
+  },
+  {
+    title: 'Каким мужчиной ты себя видишь прямо сейчас?',
+    options: [
+      'Всё норм, я не сдался, я знаю что смогу. Я действую.',
+      'Ходячая папка с планами, которые не реализовались и хрен знает реализуются ли.',
+      'Во мне есть силы, есть потенциал, но из-за кучи провалов я стал терять веру в себя.',
+      'Остались только обещания себе и семье, которые я так и не выполнил.'
+    ]
+  }
+]);
+
+function renderAtmospaceQuizButton(className, label = 'Пройти мини-тест') {
+  return `<a href="#atmospace-mini-quiz" data-atmospace-quiz-link data-atmospace-state="ready" class="${esc(className)}" style="grid-column:1 / -1"><span>${esc(label)}</span></a>`;
+}
+
+function renderAtmospaceRegistrationButton(className, label = 'Перейти к форме заявки') {
+  return `<a href="#" data-atmospace-registration-link data-atmospace-state="loading" aria-disabled="true" class="${esc(className)}" style="grid-column:1 / -1"><span>${esc(label)}</span></a>`;
 }
 
 function buildAtmospaceHeadConfig({ projectData, ...fallback } = {}) {
@@ -930,7 +967,7 @@ window.ATMOSPACE_LANDING_CONFIG = Object.freeze(${safeInlineJson(config)});
 </script>`;
 }
 
-function buildAtmospacePrelandingTrackingScript() {
+function buildLegacyAtmospacePrelandingTrackingScript() {
   return `<script>
 (function () {
   'use strict';
@@ -941,8 +978,12 @@ function buildAtmospacePrelandingTrackingScript() {
   var clickEndpoint = cfg.clickEndpoint || ${JSON.stringify(ATMOSPACE_CLICK_ENDPOINT)};
   var DIRECT_PARAM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
   var CLICK_ID_KEYS = ['yclid', 'gclid', 'fbclid', 'msclkid', 'dclid'];
-  var readyLinks = {};
+  var questions = ${safeInlineJson(ATMOSPACE_MINI_QUIZ)};
+  var registrationUrl = '';
   var landingOpenedSent = false;
+  var answeredGoalIndexes = {};
+  var quizCompletedSent = false;
+  var registrationNavigationStarted = false;
   var RUNTIME_ERROR_MESSAGE = 'Сейчас переход временно недоступен. Попробуйте ещё раз чуть позже.';
 
   function getParam(name) {
@@ -984,17 +1025,28 @@ function buildAtmospacePrelandingTrackingScript() {
       || window.location.hostname === '127.0.0.1';
   }
 
-  function getButtons() {
-    return Array.prototype.slice.call(document.querySelectorAll('[data-atmospace-messenger]'));
+  function getQuizButtons() {
+    return Array.prototype.slice.call(document.querySelectorAll('[data-atmospace-quiz-link]'));
   }
 
-  function setButtonsState(state) {
-    getButtons().forEach(function (button) {
-      button.setAttribute('target', '_blank');
-      button.setAttribute('rel', 'noopener noreferrer');
+  function getRegistrationButtons() {
+    return Array.prototype.slice.call(document.querySelectorAll('[data-atmospace-registration-link]'));
+  }
+
+  function setQuizButtonsState(state) {
+    getQuizButtons().forEach(function (button) {
       button.setAttribute('data-atmospace-state', state);
-      if (state === 'ready') {
+      button.removeAttribute('aria-disabled');
+      button.setAttribute('href', '#atmospace-mini-quiz');
+    });
+  }
+
+  function setRegistrationButtonsState(state) {
+    getRegistrationButtons().forEach(function (button) {
+      button.setAttribute('data-atmospace-state', state);
+      if (state === 'ready' && registrationUrl) {
         button.removeAttribute('aria-disabled');
+        button.setAttribute('href', registrationUrl);
       } else {
         button.setAttribute('aria-disabled', 'true');
         button.setAttribute('href', '#');
@@ -1005,7 +1057,7 @@ function buildAtmospacePrelandingTrackingScript() {
   function getRuntimeMessageNode() {
     var existing = document.querySelector('[data-atmospace-runtime-message]');
     if (existing) return existing;
-    var firstButton = getButtons()[0];
+    var firstButton = getRegistrationButtons()[0] || getQuizButtons()[0];
     if (!firstButton) return null;
     var node = document.createElement('p');
     node.setAttribute('data-atmospace-runtime-message', '');
@@ -1025,51 +1077,35 @@ function buildAtmospacePrelandingTrackingScript() {
   }
 
   function showRuntimeError() {
-    setButtonsState('error');
+    registrationUrl = '';
+    setRegistrationButtonsState('error');
     setRuntimeMessage(RUNTIME_ERROR_MESSAGE);
   }
 
-  function getPolicyCheckbox() {
-    return document.getElementById('atmospace-policy-consent');
-  }
-
-  function setPolicyError(isVisible) {
-    var error = document.getElementById('atmospace-policy-error');
-    if (!error) return;
-    error.hidden = !isVisible;
-    error.style.display = isVisible ? 'block' : 'none';
-  }
-
-  function hasPolicyConsent() {
-    var checkbox = getPolicyCheckbox();
-    if (!checkbox) {
-      setPolicyError(false);
-      return true;
+  function isTrustedRegistrationUrl(value) {
+    try {
+      var url = new URL(String(value || ''));
+      return url.protocol === 'https:' && (url.hostname === 'atmospace.pro' || url.hostname.endsWith('.atmospace.pro'));
+    } catch (error) {
+      return false;
     }
-    if (checkbox.checked) {
-      setPolicyError(false);
-      return true;
-    }
-    setPolicyError(true);
-    if (typeof checkbox.focus === 'function') checkbox.focus();
-    return false;
   }
 
-  function applyLinks(links) {
-    readyLinks = {
-      telegram: String(links && links.telegram ? links.telegram : ''),
-      max: String(links && links.max ? links.max : '')
-    };
+  function applyRegistrationLink(links) {
+    var candidate = links && links.registration;
+    if (typeof candidate !== 'string') {
+      showRuntimeError();
+      return false;
+    }
+    if (!isTrustedRegistrationUrl(candidate)) {
+      showRuntimeError();
+      return false;
+    }
+    registrationUrl = candidate;
     setRuntimeMessage('');
-    getButtons().forEach(function (button) {
-      var messenger = button.getAttribute('data-atmospace-messenger') === 'max' ? 'max' : 'telegram';
-      var url = readyLinks[messenger] || '';
-      if (url) {
-        button.href = url;
-        button.removeAttribute('aria-disabled');
-        button.setAttribute('data-atmospace-state', 'ready');
-      }
-    });
+    setRegistrationButtonsState('ready');
+    document.dispatchEvent(new CustomEvent('atmospace:registration-ready', { detail: { registrationUrl: registrationUrl } }));
+    return true;
   }
 
   function buildBasePayload() {
@@ -1110,12 +1146,11 @@ function buildAtmospacePrelandingTrackingScript() {
     });
   }
 
-  function sendEvent(eventType, messenger) {
+  function sendEvent(eventType) {
     var payload = {
       public_landing_key: cfg.publicLandingKey || '',
       counter_id: cfg.counterId || '',
       event_type: eventType,
-      messenger: messenger || null,
       page_instance_id: pageInstanceId,
       page_url: window.location.href,
       referrer: document.referrer || null,
@@ -1138,16 +1173,174 @@ function buildAtmospacePrelandingTrackingScript() {
   function sendLandingOpenedOnce() {
     if (landingOpenedSent) return;
     landingOpenedSent = true;
-    sendEvent('landing_opened', null);
+    sendEvent('landing_opened');
+  }
+
+  var metrikaCounterId = (function () {
+    var value = Number.parseInt(String(cfg.counterId || ''), 10);
+    return Number.isInteger(value) && value > 0 ? value : null;
+  })();
+  var pendingMetrikaGoals = [];
+  var metrikaFlushScheduled = false;
+
+  function finishPendingMetrikaGoals() {
+    while (pendingMetrikaGoals.length) {
+      var item = pendingMetrikaGoals.shift();
+      item.done();
+    }
+  }
+
+  function flushPendingMetrikaGoals() {
+    if (!metrikaCounterId || typeof window.ym !== 'function') return false;
+    while (pendingMetrikaGoals.length) {
+      var item = pendingMetrikaGoals.shift();
+      try {
+        window.ym(metrikaCounterId, 'reachGoal', item.goalName, {}, item.done);
+      } catch (error) {
+        item.done();
+      }
+    }
+    return true;
+  }
+
+  function scheduleMetrikaFlush() {
+    if (metrikaFlushScheduled || !pendingMetrikaGoals.length) return;
+    metrikaFlushScheduled = true;
+    var attempts = 0;
+    function tick() {
+      if (flushPendingMetrikaGoals()) {
+        metrikaFlushScheduled = false;
+        return;
+      }
+      attempts += 1;
+      if (attempts >= 40) {
+        finishPendingMetrikaGoals();
+        metrikaFlushScheduled = false;
+        return;
+      }
+      window.setTimeout(tick, 250);
+    }
+    if (document.readyState === 'complete') tick();
+    else window.addEventListener('load', tick, { once: true });
+  }
+
+  function reachGoal(goalName, callback) {
+    var callbackCalled = false;
+    function done() {
+      if (callbackCalled) return;
+      callbackCalled = true;
+      if (typeof callback === 'function') callback();
+    }
+    if (!metrikaCounterId || isLocalPreview()) {
+      done();
+      return;
+    }
+    pendingMetrikaGoals.push({ goalName: goalName, done: done });
+    scheduleMetrikaFlush();
+  }
+
+  function ensureMiniQuiz() {
+    var existing = document.querySelector('[data-atmospace-mini-quiz]');
+    if (existing) return existing;
+    var style = document.createElement('style');
+    style.textContent = '[data-atmospace-mini-quiz]{position:fixed;inset:0;z-index:2147483000;display:grid;place-items:center;padding:20px;background:rgba(5,10,20,.84);font-family:Manrope,Inter,system-ui,sans-serif;color:#f8fafc}[data-atmospace-mini-quiz][hidden]{display:none!important}.atm-qz-dialog{position:relative;width:min(820px,100%);max-height:calc(100svh - 40px);overflow:auto;border:1px solid rgba(148,163,184,.24);border-radius:8px;background:#0b1424;box-shadow:0 28px 90px rgba(0,0,0,.46)}.atm-qz-body{padding:clamp(24px,5vw,48px)}.atm-qz-close{position:absolute;top:14px;right:14px;width:42px;height:42px;border:1px solid rgba(148,163,184,.25);border-radius:50%;background:#111e32;color:#fff;cursor:pointer;font-size:24px;line-height:1}.atm-qz-kicker{margin:0 52px 14px 0;color:#63b3ff;font-size:12px;font-weight:900;text-transform:uppercase}.atm-qz-title{margin:0 0 18px;font-size:clamp(30px,5vw,48px);line-height:1.08}.atm-qz-note{margin:7px 0;color:#cbd5e1;font-size:16px;line-height:1.5}.atm-qz-note strong{color:#fff}.atm-qz-action,.atm-qz-registration{display:flex;align-items:center;justify-content:center;width:100%;min-height:62px;margin-top:28px;padding:14px 22px;border:0;border-radius:8px;background:#2f80ed;color:#fff!important;text-decoration:none!important;cursor:pointer;font-size:17px;font-weight:900}.atm-qz-progress-row{display:flex;align-items:center;gap:14px;margin-bottom:28px;color:#94a3b8;font-size:13px;font-weight:800}.atm-qz-progress{height:7px;flex:1;overflow:hidden;border-radius:999px;background:#1b2a40}.atm-qz-progress span{display:block;height:100%;background:#38bdf8;transition:width .2s ease}.atm-qz-question{margin:0 0 26px;font-size:clamp(26px,4vw,38px);line-height:1.18}.atm-qz-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.atm-qz-option{min-height:76px;padding:17px;border:1px solid rgba(148,163,184,.24);border-radius:8px;background:#111e32;color:#f8fafc;cursor:pointer;text-align:left;font-size:15px;line-height:1.45;font-weight:750}.atm-qz-option:hover,.atm-qz-option:focus-visible{border-color:#38bdf8;outline:none}.atm-qz-back{margin-top:20px;border:0;background:transparent;color:#94a3b8;cursor:pointer;font-weight:800}.atm-qz-result{text-align:center}.atm-qz-result p{color:#cbd5e1;font-size:18px;line-height:1.55}.atm-qz-status{margin:12px 0 0;color:#fca5a5;font-size:13px;font-weight:800}.atm-qz-registration[aria-disabled=true]{pointer-events:none;opacity:.58}@media(max-width:640px){[data-atmospace-mini-quiz]{padding:0}.atm-qz-dialog{width:100%;max-height:100svh;min-height:100svh;border:0;border-radius:0}.atm-qz-body{padding:64px 16px 24px}.atm-qz-options{grid-template-columns:1fr}.atm-qz-option{min-height:64px}.atm-qz-close{position:fixed}}';
+    document.head.appendChild(style);
+    var modal = document.createElement('div');
+    modal.setAttribute('data-atmospace-mini-quiz', '');
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', 'Мини-тест');
+    modal.hidden = true;
+    modal.innerHTML = '<div class="atm-qz-dialog"><button class="atm-qz-close" type="button" data-atm-qz-close aria-label="Закрыть">×</button><div class="atm-qz-body"><section data-atm-qz-intro><p class="atm-qz-kicker">Мини-тест</p><h2 class="atm-qz-title">Здесь нет правильных ответов.</h2><p class="atm-qz-note"><strong>Их никто не сохраняет и не оценивает - кроме тебя.</strong></p><p class="atm-qz-note">Просто будь честен с самим собой.</p><button class="atm-qz-action" type="button" data-atm-qz-start>Начать мини-тест</button></section><section data-atm-qz-questions hidden><div class="atm-qz-progress-row"><span data-atm-qz-counter></span><div class="atm-qz-progress"><span data-atm-qz-progress></span></div></div><h2 class="atm-qz-question" data-atm-qz-question></h2><div class="atm-qz-options" data-atm-qz-options></div><button class="atm-qz-back" type="button" data-atm-qz-back>Назад</button></section><section class="atm-qz-result" data-atm-qz-result hidden><p class="atm-qz-kicker">Мини-тест пройден</p><h2 class="atm-qz-title">Спасибо за честные ответы.</h2><p>Перейдите к форме заявки, чтобы продолжить.</p><a class="atm-qz-registration" href="#" data-atmospace-registration-link data-atmospace-state="loading" aria-disabled="true">Перейти к форме заявки</a><p class="atm-qz-status" data-atm-qz-status></p></section></div></div>';
+    document.body.appendChild(modal);
+    var intro = modal.querySelector('[data-atm-qz-intro]');
+    var questionView = modal.querySelector('[data-atm-qz-questions]');
+    var resultView = modal.querySelector('[data-atm-qz-result]');
+    var counter = modal.querySelector('[data-atm-qz-counter]');
+    var progress = modal.querySelector('[data-atm-qz-progress]');
+    var questionNode = modal.querySelector('[data-atm-qz-question]');
+    var optionsNode = modal.querySelector('[data-atm-qz-options]');
+    var back = modal.querySelector('[data-atm-qz-back]');
+    var index = 0;
+    var answers = [];
+
+    function renderQuestion() {
+      var current = questions[index];
+      if (!current) {
+        questionView.hidden = true;
+        resultView.hidden = false;
+        if (!quizCompletedSent) {
+          quizCompletedSent = true;
+          reachGoal('quiz_completed');
+        }
+        setRegistrationButtonsState(registrationUrl ? 'ready' : 'error');
+        var status = modal.querySelector('[data-atm-qz-status]');
+        if (status) status.textContent = registrationUrl ? '' : (isLocalPreview() ? 'В локальном превью переход к форме отключён.' : RUNTIME_ERROR_MESSAGE);
+        return;
+      }
+      counter.textContent = String(index + 1) + ' / ' + String(questions.length);
+      progress.style.width = String(((index + 1) / questions.length) * 100) + '%';
+      questionNode.textContent = current.title;
+      back.disabled = index === 0;
+      back.style.opacity = index === 0 ? '.45' : '1';
+      optionsNode.replaceChildren();
+      current.options.forEach(function (label, optionIndex) {
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'atm-qz-option';
+        button.textContent = label;
+        button.addEventListener('click', function () {
+          answers[index] = optionIndex;
+          if (!answeredGoalIndexes[index]) {
+            answeredGoalIndexes[index] = true;
+            reachGoal('quiz_question_' + String(index + 1) + '_answered');
+          }
+          index += 1;
+          renderQuestion();
+        });
+        optionsNode.appendChild(button);
+      });
+    }
+
+    function closeModal() {
+      modal.hidden = true;
+      document.documentElement.style.overflow = '';
+    }
+
+    modal.querySelector('[data-atm-qz-close]').addEventListener('click', closeModal);
+    modal.addEventListener('click', function (event) { if (event.target === modal) closeModal(); });
+    modal.querySelector('[data-atm-qz-start]').addEventListener('click', function () {
+      intro.hidden = true;
+      questionView.hidden = false;
+      index = 0;
+      answers = [];
+      renderQuestion();
+    });
+    back.addEventListener('click', function () {
+      if (index <= 0) return;
+      index -= 1;
+      renderQuestion();
+    });
+    return modal;
+  }
+
+  function openMiniQuiz() {
+    var modal = ensureMiniQuiz();
+    setRegistrationButtonsState(registrationUrl ? 'ready' : 'loading');
+    modal.hidden = false;
+    document.documentElement.style.overflow = 'hidden';
   }
 
   function initRuntime() {
+    setQuizButtonsState('ready');
+    ensureMiniQuiz();
+    reachGoal('landing_view');
     if (!cfg.publicLandingKey || !cfg.counterId) {
       showRuntimeError();
       console.error('[Atmospace] publicLandingKey/counterId missing');
       return;
     }
-    setButtonsState(isLocalPreview() ? 'preview' : 'loading');
+    setRegistrationButtonsState(isLocalPreview() ? 'preview' : 'loading');
     if (isLocalPreview()) {
       setRuntimeMessage('');
       console.info('[Atmospace] Local preview: runtime API calls disabled.');
@@ -1157,42 +1350,604 @@ function buildAtmospacePrelandingTrackingScript() {
       var responseBody = result && result.body ? result.body : null;
       var data = responseBody && responseBody.ok && responseBody.data ? responseBody.data : null;
       var links = data && data.links ? data.links : null;
-      if (!result || !result.ok || !links || !links.telegram || !links.max) {
+      if (!result || !result.ok || !links || !links.registration) {
         showRuntimeError();
         return;
       }
-      applyLinks(links);
+      if (!applyRegistrationLink(links)) return;
       sendLandingOpenedOnce();
     });
   }
 
   document.addEventListener('click', function (event) {
-    var button = event.target && event.target.closest ? event.target.closest('[data-atmospace-messenger]') : null;
+    var button = event.target && event.target.closest ? event.target.closest('[data-atmospace-quiz-link]') : null;
     if (!button) return;
-    var messenger = button.getAttribute('data-atmospace-messenger') === 'max' ? 'max' : 'telegram';
-    if (button.getAttribute('aria-disabled') === 'true' || !readyLinks[messenger]) {
-      event.preventDefault();
-      return;
-    }
-    if (!hasPolicyConsent()) {
-      event.preventDefault();
-      return;
-    }
-    sendEvent('messenger_button_clicked', messenger);
+    event.preventDefault();
+    sendEvent('quiz_start_click');
+    reachGoal('quiz_start_click');
+    openMiniQuiz();
   }, true);
 
-  var consent = getPolicyCheckbox();
-  if (consent) {
-    consent.addEventListener('change', function () {
-      if (consent.checked) setPolicyError(false);
-    });
-  }
+  document.addEventListener('atmospace:quiz-start', function () {
+    sendEvent('quiz_start_click');
+    reachGoal('quiz_start_click');
+  });
+  document.addEventListener('atmospace:quiz-answer', function (event) {
+    var questionNumber = Number(event && event.detail ? event.detail.questionNumber : 0);
+    if (!questionNumber || answeredGoalIndexes[questionNumber - 1]) return;
+    answeredGoalIndexes[questionNumber - 1] = true;
+    reachGoal('quiz_question_' + String(questionNumber) + '_answered');
+  });
+  document.addEventListener('atmospace:quiz-complete', function () {
+    if (quizCompletedSent) return;
+    quizCompletedSent = true;
+    reachGoal('quiz_completed');
+  });
+  document.addEventListener('click', function (event) {
+    var button = event.target && event.target.closest ? event.target.closest('[data-atmospace-registration-link]') : null;
+    if (!button) return;
+    if (!registrationUrl || button.getAttribute('aria-disabled') === 'true') {
+      event.preventDefault();
+      return;
+    }
+    if (registrationNavigationStarted) return;
+    registrationNavigationStarted = true;
+    event.preventDefault();
+    var navigated = false;
+    function navigate() {
+      if (navigated) return;
+      navigated = true;
+      window.location.assign(registrationUrl);
+    }
+    window.setTimeout(navigate, 800);
+    reachGoal('registration_started', navigate);
+  }, true);
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initRuntime);
   } else {
     initRuntime();
   }
+})();
+</script>`;
+}
+
+function buildAtmospacePrelandingTrackingScript() {
+  return `<script>
+(function () {
+  'use strict';
+
+  var cfg = window.ATMOSPACE_LANDING_CONFIG || {};
+  var runtimeVersion = cfg.runtimeVersion || ${JSON.stringify(ATMOSPACE_GENERATED_RUNTIME_VERSION)};
+  var initEndpoint = cfg.initEndpoint || ${JSON.stringify(ATMOSPACE_INIT_ENDPOINT)};
+  var clickEndpoint = cfg.clickEndpoint || ${JSON.stringify(ATMOSPACE_CLICK_ENDPOINT)};
+  var questions = ${safeInlineJson(ATMOSPACE_MINI_QUIZ)};
+  var UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
+  var CLICK_ID_KEYS = ['yclid', 'gclid', 'fbclid', 'msclkid', 'dclid'];
+  var registrationUrl = '';
+  var quizStartSent = false;
+  var quizCompleted = false;
+  var registrationNavigationStarted = false;
+  var answeredGoalIndexes = {};
+  var initInFlight = false;
+  var initCompleted = false;
+  var landingOpenedSent = false;
+  var landingViewSent = false;
+  var METRIKA_SCRIPT_URL = 'https://mc.yandex.ru/metrika/tag.js';
+  var RUNTIME_ERROR_MESSAGE = 'Сейчас переход временно недоступен. Попробуйте ещё раз чуть позже.';
+
+  function getParam(name) {
+    try { return new URL(window.location.href).searchParams.get(name) || ''; }
+    catch (error) { return ''; }
+  }
+
+  function makePageInstanceId() {
+    try {
+      var bytes = new Uint8Array(10);
+      window.crypto.getRandomValues(bytes);
+      return 'pi_' + Array.prototype.map.call(bytes, function (byte) {
+        return byte.toString(16).padStart(2, '0');
+      }).join('');
+    } catch (error) {
+      return 'pi_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
+    }
+  }
+  var pageInstanceId = makePageInstanceId();
+
+  function isLocalPreview() {
+    return window.location.protocol === 'file:'
+      || window.location.hostname === 'localhost'
+      || window.location.hostname === '127.0.0.1';
+  }
+
+  function collectAttribution() {
+    var clickIds = {};
+    CLICK_ID_KEYS.forEach(function (key) {
+      var value = getParam(key);
+      if (value) clickIds[key] = value;
+    });
+    var result = { advertising_click_ids: clickIds };
+    UTM_KEYS.forEach(function (key) { result[key] = getParam(key) || null; });
+    return result;
+  }
+
+  function buildBasePayload() {
+    var attribution = collectAttribution();
+    return {
+      public_landing_key: cfg.publicLandingKey || '',
+      counter_id: cfg.counterId || '',
+      landing_variant_code: cfg.landingCode || '',
+      landing_variant_name: cfg.landingName || '',
+      page_instance_id: pageInstanceId,
+      page_url: window.location.href,
+      referrer: document.referrer || null,
+      runtime_version: runtimeVersion,
+      browser_language: navigator.language || null,
+      browser_client_time: new Date().toISOString(),
+      advertising_click_ids: attribution.advertising_click_ids,
+      utm_source: attribution.utm_source,
+      utm_medium: attribution.utm_medium,
+      utm_campaign: attribution.utm_campaign,
+      utm_content: attribution.utm_content,
+      utm_term: attribution.utm_term
+    };
+  }
+
+  function postJson(url, payload, keepalive) {
+    if (!url || typeof fetch !== 'function') return Promise.resolve(null);
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+      keepalive: Boolean(keepalive)
+    }).then(function (response) {
+      return response.json().catch(function () { return null; }).then(function (body) {
+        return { ok: response.ok, body: body };
+      });
+    }).catch(function () { return null; });
+  }
+
+  function sendEvent(eventType) {
+    if (eventType !== 'landing_opened' && eventType !== 'quiz_start_click') return;
+    var payload = buildBasePayload();
+    payload.event_type = eventType;
+    payload.client_time = new Date().toISOString();
+    var body = JSON.stringify(payload);
+    if (navigator.sendBeacon) {
+      try {
+        var blob = new Blob([body], { type: 'application/json' });
+        if (navigator.sendBeacon(clickEndpoint, blob)) return;
+      } catch (error) {
+        // Fetch below is the non-blocking fallback.
+      }
+    }
+    postJson(clickEndpoint, payload, true);
+  }
+
+  var metrikaCounterId = (function () {
+    var value = Number.parseInt(String(cfg.counterId || ''), 10);
+    return Number.isInteger(value) && value > 0 ? value : null;
+  })();
+  var pendingMetrikaGoals = [];
+  var metrikaReadyPromise = null;
+
+  function flushPendingMetrikaGoals() {
+    if (!metrikaCounterId || typeof window.ym !== 'function') return false;
+    while (pendingMetrikaGoals.length) {
+      var item = pendingMetrikaGoals.shift();
+      try { window.ym(metrikaCounterId, 'reachGoal', item.goalName, item.params || {}, item.done); }
+      catch (error) { item.done(); }
+    }
+    return true;
+  }
+
+  function ensureMetrikaReady() {
+    if (!metrikaCounterId || isLocalPreview()) return Promise.resolve(false);
+    if (metrikaReadyPromise) return metrikaReadyPromise;
+
+    metrikaReadyPromise = new Promise(function (resolve) {
+      window.ym = window.ym || function () {
+        (window.ym.a = window.ym.a || []).push(arguments);
+      };
+      window.ym.l = window.ym.l || 1 * new Date();
+      window.__atmospaceMetrikaInited = window.__atmospaceMetrikaInited || {};
+      if (!window.__atmospaceMetrikaInited[metrikaCounterId]) {
+        window.__atmospaceMetrikaInited[metrikaCounterId] = true;
+        window.ym(metrikaCounterId, 'init', {
+          clickmap: true,
+          trackLinks: true,
+          accurateTrackBounce: true,
+          webvisor: true
+        });
+      }
+
+      var existing = document.querySelector('script[src="' + METRIKA_SCRIPT_URL + '"]');
+      if (existing) {
+        if (existing.getAttribute('data-atmospace-loaded') === 'true') {
+          resolve(true);
+          return;
+        }
+        existing.addEventListener('load', function () { resolve(true); }, { once: true });
+        existing.addEventListener('error', function () { resolve(false); }, { once: true });
+        window.setTimeout(function () { resolve(typeof window.ym === 'function'); }, 2500);
+        return;
+      }
+
+      var script = document.createElement('script');
+      script.async = true;
+      script.src = METRIKA_SCRIPT_URL;
+      script.setAttribute('data-atmospace-metrika', '');
+      script.addEventListener('load', function () {
+        script.setAttribute('data-atmospace-loaded', 'true');
+        resolve(true);
+      }, { once: true });
+      script.addEventListener('error', function () { resolve(false); }, { once: true });
+      document.head.appendChild(script);
+    }).then(function (ready) {
+      flushPendingMetrikaGoals();
+      return ready;
+    });
+
+    return metrikaReadyPromise;
+  }
+
+  function reachGoal(goalName, params, callback) {
+    if (typeof params === 'function') {
+      callback = params;
+      params = {};
+    }
+    var called = false;
+    function done() {
+      if (called) return;
+      called = true;
+      if (typeof callback === 'function') callback();
+    }
+    if (!metrikaCounterId || isLocalPreview()) {
+      done();
+      return;
+    }
+    pendingMetrikaGoals.push({ goalName: goalName, params: params || {}, done: done });
+    ensureMetrikaReady();
+    window.setTimeout(done, 1200);
+  }
+
+  function getQuizLinks() {
+    return Array.prototype.slice.call(document.querySelectorAll('[data-atmospace-quiz-link]'));
+  }
+
+  function getRegistrationLinks() {
+    return Array.prototype.slice.call(document.querySelectorAll('[data-atmospace-registration-link]'));
+  }
+
+  function setRegistrationState(state) {
+    getRegistrationLinks().forEach(function (link) {
+      link.setAttribute('data-atmospace-state', state);
+      if (state === 'ready' && registrationUrl) {
+        link.setAttribute('href', registrationUrl);
+        link.removeAttribute('aria-disabled');
+      } else {
+        link.setAttribute('href', '#');
+        link.setAttribute('aria-disabled', 'true');
+      }
+    });
+  }
+
+  function runtimeMessageNode() {
+    var node = document.querySelector('[data-atmospace-runtime-message]');
+    if (node) return node;
+    var firstLink = getRegistrationLinks()[0] || getQuizLinks()[0];
+    if (!firstLink) return null;
+    node = document.createElement('p');
+    node.setAttribute('data-atmospace-runtime-message', '');
+    node.hidden = true;
+    node.style.cssText = 'display:none;margin:12px 0 0;color:#b91c1c;font-size:14px;line-height:1.45;font-weight:800;text-align:center;';
+    firstLink.insertAdjacentElement('afterend', node);
+    return node;
+  }
+
+  function setRuntimeMessage(message) {
+    var node = runtimeMessageNode();
+    if (!node) return;
+    node.textContent = message || '';
+    node.hidden = !message;
+    node.style.display = message ? 'block' : 'none';
+  }
+
+  function runtimeRetryButton() {
+    var existing = document.querySelector('[data-atmospace-runtime-retry]');
+    if (existing) return existing;
+    var message = runtimeMessageNode();
+    if (!message) return null;
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.setAttribute('data-atmospace-runtime-retry', '');
+    button.hidden = true;
+    button.textContent = 'Попробовать ещё раз';
+    button.style.cssText = 'display:none;min-height:46px;margin:12px auto 0;padding:10px 18px;border:0;border-radius:8px;background:#2563eb;color:#fff;font:inherit;font-weight:900;cursor:pointer;';
+    message.insertAdjacentElement('afterend', button);
+    button.addEventListener('click', function () { requestRegistration(); });
+    return button;
+  }
+
+  function setRetryVisible(isVisible) {
+    var button = runtimeRetryButton();
+    if (!button) return;
+    button.hidden = !isVisible;
+    button.style.display = isVisible ? 'block' : 'none';
+  }
+
+  function isTrustedRegistrationUrl(value) {
+    try {
+      var url = new URL(String(value || ''));
+      return url.protocol === 'https:'
+        && (url.hostname === 'atmospace.pro' || url.hostname.endsWith('.atmospace.pro'));
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function applyRegistrationLink(links) {
+    var candidate = links && links.registration;
+    if (typeof candidate !== 'string') return false;
+    if (!isTrustedRegistrationUrl(candidate)) return false;
+    registrationUrl = candidate;
+    setRegistrationState('ready');
+    setRuntimeMessage('');
+    document.dispatchEvent(new CustomEvent('atmospace:registration-ready', {
+      detail: { registrationUrl: registrationUrl }
+    }));
+    return true;
+  }
+
+  function markQuizStarted() {
+    if (quizStartSent) return;
+    quizStartSent = true;
+    sendEvent('quiz_start_click');
+    reachGoal('quiz_start_click');
+  }
+
+  function markQuestionAnswered(index) {
+    if (answeredGoalIndexes[index]) return;
+    answeredGoalIndexes[index] = true;
+    reachGoal('question_answered', { questionNumber: index + 1 });
+  }
+
+  function markQuizCompleted() {
+    if (quizCompleted) return;
+    quizCompleted = true;
+    reachGoal('quiz_completed');
+  }
+
+  document.addEventListener('atmospace:quiz-start', markQuizStarted);
+  document.addEventListener('atmospace:quiz-answer', function (event) {
+    var questionNumber = Number(event && event.detail ? event.detail.questionNumber : 0);
+    if (questionNumber > 0) markQuestionAnswered(questionNumber - 1);
+  });
+  document.addEventListener('atmospace:quiz-complete', function () {
+    markQuizCompleted();
+    revealOffer();
+  });
+
+  function revealOffer() {
+    Array.prototype.slice.call(document.querySelectorAll('[data-atmospace-offer], [data-atmospace-registration-section]')).forEach(function (node) {
+      node.hidden = false;
+    });
+  }
+
+  function setupInlineQuiz(root) {
+    var panels = Array.prototype.slice.call(root.querySelectorAll('[data-atmospace-question]'));
+    var counter = root.querySelector('[data-atmospace-quiz-counter]');
+    var progress = root.querySelector('[data-atmospace-quiz-progress]');
+    var result = root.querySelector('[data-atmospace-inline-result]');
+    var index = 0;
+
+    function showQuestion(nextIndex) {
+      index = Math.max(0, Math.min(nextIndex, panels.length - 1));
+      panels.forEach(function (panel, panelIndex) { panel.hidden = panelIndex !== index; });
+      if (counter) counter.textContent = String(index + 1) + ' / ' + String(panels.length);
+      if (progress) progress.style.width = String(((index + 1) / panels.length) * 100) + '%';
+      root.setAttribute('data-atmospace-quiz-active', 'true');
+    }
+
+    root.addEventListener('click', function (event) {
+      var option = event.target && event.target.closest ? event.target.closest('[data-atmospace-option]') : null;
+      if (!option || !root.contains(option)) return;
+      event.preventDefault();
+      markQuestionAnswered(index);
+      if (index + 1 < panels.length) {
+        showQuestion(index + 1);
+        root.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+      panels.forEach(function (panel) { panel.hidden = true; });
+      if (result) result.hidden = false;
+      if (counter) counter.textContent = String(panels.length) + ' / ' + String(panels.length);
+      if (progress) progress.style.width = '100%';
+      markQuizCompleted();
+      revealOffer();
+    });
+
+    root.addEventListener('click', function (event) {
+      var back = event.target && event.target.closest ? event.target.closest('[data-atmospace-quiz-back]') : null;
+      if (!back || !root.contains(back)) return;
+      event.preventDefault();
+      if (index > 0) showQuestion(index - 1);
+    });
+
+    root.__atmospaceStart = function () {
+      if (result) result.hidden = true;
+      showQuestion(0);
+    };
+  }
+
+  function ensureFallbackQuiz() {
+    var existing = document.querySelector('[data-atmospace-fallback-quiz]');
+    if (existing) return existing;
+    var modal = document.createElement('div');
+    modal.setAttribute('data-atmospace-fallback-quiz', '');
+    modal.hidden = true;
+    modal.style.cssText = 'position:fixed;inset:0;z-index:2147483000;display:grid;place-items:center;padding:18px;background:rgba(4,10,20,.86);font-family:Manrope,Inter,system-ui,sans-serif;color:#fff';
+    modal.innerHTML = '<div style="position:relative;width:min(780px,100%);max-height:calc(100svh - 36px);overflow:auto;padding:clamp(24px,5vw,48px);border:1px solid rgba(148,163,184,.24);border-radius:8px;background:#0b1424"><button type="button" data-atmospace-fallback-close aria-label="Закрыть" style="position:absolute;top:12px;right:12px;width:42px;height:42px;border:1px solid #334155;border-radius:50%;background:#111e32;color:#fff;font-size:24px;cursor:pointer">×</button><p style="margin:0 50px 10px 0;color:#67e8f9;font-size:12px;font-weight:900;text-transform:uppercase">Мини-тест</p><p data-atmospace-fallback-counter style="color:#94a3b8;font-weight:800"></p><h2 data-atmospace-fallback-title style="margin:18px 0;font-size:clamp(26px,5vw,42px);line-height:1.14"></h2><div data-atmospace-fallback-options style="display:grid;gap:10px"></div><div data-atmospace-fallback-result hidden><h2 style="font-size:clamp(30px,5vw,48px)">Спасибо за честные ответы.</h2><p style="color:#cbd5e1;font-size:18px;line-height:1.55">Откройте настоящую форму регистрации и продолжите на защищённой странице Атмосферы.</p><a href="#" data-atmospace-registration-link data-atmospace-state="loading" aria-disabled="true" style="display:flex;align-items:center;justify-content:center;min-height:62px;margin-top:24px;padding:14px 22px;border-radius:8px;background:#2563eb;color:#fff;text-decoration:none;font-weight:900">Перейти к регистрации</a></div></div>';
+    document.body.appendChild(modal);
+    var title = modal.querySelector('[data-atmospace-fallback-title]');
+    var counter = modal.querySelector('[data-atmospace-fallback-counter]');
+    var options = modal.querySelector('[data-atmospace-fallback-options]');
+    var result = modal.querySelector('[data-atmospace-fallback-result]');
+    var index = 0;
+    function renderQuestion() {
+      var current = questions[index];
+      if (!current) {
+        title.hidden = true;
+        counter.hidden = true;
+        options.hidden = true;
+        result.hidden = false;
+        markQuizCompleted();
+        setRegistrationState(registrationUrl ? 'ready' : 'error');
+        return;
+      }
+      title.hidden = false;
+      counter.hidden = false;
+      options.hidden = false;
+      result.hidden = true;
+      counter.textContent = String(index + 1) + ' / ' + String(questions.length);
+      title.textContent = current.title;
+      options.replaceChildren();
+      current.options.forEach(function (label) {
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = label;
+        button.style.cssText = 'min-height:64px;padding:15px;border:1px solid #334155;border-radius:8px;background:#111e32;color:#fff;text-align:left;font:inherit;font-weight:750;cursor:pointer';
+        button.addEventListener('click', function () {
+          markQuestionAnswered(index);
+          index += 1;
+          renderQuestion();
+        });
+        options.appendChild(button);
+      });
+    }
+    modal.__atmospaceOpen = function () {
+      index = 0;
+      modal.hidden = false;
+      modal.style.display = 'grid';
+      document.documentElement.style.overflow = 'hidden';
+      renderQuestion();
+    };
+    modal.querySelector('[data-atmospace-fallback-close]').addEventListener('click', function () {
+      modal.hidden = true;
+      modal.style.display = 'none';
+      document.documentElement.style.overflow = '';
+    });
+    return modal;
+  }
+
+  function startQuiz() {
+    markQuizStarted();
+    var inlineQuiz = document.querySelector('[data-atmospace-inline-quiz]');
+    if (inlineQuiz) {
+      if (typeof inlineQuiz.__atmospaceStart === 'function') inlineQuiz.__atmospaceStart();
+      inlineQuiz.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    var fallback = ensureFallbackQuiz();
+    if (fallback && typeof fallback.__atmospaceOpen === 'function') fallback.__atmospaceOpen();
+  }
+
+  document.addEventListener('click', function (event) {
+    var quizLink = event.target && event.target.closest ? event.target.closest('[data-atmospace-quiz-link]') : null;
+    if (quizLink) {
+      event.preventDefault();
+      startQuiz();
+      return;
+    }
+    var scrollLink = event.target && event.target.closest ? event.target.closest('[data-atmospace-registration-scroll]') : null;
+    if (scrollLink) {
+      event.preventDefault();
+      var target = document.querySelector('[data-atmospace-registration-section]');
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    var offerLink = event.target && event.target.closest ? event.target.closest('[data-atmospace-offer-scroll]') : null;
+    if (offerLink) {
+      event.preventDefault();
+      var offer = document.querySelector('[data-atmospace-offer]');
+      if (offer) offer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    var registrationLink = event.target && event.target.closest ? event.target.closest('[data-atmospace-registration-link]') : null;
+    if (!registrationLink) return;
+    event.preventDefault();
+    if (!registrationUrl || registrationNavigationStarted) {
+      setRuntimeMessage(registrationUrl ? '' : RUNTIME_ERROR_MESSAGE);
+      return;
+    }
+    registrationNavigationStarted = true;
+    reachGoal('registration_started');
+    window.setTimeout(function () {
+      window.location.assign(registrationUrl);
+    }, 180);
+  }, true);
+
+  function sendLandingOpenedOnce() {
+    if (landingOpenedSent) return;
+    landingOpenedSent = true;
+    sendEvent('landing_opened');
+  }
+
+  function requestRegistration() {
+    if (initInFlight || initCompleted) return Promise.resolve();
+    if (isLocalPreview()) {
+      setRetryVisible(false);
+      setRuntimeMessage('После публикации страница автоматически подготовит безопасный переход к регистрации.');
+      return Promise.resolve();
+    }
+    if (!cfg.publicLandingKey || !cfg.counterId) {
+      setRegistrationState('error');
+      setRetryVisible(false);
+      setRuntimeMessage(RUNTIME_ERROR_MESSAGE);
+      return Promise.resolve();
+    }
+
+    initInFlight = true;
+    setRegistrationState('loading');
+    setRuntimeMessage('');
+    setRetryVisible(false);
+    sendLandingOpenedOnce();
+
+    return postJson(initEndpoint, buildBasePayload(), false).then(function (result) {
+      var responseBody = result && result.body ? result.body : null;
+      var data = responseBody && responseBody.ok && responseBody.data ? responseBody.data : null;
+      var links = data && data.links ? data.links : null;
+      if (!result || !result.ok || !applyRegistrationLink(links)) throw new Error('landing_not_ready');
+      initCompleted = true;
+      initInFlight = false;
+      setRetryVisible(false);
+    }).catch(function () {
+      initInFlight = false;
+      setRegistrationState('error');
+      setRuntimeMessage(RUNTIME_ERROR_MESSAGE);
+      setRetryVisible(true);
+    });
+  }
+
+  function initRuntime() {
+    getQuizLinks().forEach(function (link) {
+      link.setAttribute('href', '#atmospace-mini-quiz');
+      link.setAttribute('data-atmospace-state', 'ready');
+      link.removeAttribute('aria-disabled');
+    });
+    setRegistrationState('loading');
+    var inlineQuiz = document.querySelector('[data-atmospace-inline-quiz]');
+    if (inlineQuiz) setupInlineQuiz(inlineQuiz);
+    ensureMetrikaReady();
+    if (!landingViewSent) {
+      landingViewSent = true;
+      reachGoal('landing_view');
+    }
+    requestRegistration();
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initRuntime);
+  else initRuntime();
 })();
 </script>`;
 }
@@ -1228,7 +1983,7 @@ function prelandingModeTitle(mode = '') {
   if (mode === 'directionQuiz') return 'Формат 5 / Квиз-направление';
   if (mode === 'barrierProfileQuiz') return 'Формат 6 / Профиль барьера';
   if (mode === 'personalRouteQuiz') return 'Сохранённый формат / Личный маршрут';
-  return 'Формат 1 / Метод + 3 блока';
+  return 'Формат 1 / Мини-тест + разбор';
 }
 
 function makePrelandingVariantMeta({ projectData = {}, mode = '', templateId = 1, style = '', palette = '', title = '', text = '', routeId = '' } = {}) {
@@ -2371,8 +3126,8 @@ const CORE_PRELANDING_VARIANTS = {
 const MANUAL_PRELANDING_MODES = [
   {
     id: 'templateStage',
-    title: 'Формат 1 / Метод + 3 блока',
-    desc: 'Компактный Tilda-блок: сильный первый экран, три смысловых блока и кнопки перехода.'
+    title: 'Формат 1 / Мини-тест + разбор',
+    desc: 'Компактный Tilda-блок: сильный первый экран, три смысловых блока, мини-тест и регистрация.'
   },
   {
     id: 'heroBlocks',
@@ -2387,12 +3142,12 @@ const MANUAL_PRELANDING_MODES = [
   {
     id: 'minimalCompare',
     title: 'Формат 4 / Тихое сравнение',
-    desc: 'Тёмный минималистичный Tilda-блок без фото: внутренний конфликт, 3 микро-смысла и Telegram/MAX.'
+    desc: 'Тёмный минималистичный Tilda-блок без фото: внутренний конфликт, 3 микро-смысла и регистрация.'
   },
   {
     id: 'directionQuiz',
     title: 'Формат 5 / Квиз-направление',
-    desc: 'Интерактивный разбор из 4 вопросов: человек видит свою точку опоры и переходит в Telegram/MAX.'
+    desc: 'Интерактивный разбор из 4 вопросов: человек видит свою точку опоры и открывает форму регистрации.'
   },
   {
     id: 'barrierProfileQuiz',
@@ -3059,9 +3814,8 @@ function renderHeroSceneBlocksPrelanding({
           <div class="fh-hb-story-row">${cardsHtml}</div>
           <div class="fh-hb-actions">
             ${actionNoteHtml}
-            <div class="fh-hb-buttons" aria-label="Выбор мессенджера">
-              ${renderAtmospaceMessengerButton('telegram', 'fh-hb-btn fh-hb-btn-tg', 'Начать разбор в Telegram')}
-              ${renderAtmospaceMessengerButton('max', 'fh-hb-btn fh-hb-btn-max', 'Начать разбор в MAX')}
+            <div class="fh-hb-buttons" aria-label="Начать мини-тест">
+              ${renderAtmospaceQuizButton('fh-hb-btn fh-hb-btn-tg')}
             </div>
           </div>
         </div>
@@ -3087,9 +3841,8 @@ function renderHeroSceneBlocksPrelanding({
       <div class="fh-hb-section-label">Следующий шаг</div>
       <h2 class="fh-hb-cta-title">${esc(ctaTitle)}</h2>
       <p class="fh-hb-cta-sub">${esc(ctaSubtitle)}</p>
-      <div class="fh-hb-buttons" aria-label="Финальные кнопки">
-        ${renderAtmospaceMessengerButton('telegram', 'fh-hb-btn fh-hb-btn-tg', 'Начать в Telegram')}
-        ${renderAtmospaceMessengerButton('max', 'fh-hb-btn fh-hb-btn-max', 'Начать в MAX')}
+      <div class="fh-hb-buttons" aria-label="Начать мини-тест">
+        ${renderAtmospaceQuizButton('fh-hb-btn fh-hb-btn-tg')}
       </div>
     </div>
     <div class="${ctaMediaClass}" aria-hidden="true">
@@ -3297,9 +4050,8 @@ function renderNatureEditorialPrelanding({ content, projectData, landingMeta, sc
         <div class="fh-nd-kicker">${esc(badge)}</div>
         <h1 class="fh-nd-title">${titleHtml}</h1>
         <p class="fh-nd-lead">${esc(leadText)}</p>
-        <div class="fh-nd-buttons" aria-label="Выбор мессенджера">
-          ${renderAtmospaceMessengerButton('telegram', 'fh-nd-btn fh-nd-btn-tg', 'Начать разбор в Telegram')}
-          ${renderAtmospaceMessengerButton('max', 'fh-nd-btn fh-nd-btn-max', 'Начать разбор в MAX')}
+        <div class="fh-nd-buttons" aria-label="Начать мини-тест">
+          ${renderAtmospaceQuizButton('fh-nd-btn fh-nd-btn-tg')}
         </div>
         <div class="fh-nd-note"><i>✓</i><span>${esc(ctaLead)}</span></div>
       </div>
@@ -3343,9 +4095,8 @@ function renderNatureEditorialPrelanding({ content, projectData, landingMeta, sc
       <div class="fh-nd-box">
         <h2>${esc(finalTitle)}</h2>
         <p>${esc(finalText)}</p>
-        <div class="fh-nd-buttons" aria-label="Финальные кнопки">
-          ${renderAtmospaceMessengerButton('telegram', 'fh-nd-btn fh-nd-btn-tg', 'Начать в Telegram')}
-          ${renderAtmospaceMessengerButton('max', 'fh-nd-btn fh-nd-btn-max', 'Начать в MAX')}
+        <div class="fh-nd-buttons" aria-label="Начать мини-тест">
+          ${renderAtmospaceQuizButton('fh-nd-btn fh-nd-btn-tg')}
         </div>
       </div>
     </div>
@@ -3495,9 +4246,8 @@ function renderMinimalComparePrelanding({ content, projectData, landingMeta, sty
       <div class="fh-mc-divider"></div>
       <div class="fh-mc-mini">${miniHtml}</div>
       <div class="fh-mc-proof" aria-label="Короткие смыслы">${cardsHtml}</div>
-      <div class="fh-mc-btn-group" aria-label="Выбор мессенджера">
-        ${renderAtmospaceMessengerButton('telegram', 'fh-mc-btn fh-mc-btn-primary', 'Начать разбор в Telegram')}
-        ${renderAtmospaceMessengerButton('max', 'fh-mc-btn', 'Начать разбор в MAX')}
+      <div class="fh-mc-btn-group" aria-label="Начать мини-тест">
+        ${renderAtmospaceQuizButton('fh-mc-btn fh-mc-btn-primary')}
       </div>
       <p class="fh-mc-next">${esc(buttonLead)}</p>
       <label class="fh-mc-policy" for="atmospace-policy-consent">
@@ -3511,7 +4261,7 @@ function renderMinimalComparePrelanding({ content, projectData, landingMeta, sty
 ${buildAtmospacePrelandingTrackingScript()}`;
 }
 
-function renderCoreMethodInlinePrelanding({ templateId, content, projectData, landingMeta, sceneImage, valueImage, ctaImage }) {
+function renderLegacyCoreMethodInlinePrelanding({ templateId, content, projectData, landingMeta, sceneImage, valueImage, ctaImage }) {
   const safeTemplateId = [1, 2, 3].includes(Number(templateId)) ? Number(templateId) : 1;
   const titleText = stripHtml(content.titleHtml || 'Откройте короткий разбор и первый понятный шаг');
   const titleHtml = content.titleHtml || esc(titleText);
@@ -3809,19 +4559,286 @@ body:before{
             <img src="${esc(images[2])}" alt="" loading="lazy" decoding="async">
           </div>
         </div>
-        <div class="buttons">
-          ${renderAtmospaceMessengerButton('telegram', 'btn btn-tg', 'Начать разбор в Telegram')}
-          ${renderAtmospaceMessengerButton('max', 'btn btn-max', 'Начать разбор в MAX')}
+        <div class="buttons" aria-label="Начать мини-тест">
+          ${renderAtmospaceQuizButton('btn btn-tg')}
         </div>
-        <p class="legal">Нажимая кнопку, вы переходите в выбранный мессенджер. Данные перехода используются для корректной работы бота и аналитики.</p>
-        <label class="policy-box" for="atmospace-policy-consent">
-          <input id="atmospace-policy-consent" class="policy-checkbox" type="checkbox">
-          <span>Я принимаю <a href="https://modernisto.ru/politics" target="_blank" rel="noopener noreferrer">политику конфиденциальности</a> и <a href="https://modernisto.ru/approval" target="_blank" rel="noopener noreferrer">согласие на обработку персональных данных</a>.</span>
-        </label>
-        <div id="atmospace-policy-error" class="policy-error" role="alert" hidden>Для перехода в мессенджер подтвердите согласие на обработку персональных данных.</div>
+        <p class="legal">Ответы мини-теста не сохраняются и не оцениваются. После теста откроется форма заявки.</p>
       </div>
     </section>
   </div>
+</div>
+${buildAtmospacePrelandingTrackingScript()}`;
+}
+
+function renderCoreMethodMiniQuiz() {
+  const questions = ATMOSPACE_MINI_QUIZ.map((question, questionIndex) => `
+    <section class="atm-v1-question" data-atmospace-question="${questionIndex}" hidden>
+      <p class="atm-v1-question-label">Вопрос ${questionIndex + 1}</p>
+      <h3>${esc(question.title)}</h3>
+      <div class="atm-v1-options">
+        ${question.options.map((option) => `<button type="button" data-atmospace-option>${esc(option)}</button>`).join('')}
+      </div>
+      ${questionIndex > 0 ? '<button class="atm-v1-back" type="button" data-atmospace-quiz-back>Вернуться к предыдущему вопросу</button>' : ''}
+    </section>`).join('');
+
+  return `<section id="atmospace-mini-quiz" class="atm-v1-quiz-band" aria-labelledby="atm-v1-quiz-title">
+    <div class="atm-v1-shell">
+      <div class="atm-v1-quiz" data-atmospace-inline-quiz>
+        <div class="atm-v1-quiz-intro">
+          <p class="atm-v1-kicker">Мини-тест</p>
+          <h2 id="atm-v1-quiz-title">Здесь нет правильных ответов.</h2>
+          <p><strong>Их никто не сохраняет и не оценивает - кроме тебя.</strong></p>
+          <p>Просто будь честен с самим собой.</p>
+        </div>
+        <div class="atm-v1-progress" aria-hidden="true"><span data-atmospace-quiz-progress></span></div>
+        <p class="atm-v1-counter" data-atmospace-quiz-counter>1 / ${ATMOSPACE_MINI_QUIZ.length}</p>
+        <div class="atm-v1-questions">${questions}</div>
+        <div class="atm-v1-quiz-result" data-atmospace-inline-result hidden>
+          <p class="atm-v1-kicker">Мини-тест пройден</p>
+          <h3>Спасибо за честные ответы.</h3>
+          <p>Теперь посмотри, почему одних усилий недостаточно и что на самом деле удерживает тебя в прежней точке.</p>
+          <a class="atm-v1-primary" href="#atm-v1-offer" data-atmospace-offer-scroll>Перейти к разбору</a>
+        </div>
+      </div>
+    </div>
+  </section>`;
+}
+
+function renderCoreMethodFixedOffer({ valueImage, ctaImage }) {
+  return `<div id="atm-v1-offer" data-atmospace-offer hidden>
+    <section class="atm-v1-editorial atm-v1-editorial-dark">
+      <div class="atm-v1-shell atm-v1-copy-grid">
+        <div>
+          <p class="atm-v1-kicker">Почему всё ещё не получилось</p>
+          <h2>Ты не беспомощный. Не тупой. И умеешь решать сложные задачи.</h2>
+        </div>
+        <div class="atm-v1-prose">
+          <p>Итак, почему ты не можешь реализовать лучший вариант своей жизни, при том что умеешь решать проблемы и разбираться в сложных вещах?</p>
+          <p>Ты знаешь, что в тебе есть потенциал: заниматься своим делом, иметь хороший дом, ездить на машине, которая нравится, путешествовать с семьёй без надрыва для бюджета, иметь запас денег и быть независимым.</p>
+          <p>Но сколько бы ты ни старался, в реальности происходит другое: деньги идут туго, семья не получает желаемого уровня жизни, своё дело не построено, свободы нет, накоплений недостаточно, время уходит, а очередная попытка снова не дала результата.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="atm-v1-editorial">
+      <div class="atm-v1-shell atm-v1-copy-grid">
+        <div class="atm-v1-sticky-title">
+          <p class="atm-v1-kicker">Мысли, которые возвращаются</p>
+          <h2>Почему другие смогли, а я нет?</h2>
+        </div>
+        <div class="atm-v1-quotes">
+          <blockquote>«Может, я просто не такой способный, как о себе думаю?»</blockquote>
+          <blockquote>«Почему я хорошо решаю чужие задачи, но не могу выстроить собственную жизнь?»</blockquote>
+          <blockquote>«Сколько ещё попыток выдержу я сам и сколько выдержит моя семья?»</blockquote>
+          <blockquote>«Что я скажу детям, если через пять лет всё останется так же?»</blockquote>
+          <blockquote>«А вдруг мой сегодняшний уровень - это и есть мой предел?»</blockquote>
+        </div>
+      </div>
+    </section>
+
+    <section class="atm-v1-visual-break">
+      <div class="atm-v1-shell">
+        <img src="${esc(valueImage)}" alt="Человек в моменте честного переосмысления своей жизни" loading="lazy" decoding="async">
+      </div>
+    </section>
+
+    <section class="atm-v1-editorial atm-v1-editorial-accent">
+      <div class="atm-v1-shell atm-v1-copy-grid">
+        <div>
+          <p class="atm-v1-kicker">Можно сделать ещё 100+ попыток</p>
+          <h2>Но так и не пробить свой уровень.</h2>
+        </div>
+        <div class="atm-v1-prose">
+          <p>Найти наставника. Поймать тренд. Сменить направление, работу или нишу. Начать работать ещё больше.</p>
+          <p><strong>Знаешь почему этого может снова оказаться недостаточно?</strong></p>
+          <p>Потому что у проблемы есть одна причина - твоя психика. Слово знакомое, но спроси себя: «Я точно знаю, что это такое и как это работает?»</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="atm-v1-editorial">
+      <div class="atm-v1-shell atm-v1-copy-grid">
+        <div class="atm-v1-sticky-title">
+          <p class="atm-v1-kicker">Рассинхрон психики</p>
+          <h2>Желаешь одно, а бессознательно воспроизводишь другое.</h2>
+        </div>
+        <div class="atm-v1-prose">
+          <p>Работа психики проявляется в деньгах, отношениях, здоровье, хобби и работе. Главная причина, по которой мы желаем одно, а получаем другое, - рассинхрон психики.</p>
+          <p>Рассинхрон - это состояние, при котором психика работает некорректно. Процесс происходит бессознательно, поэтому человек часто даже не замечает, что снова транслирует старый сценарий.</p>
+          <p>Можно испробовать все направления, взять сильнейшего наставника и научиться управлять планами, но рассинхрон превращает усилия в развлечения, провалы и боль.</p>
+          <div class="atm-v1-callout">Сейчас важно понять одну вещь: рассинхрон происходит именно в бессознательной части психики.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="atm-v1-editorial atm-v1-editorial-dark">
+      <div class="atm-v1-shell atm-v1-copy-grid">
+        <div>
+          <p class="atm-v1-kicker">Бессознательные программы</p>
+          <h2>Каждый результат опирается на уже сформированные нейронные связи.</h2>
+        </div>
+        <div class="atm-v1-prose">
+          <p>Программа - это нейронные связи для выполнения задач. Когда мы осваиваем вождение, чтение, печать или приготовление еды, нейроны приходят в действие и образуют связи.</p>
+          <p>За реализацию любой цели отвечают сформированные бессознательные программы: сколько ты зарабатываешь, как ведёшь себя в сложных ситуациях, сколько у тебя энергии, как работает дисциплина и доводишь ли ты дела до конца.</p>
+          <p><strong>Чем мощнее психика, тем выше результат.</strong> Но программы, сформированные воспитанием и социумом, часто просто не соответствуют большим и амбициозным целям.</p>
+          <p>Поэтому так сложно перескочить на другие рельсы и начать новый образ жизни. Но у нас есть свобода выбора: программы можно переписать на нужные.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="atm-v1-roadmap">
+      <div class="atm-v1-shell">
+        <p class="atm-v1-kicker">С чего мы начнём</p>
+        <h2>Четыре шага к новому сценарию жизни</h2>
+        <div class="atm-v1-roadmap-grid">
+          <article><span>01</span><h3>Почему не получается</h3><p>Разберём конкретную причину, которая мешает заниматься своим делом, вырваться из нужды и реализовывать цели. Неудачи - лишь её следствия.</p></article>
+          <article><span>02</span><h3>Смена программ</h3><p>Приведём в действие механизм замены старых программ на новые через практические ключи и действия, изменения от которых видно в реальности.</p></article>
+          <article><span>03</span><h3>Базовый доход</h3><p>Уберём ситуацию, когда после рабочего марафона ты пытаешься строить новую жизнь на остатках сил, времени и энергии.</p></article>
+          <article><span>04</span><h3>Живая движуха</h3><p>Встречи, активный отдых, путешествия, знакомства и совместные челленджи с людьми, которые тоже выбирают свой путь.</p></article>
+        </div>
+        <a class="atm-v1-primary atm-v1-primary-wide" href="#atmospace-registration" data-atmospace-registration-scroll>Перейти к регистрации</a>
+      </div>
+    </section>
+
+    <section class="atm-v1-final-story">
+      <div class="atm-v1-shell atm-v1-final-grid">
+        <div>
+          <p class="atm-v1-kicker">Ещё один год пройдёт в любом случае</p>
+          <h2>Вопрос только один: ты готов?</h2>
+          <p>Можно снова искать новую идею, смотреть ролики, сохранять полезные посты, обещать себе начать с понедельника.</p>
+          <p>И через год обнаружить те же долги, тот же доход, ту же работу и те же вопросы к себе.</p>
+          <p>А можно взять и разобраться, почему предыдущие попытки не давали результата.</p>
+          <p><strong>В конце концов, что ты теряешь? В любой момент всё можно пересмотреть.</strong></p>
+        </div>
+        <img src="${esc(ctaImage)}" alt="Следующий шаг к осознанным изменениям" loading="lazy" decoding="async">
+      </div>
+    </section>
+  </div>`;
+}
+
+function renderCoreMethodInlinePrelanding({ templateId, content, projectData, landingMeta, sceneImage, valueImage, ctaImage }) {
+  const safeTemplateId = [1, 2, 3].includes(Number(templateId)) ? Number(templateId) : 1;
+  const titleText = stripHtml(content?.titleHtml || content?.title || 'Как реализовать себя, когда тебе 30+ и куча провалов');
+  const designClass = safeTemplateId === 2 ? 'atm-v1-blue' : safeTemplateId === 3 ? 'atm-v1-green' : 'atm-v1-ember';
+  const heroImage = bothelpImageSrc(sceneImage || PRELANDING_FALLBACK_IMAGES[0]);
+  const offerImage = bothelpImageSrc(valueImage || PRELANDING_FALLBACK_IMAGES[1]);
+  const finalImage = bothelpImageSrc(ctaImage || PRELANDING_FALLBACK_IMAGES[2]);
+
+  return `${buildAtmospaceHeadConfig({ projectData, ...(landingMeta || {}) })}
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800;900&display=swap');
+#fh-preland-root{--atm-bg:#f5f8fc;--atm-ink:#0b1324;--atm-muted:#526176;--atm-accent:#ef6c33;--atm-accent2:#f4b942;--atm-deep:#111d31;--atm-line:rgba(37,55,83,.14);width:100vw;min-height:100vh;margin-left:calc(50% - 50vw);margin-right:calc(50% - 50vw);overflow:hidden;background:var(--atm-bg);color:var(--atm-ink);font-family:'Manrope',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;-webkit-font-smoothing:antialiased}
+#fh-preland-root.atm-v1-blue{--atm-accent:#2576f3;--atm-accent2:#39b7e8;--atm-deep:#0a1d39}
+#fh-preland-root.atm-v1-green{--atm-accent:#168f68;--atm-accent2:#92c83e;--atm-deep:#0c2923}
+#fh-preland-root *{box-sizing:border-box}
+#fh-preland-root [hidden]{display:none!important}
+.atm-v1-shell{width:min(1180px,calc(100% - 40px));margin:0 auto}
+.atm-v1-hero{position:relative;min-height:min(900px,100svh);display:grid;align-items:center;padding:56px 0;background:linear-gradient(110deg,rgba(248,251,255,.98) 0%,rgba(248,251,255,.91) 48%,rgba(248,251,255,.18) 72%),url('${esc(heroImage)}') center right/cover no-repeat}
+.atm-v1-hero-copy{max-width:700px}
+.atm-v1-kicker{margin:0 0 18px;color:var(--atm-accent);font-size:13px;line-height:1.2;font-weight:900;text-transform:uppercase}
+.atm-v1-hero h1{max-width:760px;margin:0 0 24px;font-size:clamp(48px,7vw,94px);line-height:.96;font-weight:900;letter-spacing:0;text-wrap:balance}
+.atm-v1-lead{max-width:690px;margin:0 0 22px;color:#263449;font-size:clamp(18px,2vw,25px);line-height:1.48;font-weight:700}
+.atm-v1-points{display:grid;gap:7px;margin:0 0 24px;padding:0;list-style:none;color:#263449;font-size:18px;line-height:1.45;font-weight:800}
+.atm-v1-points li:before{content:'•';margin-right:10px;color:var(--atm-accent)}
+.atm-v1-question-lead{max-width:670px;margin:30px 0 0;padding:22px 0;border-top:1px solid var(--atm-line);color:var(--atm-ink);font-size:21px;line-height:1.45;font-weight:900}
+.atm-v1-primary{display:inline-flex;align-items:center;justify-content:center;min-height:64px;margin-top:26px;padding:17px 28px;border:0;border-radius:8px;background:linear-gradient(135deg,var(--atm-accent),var(--atm-accent2));box-shadow:0 18px 42px color-mix(in srgb,var(--atm-accent) 24%,transparent);color:#fff!important;text-decoration:none!important;font-size:17px;line-height:1.2;font-weight:900;cursor:pointer}
+.atm-v1-primary-wide{width:100%;margin-top:30px}
+.atm-v1-quiz-band{padding:clamp(64px,9vw,120px) 0;background:var(--atm-deep);color:#f8fafc}
+.atm-v1-quiz{max-width:900px;margin:0 auto}
+.atm-v1-quiz-intro{max-width:760px;margin-bottom:34px}
+.atm-v1-quiz h2{margin:0 0 18px;font-size:clamp(38px,6vw,68px);line-height:1.02;font-weight:900;letter-spacing:0}
+.atm-v1-quiz-intro p:not(.atm-v1-kicker){margin:8px 0;color:#c8d3e2;font-size:18px;line-height:1.55}
+.atm-v1-progress{height:8px;overflow:hidden;border-radius:999px;background:rgba(255,255,255,.12)}
+.atm-v1-progress span{display:block;width:25%;height:100%;background:linear-gradient(90deg,var(--atm-accent),var(--atm-accent2));transition:width .22s ease}
+.atm-v1-counter{margin:13px 0 26px;color:#94a3b8;font-size:13px;font-weight:900}
+.atm-v1-question-label{margin:0 0 12px;color:var(--atm-accent2);font-size:13px;font-weight:900;text-transform:uppercase}
+.atm-v1-question h3,.atm-v1-quiz-result h3{max-width:820px;margin:0 0 26px;font-size:clamp(28px,4.5vw,46px);line-height:1.17;font-weight:900;letter-spacing:0}
+.atm-v1-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.atm-v1-options button{min-height:78px;padding:18px;border:1px solid rgba(255,255,255,.18);border-radius:8px;background:#17263c;color:#f8fafc;text-align:left;font:inherit;font-size:15px;line-height:1.45;font-weight:750;cursor:pointer;transition:border-color .18s ease,background .18s ease}
+.atm-v1-options button:hover,.atm-v1-options button:focus-visible{border-color:var(--atm-accent2);background:#1d304b;outline:none}
+.atm-v1-back{margin-top:18px;padding:0;border:0;background:transparent;color:#94a3b8;font:inherit;font-weight:800;cursor:pointer}
+.atm-v1-quiz-result{padding:28px 0 0}
+.atm-v1-quiz-result>p:not(.atm-v1-kicker){max-width:720px;color:#c8d3e2;font-size:19px;line-height:1.55}
+.atm-v1-editorial{padding:clamp(72px,9vw,130px) 0;background:#fff}
+.atm-v1-editorial-dark{background:var(--atm-deep);color:#f8fafc}
+.atm-v1-editorial-accent{background:color-mix(in srgb,var(--atm-accent) 9%,#fff)}
+.atm-v1-copy-grid{display:grid;grid-template-columns:minmax(0,.88fr) minmax(0,1.12fr);gap:clamp(36px,7vw,100px);align-items:start}
+.atm-v1-copy-grid h2,.atm-v1-roadmap h2,.atm-v1-final-story h2{margin:0;font-size:clamp(38px,5.5vw,68px);line-height:1.03;font-weight:900;letter-spacing:0;text-wrap:balance}
+.atm-v1-prose{display:grid;gap:18px;color:var(--atm-muted);font-size:18px;line-height:1.72}
+.atm-v1-prose p{margin:0}
+.atm-v1-editorial-dark .atm-v1-prose{color:#c8d3e2}
+.atm-v1-sticky-title{position:sticky;top:30px}
+.atm-v1-quotes{display:grid;gap:12px}
+.atm-v1-quotes blockquote{margin:0;padding:22px;border-left:4px solid var(--atm-accent);background:#f3f6fa;color:#263449;font-size:18px;line-height:1.55;font-weight:750}
+.atm-v1-callout{padding:24px;border:1px solid color-mix(in srgb,var(--atm-accent) 30%,transparent);border-radius:8px;background:color-mix(in srgb,var(--atm-accent) 8%,#fff);color:var(--atm-ink);font-weight:900}
+.atm-v1-visual-break{padding:34px 0;background:#fff}
+.atm-v1-visual-break img{display:block;width:100%;max-height:650px;object-fit:cover;border-radius:8px}
+.atm-v1-roadmap{padding:clamp(72px,9vw,130px) 0;background:#edf3f8}
+.atm-v1-roadmap>div>h2{max-width:860px}
+.atm-v1-roadmap-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:42px}
+.atm-v1-roadmap article{min-height:270px;padding:28px;border:1px solid var(--atm-line);border-radius:8px;background:#fff}
+.atm-v1-roadmap article span{display:block;margin-bottom:26px;color:var(--atm-accent);font-size:34px;font-weight:900}
+.atm-v1-roadmap article h3{margin:0 0 12px;font-size:25px;line-height:1.2}
+.atm-v1-roadmap article p{margin:0;color:var(--atm-muted);font-size:16px;line-height:1.6}
+.atm-v1-final-story{padding:clamp(72px,9vw,130px) 0;background:#fff}
+.atm-v1-final-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,.75fr);gap:clamp(36px,7vw,90px);align-items:center}
+.atm-v1-final-grid p:not(.atm-v1-kicker){margin:18px 0 0;color:var(--atm-muted);font-size:18px;line-height:1.65}
+.atm-v1-final-grid img{display:block;width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:8px}
+.atm-v1-registration{padding:clamp(70px,9vw,120px) 0;background:var(--atm-deep);color:#fff}
+.atm-v1-registration-panel{max-width:880px;margin:0 auto;text-align:center}
+.atm-v1-registration h2{margin:0 0 18px;font-size:clamp(40px,6vw,72px);line-height:1.02;font-weight:900;letter-spacing:0}
+.atm-v1-registration p{max-width:700px;margin:0 auto;color:#c8d3e2;font-size:18px;line-height:1.6}
+.atm-v1-register-button{display:flex;align-items:center;justify-content:center;width:min(520px,100%);min-height:68px;margin:30px auto 0;padding:18px 24px;border-radius:8px;background:linear-gradient(135deg,var(--atm-accent),var(--atm-accent2));color:#fff!important;text-decoration:none!important;font-size:18px;font-weight:900}
+.atm-v1-register-button[aria-disabled=true]{pointer-events:none;opacity:.58}
+.atm-v1-secure{margin-top:14px!important;color:#94a3b8!important;font-size:13px!important}
+.atm-v1-footer{padding:26px 0;border-top:1px solid rgba(255,255,255,.14);background:var(--atm-deep);color:#94a3b8}
+.atm-v1-footer-inner{display:flex;align-items:center;justify-content:space-between;gap:18px;font-size:12px;line-height:1.5}
+.atm-v1-footer-links{display:flex;flex-wrap:wrap;gap:18px}
+.atm-v1-footer a{color:#c8d3e2;text-decoration:underline;text-underline-offset:3px}
+@media(max-width:800px){.atm-v1-shell{width:min(100% - 28px,1180px)}.atm-v1-hero{min-height:auto;padding:360px 0 46px;background:linear-gradient(180deg,rgba(248,251,255,.05) 0%,rgba(248,251,255,.88) 42%,#f8fbff 58%),url('${esc(heroImage)}') 64% top/auto 430px no-repeat,#f8fbff}.atm-v1-hero h1{font-size:clamp(40px,12vw,58px)}.atm-v1-lead{font-size:17px}.atm-v1-copy-grid,.atm-v1-final-grid{grid-template-columns:1fr}.atm-v1-sticky-title{position:static}.atm-v1-options,.atm-v1-roadmap-grid{grid-template-columns:1fr}.atm-v1-roadmap article{min-height:auto}.atm-v1-final-grid img{aspect-ratio:16/10}.atm-v1-footer-inner{align-items:flex-start;flex-direction:column}.atm-v1-question h3{font-size:27px}}
+@media(max-width:420px){.atm-v1-shell{width:calc(100% - 22px)}.atm-v1-hero{padding-top:320px;background-size:auto 380px}.atm-v1-hero h1{font-size:39px}.atm-v1-primary{width:100%;padding-inline:16px}.atm-v1-options button{min-height:66px;padding:15px}.atm-v1-editorial,.atm-v1-roadmap,.atm-v1-final-story,.atm-v1-registration{padding:58px 0}}
+</style>
+<div id="fh-preland-root" class="${designClass}">
+  <main>
+    <section class="atm-v1-hero" aria-labelledby="atm-v1-title">
+      <div class="atm-v1-shell">
+        <div class="atm-v1-hero-copy">
+          <p class="atm-v1-kicker">Честный разговор с собой</p>
+          <h1 id="atm-v1-title">${esc(titleText)}</h1>
+          <p class="atm-v1-lead">Ты уже не первый год пытаешься перейти на новый уровень:</p>
+          <ul class="atm-v1-points"><li>увеличить доход</li><li>найти своё дело</li><li>изменить привычки</li><li>жить так, как хочешь именно ты</li></ul>
+          <p class="atm-v1-lead">Но что бы ты ни делал - результата <strong>НЕТ</strong>. Новая попытка как удар по вере в себя.</p>
+          <div class="atm-v1-question-lead">Сколько ты ещё так сможешь, пока окончательно не выгоришь?<br><br>Почему у других получается, а у тебя нет?<br>Готов увидеть <strong>НАСТОЯЩУЮ</strong> причину твоих проблем?</div>
+          ${renderAtmospaceQuizButton('atm-v1-primary')}
+        </div>
+      </div>
+    </section>
+
+    ${renderCoreMethodMiniQuiz()}
+    ${renderCoreMethodFixedOffer({ valueImage: offerImage, ctaImage: finalImage })}
+
+    <div data-atmospace-registration-section hidden>
+      <section id="atmospace-registration" class="atm-v1-registration" aria-labelledby="atm-v1-registration-title">
+        <div class="atm-v1-shell atm-v1-registration-panel">
+          <p class="atm-v1-kicker">Форма регистрации</p>
+          <h2 id="atm-v1-registration-title">Продолжи на защищённой странице Атмосферы</h2>
+          <p>Сервер подготовит персональную регистрацию и сохранит рекламную атрибуцию. Пароль, CAPTCHA и создание аккаунта выполняются только на защищённом домене Atmospace.</p>
+          ${renderAtmospaceRegistrationButton('atm-v1-register-button', 'Открыть форму регистрации')}
+          <p class="atm-v1-secure">Ссылка приходит напрямую с сервера. Лендинг не собирает и не хранит пароль.</p>
+          <p data-atmospace-runtime-message hidden></p>
+        </div>
+      </section>
+      <footer class="atm-v1-footer">
+        <div class="atm-v1-shell atm-v1-footer-inner">
+          <span>Материал носит информационный характер. Результат зависит от действий участника.</span>
+          <nav class="atm-v1-footer-links" aria-label="Юридическая информация">
+            <a href="https://modernisto.ru/politics" target="_blank" rel="noopener noreferrer">Политика конфиденциальности</a>
+            <a href="https://modernisto.ru/approval" target="_blank" rel="noopener noreferrer">Согласие на обработку данных</a>
+          </nav>
+        </div>
+      </footer>
+    </div>
+  </main>
 </div>
 ${buildAtmospacePrelandingTrackingScript()}`;
 }
@@ -4393,8 +5410,8 @@ function renderInteractiveQuizPrelanding({
   const resultText = isBarrierProfile
     ? 'Ответы покажут не общую мотивацию, а конкретный повторяющийся сценарий и первый шаг, который можно выдержать в обычной неделе.'
     : isPersonalRoute
-    ? 'Ответы показали, где сейчас находится главная точка опоры. Откройте короткий разбор в удобном мессенджере и заберите следующий шаг.'
-    : 'Вы уже отделили реальную точку старта от лишнего шума. Откройте короткий разбор и заберите первый шаг, который можно применить без нового рывка.';
+    ? 'Ответы показали, где сейчас находится главная точка опоры. Перейдите к защищённой форме регистрации и заберите следующий шаг.'
+    : 'Вы уже отделили реальную точку старта от лишнего шума. Перейдите к защищённой форме регистрации и заберите первый шаг без нового рывка.';
 
   return `${buildAtmospaceHeadConfig({
   projectData,
@@ -4439,14 +5456,10 @@ function renderInteractiveQuizPrelanding({
 #fh-preland-root.${rootModeClass} .fhq-result{text-align:center}
 #fh-preland-root.${rootModeClass} .fhq-result h2{max-width:740px;margin:0 auto 18px;font-size:48px;line-height:1.08;font-weight:900;letter-spacing:0;text-wrap:balance}
 #fh-preland-root.${rootModeClass} .fhq-result-copy{max-width:700px;margin:0 auto 28px;color:var(--fhq-muted);font-size:18px;line-height:1.55}
-#fh-preland-root.${rootModeClass} .fhq-messengers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;max-width:720px;margin:0 auto}
+#fh-preland-root.${rootModeClass} .fhq-registration{max-width:720px;margin:0 auto}
 #fh-preland-root.${rootModeClass} .fhq-cta{display:flex;align-items:center;justify-content:center;min-height:66px;padding:16px;border-radius:8px;color:#fff!important;text-decoration:none!important;font-size:16px;font-weight:900}
-#fh-preland-root.${rootModeClass} .fhq-cta-tg{background:#168de2}
-#fh-preland-root.${rootModeClass} .fhq-cta-max{background:#6a4ee6}
-#fh-preland-root.${rootModeClass} .fhq-policy{display:flex;align-items:flex-start;gap:10px;max-width:760px;margin:24px auto 0;padding:14px;border:1px solid var(--fhq-line);border-radius:8px;color:var(--fhq-muted);font-size:12px;line-height:1.5;text-align:left}
-#fh-preland-root.${rootModeClass} .fhq-policy input{width:18px;height:18px;margin:1px 0 0;flex:0 0 18px;accent-color:var(--fhq-accent)}
-#fh-preland-root.${rootModeClass} .fhq-policy a{color:var(--fhq-accent2);font-weight:800}
-#fh-preland-root.${rootModeClass} .fhq-policy-error{margin:8px auto 0;color:#ff9a93;font-size:12px;font-weight:800}
+#fh-preland-root.${rootModeClass} .fhq-cta{background:var(--fhq-accent);color:#07101a!important}
+#fh-preland-root.${rootModeClass} .fhq-cta[aria-disabled=true]{pointer-events:none;opacity:.58}
 #fh-preland-root.${rootModeClass} .fhq-restart{margin-top:16px}
 #fh-preland-root.${rootModeClass}.fh-prq26 .fhq-hero,#fh-preland-root.${rootModeClass}.fh-bpq26 .fhq-hero{grid-template-columns:minmax(0,.86fr) minmax(460px,1.14fr)}
 #fh-preland-root.${rootModeClass}.fh-prq26 .fhq-image,#fh-preland-root.${rootModeClass}.fh-bpq26 .fhq-image{min-height:620px}
@@ -4465,7 +5478,7 @@ function renderInteractiveQuizPrelanding({
   #fh-preland-root.${rootModeClass} .fhq-stage{padding:24px 0}
   #fh-preland-root.${rootModeClass} .fhq-panel{padding:22px 16px}
   #fh-preland-root.${rootModeClass} .fhq-question{font-size:28px}
-  #fh-preland-root.${rootModeClass} .fhq-options,#fh-preland-root.${rootModeClass} .fhq-messengers{grid-template-columns:1fr}
+  #fh-preland-root.${rootModeClass} .fhq-options{grid-template-columns:1fr}
   #fh-preland-root.${rootModeClass} .fhq-option{min-height:70px}
   #fh-preland-root.${rootModeClass} .fhq-result h2{font-size:34px}
 }
@@ -4499,15 +5512,9 @@ function renderInteractiveQuizPrelanding({
           <div class="fhq-kicker">Результат готов</div>
           <h2 data-quiz-result-title>${esc(resultTitle)}</h2>
           <p class="fhq-result-copy" data-quiz-result-copy>${esc(resultText)}</p>
-          <div class="fhq-messengers">
-            ${renderAtmospaceMessengerButton('telegram', 'fhq-cta fhq-cta-tg', 'Открыть разбор в Telegram')}
-            ${renderAtmospaceMessengerButton('max', 'fhq-cta fhq-cta-max', 'Открыть разбор в MAX')}
+          <div class="fhq-registration">
+            <a href="#" data-atmospace-registration-link data-atmospace-state="loading" aria-disabled="true" class="fhq-cta">Перейти к форме регистрации</a>
           </div>
-          <label class="fhq-policy" for="atmospace-policy-consent">
-            <input id="atmospace-policy-consent" type="checkbox">
-            <span>Я принимаю <a href="https://modernisto.ru/politics" target="_blank" rel="noopener noreferrer">политику конфиденциальности</a> и <a href="https://modernisto.ru/approval" target="_blank" rel="noopener noreferrer">согласие на обработку персональных данных</a>.</span>
-          </label>
-          <p id="atmospace-policy-error" class="fhq-policy-error" role="alert" hidden>Для перехода подтвердите согласие на обработку персональных данных.</p>
           <button class="fhq-restart" type="button" data-quiz-restart>Пройти заново</button>
         </div>
       </div>
@@ -4563,6 +5570,7 @@ function renderInteractiveQuizPrelanding({
       button.textContent=item.label;
       button.addEventListener('click',function(){
         answers[index]={label:item.label,value:item.value||'',optionIndex:optionIndex};
+        document.dispatchEvent(new CustomEvent('atmospace:quiz-answer',{detail:{questionNumber:index+1}}));
         index+=1;
         if(index>=questions.length){showResult();return;}
         renderQuestion();
@@ -4621,10 +5629,12 @@ function renderInteractiveQuizPrelanding({
       else if(support.indexOf('Реалистичного')!==-1)title='Твоя точка старта — маршрут, который выдержит реальность';
       resultTitle.textContent=title;
     }
+    document.dispatchEvent(new CustomEvent('atmospace:quiz-complete'));
     moveTo(stage);
   }
 
   root.querySelector('[data-quiz-start]').addEventListener('click',function(){
+    document.dispatchEvent(new CustomEvent('atmospace:quiz-start'));
     hero.hidden=true;
     stage.hidden=false;
     form.hidden=false;
@@ -4988,6 +5998,11 @@ function validateAtmospaceTildaHtml(html = '', config = {}) {
     [patternFrom('landing', '-', 'attribution'), 'старый endpoint атрибуции'],
     [patternFrom('r\\.bothelp\\.', 'io'), 'прямая ссылка BotHelp'],
     [patternFrom('data-', 'fh-', 'messenger'), 'старый messenger-атрибут'],
+    [patternFrom('data-', 'atmospace-', 'messenger'), 'старый Atmospace messenger-атрибут'],
+    [patternFrom('messenger', '_button_', 'clicked'), 'старое messenger-событие'],
+    [patternFrom('links\\.', 'telegram', '|links\\.', 'max'), 'старые messenger-ссылки'],
+    [patternFrom('build', 'Quiz', 'Url'), 'ручная переделка серверной ссылки регистрации'],
+    [patternFrom('pathname\\s*=\\s*[\'\"]', '\\/quiz', '[\'\"]'), 'подмена серверной регистрации маршрутом /quiz'],
     [patternFrom('lead', '_', 'static'), 'старый статический lead'],
     [patternFrom('order', '_url_', '990', '|', 'order', 'Url', '990'), 'старое поле регистрации'],
     [patternFrom('purchase', '_url_', '990', '|', 'purchase', 'Url', '990'), 'старое поле покупки'],
@@ -4998,7 +6013,11 @@ function validateAtmospaceTildaHtml(html = '', config = {}) {
     [patternFrom('DIRECTION', '_CONFIG'), 'сторонний объект конфигурации квиза'],
     [patternFrom('webhook', 'Url', '|webhook', '_url', '|quiz[-_ ]?webhook'), 'сторонний webhook квиза'],
     [patternFrom('lichnyy-marshrut\\.gayvoronskyluka\\.chatgpt\\.site'), 'сторонний сервер личного маршрута'],
-    [patternFrom('\\/api\\/', 'register'), 'сторонний endpoint регистрации']
+    [patternFrom('\\/api\\/', 'register'), 'сторонний endpoint регистрации'],
+    [patternFrom('registration_', 'success'), 'серверная цель успешной регистрации в браузере'],
+    [patternFrom('notifications_', 'connected'), 'серверная цель подключения уведомлений в браузере'],
+    [patternFrom('payment_', 'success'), 'серверная цель успешной оплаты в браузере'],
+    [patternFrom('registration_', 'click'), 'устаревшая браузерная цель регистрации']
   ].forEach(([pattern, label]) => {
     if (pattern.test(source)) errors.push(`В Tilda HTML найден запрещённый фрагмент: ${label}.`);
   });
@@ -5010,12 +6029,26 @@ function validateAtmospaceTildaHtml(html = '', config = {}) {
     ATMOSPACE_PUBLIC_API_BASE_URL,
     '/api/landing-runtime/init',
     '/api/landing-runtime/click',
-    'data-atmospace-messenger="telegram"',
-    'data-atmospace-messenger="max"',
+    'data-atmospace-quiz-link',
+    'data-atmospace-registration-link',
     'data-atmospace-state',
+    'data-atmospace-runtime-retry',
     'aria-disabled="true"',
     'landing_opened',
-    'messenger_button_clicked',
+    'quiz_start_click',
+    'landing_view',
+    'question_answered',
+    'questionNumber',
+    'quiz_completed',
+    'registration_started',
+    'links.registration',
+    'registrationUrl = candidate',
+    'window.location.assign(registrationUrl)',
+    'isTrustedRegistrationUrl',
+    'requestRegistration',
+    "eventType !== 'landing_opened' && eventType !== 'quiz_start_click'",
+    'https://mc.yandex.ru/metrika/tag.js',
+    'window.__atmospaceMetrikaInited',
     'landing_variant_code',
     'landing_variant_name',
     'page_instance_id',
@@ -5032,15 +6065,11 @@ function validateAtmospaceTildaHtml(html = '', config = {}) {
     'utm_campaign',
     'utm_content',
     'utm_term',
-    'messenger: messenger || null',
-    '!links.telegram || !links.max',
     'result && result.body',
     'var pageInstanceId = makePageInstanceId();',
     'Сейчас переход временно недоступен. Попробуйте ещё раз чуть позже.',
-    'id="atmospace-policy-consent"',
+    'Не удалось подготовить продолжение. Проверьте подключение и попробуйте ещё раз.',
     'href="#"',
-    'target="_blank"',
-    'Local preview',
     'public_landing_key',
     'counter_id'
   ].forEach((marker) => {
@@ -5055,6 +6084,9 @@ function validateAtmospaceTildaHtml(html = '', config = {}) {
   }
   if (source.includes('sessionStorage')) {
     errors.push('page_instance_id не должен сохраняться в sessionStorage.');
+  }
+  if (countMatches(source, /window\.ym\(metrikaCounterId,\s*['"]init['"]/g) !== 1) {
+    errors.push('Счётчик Метрики должен инициализироваться ровно один раз защитным ядром лендинга.');
   }
   if (/\blanding_name\s*:\s*cfg\.landingName/.test(source)) {
     errors.push('Используйте landing_variant_name вместо устаревшего landing_name.');
@@ -6551,7 +7583,7 @@ export default function Constructor() {
                 />
                 <TextArea
                   label="Текст / подзаголовок предлендинга"
-                  hint="коротко: какой сценарий разбирает бот"
+                  hint="коротко: какой сценарий разбирает лендинг"
                   value={creativeMethod}
                   onChange={setCreativeMethod}
                   rows={2}
@@ -6567,7 +7599,7 @@ export default function Constructor() {
             {/* Шаг 1 */}
             {manualPrelandingMode === 'templateStage' && (
               <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
-                <h2 className={`text-xl font-black mb-2 ${text}`}>Формат 1: метод + 3 блока</h2>
+                <h2 className={`text-xl font-black mb-2 ${text}`}>Формат 1: мини-тест + разбор</h2>
                 <p className={`text-sm ${textMuted} mb-4`}>Каждая карточка привязана к своему углу, дизайну, палитре, типографике и структуре. Выбрали сценарий → сгенерировали картинки и Tilda HTML.</p>
                 <div className="grid md:grid-cols-3 gap-3">
                   {TPL.map((t) => {

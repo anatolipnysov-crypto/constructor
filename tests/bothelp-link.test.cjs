@@ -4,27 +4,56 @@ const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
 const appSource = fs.readFileSync(path.join(root, 'src', 'App.jsx'), 'utf8');
+const CLICK_HELPER_NAMES = ['sendEvent', 'sendRuntimeEvent'];
 
-const functionStart = appSource.indexOf('function buildAtmospacePrelandingTrackingScript()');
-assert.notEqual(functionStart, -1, 'Atmospace inline runtime function must exist.');
+function extractFunctionBody(source, signature) {
+  const functionStart = source.indexOf(signature);
+  assert.notEqual(functionStart, -1, `${signature} must exist.`);
 
-const returnMarker = 'return `<script>\n';
-const runtimeStart = appSource.indexOf(returnMarker, functionStart);
-assert.notEqual(runtimeStart, -1, 'Atmospace runtime template must start with return script.');
-const inlineRuntimeStart = runtimeStart + returnMarker.length;
-const inlineRuntimeEnd = appSource.indexOf('\n</script>`;', inlineRuntimeStart);
-assert.notEqual(inlineRuntimeEnd, -1, 'Atmospace runtime template must have a closing script marker.');
+  const returnMarker = 'return `<script>';
+  const runtimeStart = source.indexOf(returnMarker, functionStart);
+  assert.notEqual(runtimeStart, -1, 'Atmospace runtime template must start with return script.');
+  const inlineRuntimeStart = runtimeStart + returnMarker.length;
+  const inlineRuntimeEnd = source.indexOf('</script>`;', inlineRuntimeStart);
+  assert.notEqual(inlineRuntimeEnd, -1, 'Atmospace runtime template must have a closing script marker.');
+  return source.slice(inlineRuntimeStart, inlineRuntimeEnd);
+}
 
-const inlineRuntimeSource = appSource.slice(inlineRuntimeStart, inlineRuntimeEnd);
+function literalCalls(source, functionName) {
+  const calls = [];
+  const pattern = new RegExp(`${functionName}\\(\\s*['\"]([^'\"]+)['\"]`, 'g');
+  let match;
+  while ((match = pattern.exec(source))) calls.push(match[1]);
+  return calls;
+}
+
+function functionSlice(source, signature) {
+  const start = source.indexOf(signature);
+  assert.notEqual(start, -1, `${signature} must exist.`);
+  const next = source.indexOf('\n  function ', start + signature.length);
+  return source.slice(start, next === -1 ? source.length : next);
+}
+
+function hasRegistrationStartedHandoff(source) {
+  const directHandoff = /(?:reachGoal|sendMetrikaGoal)\(\s*['"]registration_started['"][\s\S]{0,1000}window\.location\.(?:assign\(registrationUrl\)|href\s*=\s*registrationUrl)/;
+  const callbackHandoff = /function\s+(\w+)\s*\(\)\s*\{[\s\S]{0,500}window\.location\.(?:assign\(registrationUrl\)|href\s*=\s*registrationUrl)[\s\S]{0,1000}(?:reachGoal|sendMetrikaGoal)\(\s*['"]registration_started['"]\s*,[\s\S]{0,300}\b\1\s*\)/;
+  return directHandoff.test(source) || callbackHandoff.test(source);
+}
+
+function hasExactRegistrationPassthrough(source) {
+  return /(?:var|let|const)\s+candidate\s*=\s*(?:(?:links\s*&&\s*links\.registration)|(?:links\?\.registration)|(?:links\s*&&\s*typeof\s+links\.registration\s*===\s*['"]string['"]\s*\?\s*links\.registration\s*:\s*['"]{2}))\s*;?[\s\S]{0,120}registrationUrl\s*=\s*candidate\s*;?/.test(source);
+}
+
+const runtime = extractFunctionBody(appSource, 'function buildAtmospacePrelandingTrackingScript()');
 
 [
   'window.ATMOSPACE_LANDING_CONFIG',
   'ATMOSPACE_GENERATED_RUNTIME_VERSION',
   'ATMOSPACE_INIT_ENDPOINT',
   'ATMOSPACE_CLICK_ENDPOINT',
-  'data-atmospace-messenger',
-  'landing_opened',
-  'messenger_button_clicked',
+  'data-atmospace-quiz-link',
+  'data-atmospace-registration-link',
+  'links.registration',
   'public_landing_key',
   'counter_id',
   'landing_variant_code',
@@ -45,53 +74,109 @@ const inlineRuntimeSource = appSource.slice(inlineRuntimeStart, inlineRuntimeEnd
   'utm_campaign',
   'utm_content',
   'utm_term',
-  'target',
-  '_blank',
-  'aria-disabled',
-  'var pageInstanceId = makePageInstanceId();',
-  'Сейчас переход временно недоступен. Попробуйте ещё раз чуть позже.',
-  'Local preview'
+  'https://mc.yandex.ru/metrika/tag.js',
+  'landing_view',
+  'quiz_start_click',
+  'question_answered',
+  'questionNumber',
+  'quiz_completed',
+  'registration_started'
 ].forEach((snippet) => {
-  assert.ok(inlineRuntimeSource.includes(snippet), `Atmospace runtime must include ${snippet}`);
+  assert.ok(runtime.includes(snippet), `Final Atmospace runtime must include ${snippet}`);
 });
 
-assert.equal(
-  (inlineRuntimeSource.match(/var pageInstanceId\s*=\s*makePageInstanceId\(\);/g) || []).length,
-  1,
-  'Atmospace runtime must create exactly one page_instance_id per page load.'
+assert.ok(
+  hasExactRegistrationPassthrough(runtime),
+  'The registration URL must be copied from links.registration without rebuilding it.'
+);
+assert.match(
+  runtime,
+  /window\.location\.assign\(registrationUrl\)/,
+  'Registration must navigate with the unchanged stored registrationUrl.'
+);
+assert.doesNotMatch(runtime, /buildQuizUrl|pathname\s*=\s*['"]\/quiz['"]|['"]\/quiz(?:[?#'"]|$)/);
+assert.doesNotMatch(
+  runtime,
+  /registrationUrl\s*(?:\+=|=\s*registrationUrl\s*\+)|registrationUrl\.searchParams|(?:searchParams\.(?:set|append))\([^)]*(?:utm_|yclid)/i,
+  'The constructor must not append attribution or quiz data to links.registration.'
 );
 
+assert.match(
+  runtime,
+  /(?:reachGoal|sendMetrikaGoal)\(\s*['"]question_answered['"]\s*,\s*\{[\s\S]{0,180}questionNumber/,
+  'question_answered must contain only the safe questionNumber parameter.'
+);
+assert.ok(
+  hasRegistrationStartedHandoff(runtime),
+  'registration_started must be emitted immediately before registration navigation.'
+);
+
+const clickEvents = CLICK_HELPER_NAMES.flatMap((helperName) => literalCalls(runtime, helperName));
+assert.deepEqual(
+  [...new Set(clickEvents)].sort(),
+  ['landing_opened', 'quiz_start_click'],
+  '/click may receive only landing_opened and quiz_start_click.'
+);
+
+assert.equal(
+  (runtime.match(/(?:var|let|const)\s+pageInstanceId\s*=\s*makePageInstanceId\(\);/g) || []).length,
+  1,
+  'Exactly one pageInstanceId must be created per page load.'
+);
+assert.equal(
+  (runtime.match(/=\s*makePageInstanceId\(\)/g) || []).length,
+  1,
+  'Retry must not create a second pageInstanceId.'
+);
+assert.match(runtime, /retry/i, 'A visible retry path must exist after a temporary init failure.');
+assert.doesNotMatch(runtime, /sessionStorage|localStorage/i, 'Runtime state and quiz answers must not use browser storage.');
+
+const basePayload = functionSlice(runtime, 'function buildBasePayload');
+const clickPayloads = CLICK_HELPER_NAMES
+  .filter((helperName) => runtime.includes(`function ${helperName}`))
+  .map((helperName) => [`click payload (${helperName})`, functionSlice(runtime, `function ${helperName}`)]);
+assert.ok(clickPayloads.length > 0, 'A sendEvent or sendRuntimeEvent click helper must exist.');
+for (const [name, payloadSource] of [['init payload', basePayload], ...clickPayloads]) {
+  assert.doesNotMatch(
+    payloadSource,
+    /\banswers?\b|quiz_answers?|selectedOption|optionText|questionText|resultKey|quiz_result/i,
+    `${name} must not contain quiz answers or result details.`
+  );
+}
+
 [
+  /buildQuizUrl/i,
   /r\.bothelp\.io/i,
+  /bothelp/i,
+  /telegram/i,
+  /data-fh-messenger/i,
+  /data-atmospace-messenger/i,
+  /messenger_button_clicked/i,
+  /links\.telegram|links\.max/i,
+  /telegramDomain|telegramStart|maxDomain|maxStart/i,
+  /registration_click/i,
+  /quiz_question_\d+_answered/i,
+  /registration_success/i,
+  /payment_success/i,
+  /notifications_connected/i,
   /window\.FH_CONFIG/i,
   /window\.FUNNEL_CONFIG/i,
-  /client_id/i,
-  /order_url_990|orderUrl990/i,
-  /purchase_url_990|purchaseUrl990/i,
   /smart-endpoint/i,
   /supabase\.co\/functions\/v1/i,
-  /landing-attribution/i,
-  /data-fh-messenger/i,
-  /telegramDomain|telegramStart|maxDomain|maxStart/i,
-  /landing_code/i,
-  /metrikaToken|yandex_oauth_token|serverOnlyAdGoalCredential/i,
-  /sessionStorage/i,
   /https:\/\/web\.telegram\.org\/k\/#/i
 ].forEach((pattern) => {
-  assert.ok(!pattern.test(inlineRuntimeSource), `Atmospace runtime must not match ${pattern}`);
+  assert.doesNotMatch(runtime, pattern, `Final Atmospace runtime must not match ${pattern}`);
 });
 
 [
   'validateAtmospaceTildaHtml',
-  'return `<a href="#" data-atmospace-messenger="${safeMessenger}" data-atmospace-state="loading" aria-disabled="true"',
-  'id="atmospace-policy-consent"',
+  'data-atmospace-quiz-link',
+  'data-atmospace-registration-link',
   'window.ATMOSPACE_LANDING_CONFIG',
-  'data-atmospace-messenger="telegram"',
-  'data-atmospace-messenger="max"',
   'publicLandingKey',
   'counterId'
 ].forEach((snippet) => {
   assert.ok(appSource.includes(snippet), `Constructor source must include ${snippet}`);
 });
 
-console.log('Atmospace runtime link test passed');
+console.log('Final Atmospace quiz-registration runtime contract passed');
