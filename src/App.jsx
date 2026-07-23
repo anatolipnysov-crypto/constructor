@@ -1,7 +1,9 @@
 ﻿import { useState, useMemo, useEffect } from 'react';
-import { Copy, Check, Wand2, BookOpen, AlertCircle, ChevronDown, RotateCcw, Eye, Sun, Moon, Sparkles, Lightbulb, ShieldCheck } from 'lucide-react';
+import { Copy, Check, Wand2, BookOpen, AlertCircle, ChevronDown, RotateCcw, Eye, Sun, Moon, Sparkles, Lightbulb, ShieldCheck, ListChecks } from 'lucide-react';
 import AIBannerStudio from './components/AIBannerStudio';
 import { buildCampaignLandingLogic, resolveCampaignSemanticProfile } from './data/campaignSemantics';
+import LongQuizEditor from './features/atmospace/LongQuizEditor.jsx';
+import QuizPublishPanel from './features/atmospace/QuizPublishPanel.jsx';
 import { getAtmospaceGenerateErrorMessage, validateAtmospaceLandingInput } from './utils/atmospaceLandingInput';
 
 /* ================== УТИЛИТЫ ================== */
@@ -96,6 +98,26 @@ const TILDA_PRELAND_BUILD_VERSION = '20260601-modernisto-control-v2';
 const CONSTRUCTOR_ACCESS_MODE = 'owner_only';
 const OWNER_LOGIN = 'admin';
 const OWNER_PASSWORD = 'admin';
+const QUIZ_TOOL_QUERY_VALUE = 'atmosphere-quiz';
+
+function readConstructorTabFromLocation() {
+  if (typeof window === 'undefined') return 'pre';
+  try {
+    return new URL(window.location.href).searchParams.get('tool') === QUIZ_TOOL_QUERY_VALUE
+      ? 'quiz'
+      : 'pre';
+  } catch {
+    return 'pre';
+  }
+}
+
+function writeConstructorTabToLocation(tab) {
+  if (typeof window === 'undefined') return;
+  const url = new URL(window.location.href);
+  if (tab === 'quiz') url.searchParams.set('tool', QUIZ_TOOL_QUERY_VALUE);
+  else url.searchParams.delete('tool');
+  window.history.pushState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+}
 
 function projectStorageKey(account) {
   return account?.login ? `${PROJECT_STORAGE_KEY_PREFIX}${account.login}` : LEGACY_PROJECT_STORAGE_KEY;
@@ -5444,7 +5466,7 @@ export default function Constructor() {
   const initialProjectRef = useState(() => loadSavedProject(authorizedClient))[0];
   const [usage, setUsage] = useState(() => readAccountUsage(authorizedClient));
   const [dark, setDark] = useState(false);
-  const [tab, setTab] = useState('pre');
+  const [tab, setTab] = useState(readConstructorTabFromLocation);
   const [projectData, setProjectData] = useState(initialProjectRef);
   const [landingRuntimeData, setLandingRuntimeData] = useState({
     landingName: initialProjectRef.clientDisplayName || '',
@@ -5895,6 +5917,18 @@ export default function Constructor() {
     setAuthorizedClient(null);
     setUsage({ banners: 0, prelandings: 0 });
   };
+
+  const openTab = (nextTab) => {
+    writeConstructorTabToLocation(nextTab);
+    setTab(nextTab);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    const handlePopState = () => setTab(readConstructorTabFromLocation());
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   const toggleEf = (id) => setEffects(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
 
@@ -6404,11 +6438,19 @@ export default function Constructor() {
 
         <div className={`mb-4 sticky top-2 z-20 ${dark ? 'bg-slate-950/80' : 'bg-slate-50/80'} backdrop-blur p-2 -m-2 rounded-2xl`}>
           <div className="flex flex-wrap gap-2">
-            <Tab active={tab === 'creative'} onClick={() => setTab('creative')} icon={Lightbulb} dark={dark}>Креативы</Tab>
-            <Tab active={tab === 'pre'} onClick={() => setTab('pre')} icon={Wand2} dark={dark}>Предлендинг</Tab>
-            <Tab active={tab === 'how'} onClick={() => setTab('how')} icon={BookOpen} dark={dark}>Инструкция</Tab>
+            <Tab active={tab === 'creative'} onClick={() => openTab('creative')} icon={Lightbulb} dark={dark}>Креативы</Tab>
+            <Tab active={tab === 'pre'} onClick={() => openTab('pre')} icon={Wand2} dark={dark}>Предлендинг</Tab>
+            <Tab active={tab === 'quiz'} onClick={() => openTab('quiz')} icon={ListChecks} dark={dark}>Квиз</Tab>
+            <Tab active={tab === 'how'} onClick={() => openTab('how')} icon={BookOpen} dark={dark}>Инструкция</Tab>
           </div>
         </div>
+
+        {tab === 'quiz' && (
+          <div className="space-y-4">
+            <LongQuizEditor onBack={() => openTab('pre')} />
+            <QuizPublishPanel />
+          </div>
+        )}
 
         {/* === ПАРАМЕТРЫ ДИРЕКТА === */}
         {tab === 'how' && (
