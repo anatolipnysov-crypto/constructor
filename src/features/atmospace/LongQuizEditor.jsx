@@ -423,8 +423,8 @@ export default function LongQuizEditor({ onBack }) {
           </div>
         )}
 
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(380px,.75fr)]">
-          <div className="space-y-4">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(380px,.75fr)]">
+          <div className="min-w-0 space-y-4">
             <section className={`${card} rounded-3xl border p-5 shadow-sm md:p-6`}>
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -482,8 +482,8 @@ export default function LongQuizEditor({ onBack }) {
                   <h2 className={`text-xl font-black ${text}`}>Вопросы: {project.questions.length}</h2>
                   <p className={`mt-1 text-xs ${muted}`}>Рекомендуем 5. Допустимо от {LONG_QUIZ_MIN_QUESTIONS} до {LONG_QUIZ_MAX_QUESTIONS}.</p>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <select value={selectedLibraryQuestion} onChange={(event) => setSelectedLibraryQuestion(event.target.value)} className={`rounded-xl border-2 px-3 py-2 text-xs font-bold outline-none ${dark ? 'border-slate-700 bg-slate-950 text-white' : 'border-slate-200 bg-white text-slate-800'}`}>
+                <div className="flex min-w-0 flex-wrap gap-2">
+                  <select value={selectedLibraryQuestion} onChange={(event) => setSelectedLibraryQuestion(event.target.value)} className={`min-w-0 max-w-full flex-1 basis-52 rounded-xl border-2 px-3 py-2 text-xs font-bold outline-none ${dark ? 'border-slate-700 bg-slate-950 text-white' : 'border-slate-200 bg-white text-slate-800'}`}>
                     {ATMOSPACE_QUESTION_LIBRARY.map((question) => <option key={question.id} value={question.id}>{question.title}</option>)}
                   </select>
                   <button type="button" onClick={addLibraryQuestion} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-xs font-black text-white hover:bg-blue-500">
@@ -590,7 +590,7 @@ export default function LongQuizEditor({ onBack }) {
             </section>
           </div>
 
-          <aside className="xl:sticky xl:top-4 xl:self-start">
+          <aside className="min-w-0 xl:sticky xl:top-4 xl:self-start">
             <div className="mb-3 flex items-center gap-2 px-1 text-sm font-black text-blue-600">
               <Eye className="h-5 w-5" /> Живой предпросмотр
             </div>

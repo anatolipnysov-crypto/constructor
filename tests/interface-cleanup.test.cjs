@@ -15,6 +15,7 @@ const tabs = [...source.matchAll(/<Tab active=\{tab === '([^']+)'\}[^\r\n]*>([^<
 assert.deepEqual(tabs, [
   { id: 'creative', label: 'Креативы' },
   { id: 'pre', label: 'Предлендинг' },
+  { id: 'quiz', label: 'Квиз' },
   { id: 'how', label: 'Инструкция' },
 ]);
 
@@ -34,6 +35,14 @@ for (const staleText of [
 
 assert.ok(mainSource.includes('installProtectedProjectStorageGuard()'), 'Protected project storage guard must run before React mounts.');
 assert.ok(mainSource.includes('ConstructorRecoveryBoundary'), 'A stale browser project must not leave the constructor blank.');
+assert.ok(mainSource.includes("import App from './App.jsx'"), 'The production entrypoint must mount the authorization-aware constructor.');
+assert.ok(mainSource.includes('<App />'), 'The production entrypoint must not bypass the constructor authorization gate.');
+assert.equal(mainSource.includes('ConstructorRouter'), false, 'A top-level quiz router would bypass the constructor authorization gate.');
+assert.ok(source.includes("import LongQuizEditor from './features/atmospace/LongQuizEditor.jsx'"), 'The authorized constructor must expose the long quiz editor.');
+assert.ok(source.includes("import QuizPublishPanel from './features/atmospace/QuizPublishPanel.jsx'"), 'The authorized constructor must expose quiz publishing.');
+const authorizationGateIndex = source.indexOf('return <LoginGate dark={dark} onLogin={handleLogin} />;');
+const quizRenderIndex = source.indexOf("{tab === 'quiz' && (");
+assert.ok(authorizationGateIndex !== -1 && quizRenderIndex > authorizationGateIndex, 'Quiz rendering must remain behind the authorization gate.');
 assert.ok(mainSource.includes("key.startsWith('constructorProjectData:')"), 'Per-account stale project caches must be recoverable.');
 for (const protectedKey of [
   'constructorAuthorizedClient',
