@@ -1,4 +1,4 @@
-﻿import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Copy, Check, Wand2, BookOpen, AlertCircle, ChevronDown, RotateCcw, Eye, Sun, Moon, Sparkles, Lightbulb, ShieldCheck, ListChecks } from 'lucide-react';
 import AIBannerStudio from './components/AIBannerStudio';
 import { buildCampaignLandingLogic, resolveCampaignSemanticProfile } from './data/campaignSemantics';
@@ -416,13 +416,13 @@ function makeClientId(number, displayName) {
 /* ================== ТЕКСТЫ ПРЕДЛЕНДИНГА ================== */
 const CLIENT_PRELANDING_CORE_TEXT = `Каркас предлендинга строится вокруг заголовка и текста клиента.
 
-Это не брендовый лендинг и не страница с готовой легендой. Конструктор берёт смысл объявления, выбирает один из шести форматов и собирает короткую посадочную страницу под переход в мессенджер.
+Это не брендовый лендинг и не страница с готовой легендой. Конструктор берёт смысл объявления, выбирает один из шести форматов и собирает короткую посадочную страницу с мини-тестом и защищённой регистрацией Atmospace.
 
 Узнаете сценарий
 1. Человек видит знакомую боль или желание
 2. Сразу понимает, зачем смотреть разбор
 3. Получает 2-3 сильных мини-оффера без лишней теории
-4. Переходит в Telegram или MAX на следующий шаг
+4. Проходит четыре вопроса и открывает защищённую регистрацию
 
 Главная задача: не добавить отсебятину, а усилить введённый заголовок, описание и выбранную структуру.`;
 
@@ -445,9 +445,9 @@ const TPL = [
     p: ['Сценарий', 'Три ответа', 'CTA'],
     txt: `Формат для аудитории, которой важно сначала разобраться.
 
-Лендинг показывает не обещание чуда, а спокойную логику: что человек увидит, почему это отличается от старого подхода и какой следующий шаг откроется в мессенджере.
+Лендинг показывает не обещание чуда, а спокойную логику: что человек увидит, почему это отличается от старого подхода и что станет понятно после четырёх вопросов.
 
-Страница должна работать как мост между объявлением и ботом: без бренда, без лишних деталей, без фантазий поверх заголовка клиента.`
+Страница должна работать как мост между объявлением и регистрацией: без бренда, без лишних деталей, без фантазий поверх заголовка клиента.`
   },
   {
     id: 3,
@@ -478,15 +478,15 @@ const PRELANDING_CONTENT = {
     ],
     painAlert: 'Смысл страницы — быстро показать другой маршрут и перевести человека к следующему шагу без перегруза.',
     trustTitle: 'Сначала понятный разбор, потом первый шаг.',
-    trustSmall: 'Человек видит связку: проблема, новый подход, мини-офферы и переход в выбранный мессенджер.',
+    trustSmall: 'Человек видит связку: проблема, новый подход, четыре вопроса и защищённая регистрация.',
     valueTitle: 'Что человек увидит внутри',
     valueItems: [
       'почему старый подход мог не сработать именно в его ситуации',
       'какой новый маршрут можно рассмотреть без долгой подготовки',
-      'какой первый шаг откроется сразу после перехода в мессенджер'
+      'какой первый шаг подходит ему по результату мини-теста'
     ],
     actionTitle: 'Откройте короткий разбор',
-    actionSubtitle: 'Выберите мессенджер и перейдите к первому шагу. Лендинг останется открытым.'
+    actionSubtitle: 'Ответьте на четыре вопроса, получите результат и откройте защищённую регистрацию.'
   },
   2: {
     badge: 'Спокойный вход без давления',
@@ -506,10 +506,10 @@ const PRELANDING_CONTENT = {
     valueItems: [
       'где именно ломается старый путь или привычная модель действий',
       'какой первый шаг можно сделать без лишней подготовки',
-      'почему переход в мессенджер нужен для продолжения разбора'
+      'какой результат мини-теста ведёт к следующему шагу'
     ],
     actionTitle: 'Перейти к разбору',
-    actionSubtitle: 'Следующий шаг откроется в выбранном мессенджере без закрытия лендинга.'
+    actionSubtitle: 'Пройдите четыре вопроса и продолжите через защищённую регистрацию Atmospace.'
   },
   3: {
     badge: 'Чистый маршрут вместо хаоса',
@@ -529,10 +529,10 @@ const PRELANDING_CONTENT = {
     valueItems: [
       'сильный первый экран с понятным обещанием разбора',
       'мини-офферы, которые раскрывают выгоды без повторов',
-      'финальный CTA, который не ломает страницу и открывает мессенджер'
+      'финальный CTA, который ведёт к мини-тесту и регистрации без разрыва сценария'
     ],
     actionTitle: 'Открыть первый шаг',
-    actionSubtitle: 'Нажмите на удобный мессенджер и продолжите разбор там.'
+    actionSubtitle: 'Ответьте на четыре вопроса и откройте персональный следующий шаг.'
   }
 };
 
@@ -542,7 +542,7 @@ const CLIENT_PRELANDING_RULES = [
   'не обещаем гарантированный доход, быстрый результат или лёгкие деньги',
   'используем заголовок, описание клиента и выбранную структуру как главный источник смысла',
   'убираем повторы: если смысл уже есть в карточках, не дублируем его отдельными плашками',
-  'главная цель страницы — понятный переход в Telegram или MAX на короткий разбор'
+  'главная цель страницы — довести человека от смысла объявления до четырёх вопросов и защищённой регистрации'
 ];
 
 const CLIENT_PRELANDING_MARKETING_ANGLES = [
@@ -570,7 +570,7 @@ const CLIENT_PRELANDING_MARKETING_ANGLES = [
     valueItems: [
       'почему текущий подход мог упереться в потолок',
       'как выглядит первый шаг без своего продукта и долгого запуска',
-      'что откроется в выбранном мессенджере после клика'
+      'какой следующий шаг подойдёт после четырёх ответов'
     ],
     actionTitle: 'Откройте разбор и заберите первый шаг',
     actionSubtitle: 'Разбор откроется в новой вкладке, а лендинг останется доступным.'
@@ -593,7 +593,7 @@ const CLIENT_PRELANDING_MARKETING_ANGLES = [
     ],
     cards: [
       { title: 'Смысл перед кликом', text: 'На первом экране человек сразу понимает, зачем смотреть разбор.' },
-      { title: 'Короткий маршрут', text: 'Сначала демонстрация, затем выбор мессенджера, затем первый понятный шаг.' },
+      { title: 'Короткий маршрут', text: 'Сначала смысл, затем четыре вопроса, результат и защищённая регистрация.' },
       { title: 'Без давления', text: 'Посадочная не продаёт в лоб и сохраняет доверие до перехода.' }
     ],
     valueItems: [
@@ -602,7 +602,7 @@ const CLIENT_PRELANDING_MARKETING_ANGLES = [
       'какой переход логично сделать после первого экрана'
     ],
     actionTitle: 'Перейти к первому шагу',
-    actionSubtitle: 'Выберите Telegram или MAX и продолжите разбор в удобном мессенджере.'
+    actionSubtitle: 'Пройдите мини-тест и откройте следующий шаг через защищённую регистрацию.'
   },
   {
     id: 'extra-support',
@@ -628,10 +628,10 @@ const CLIENT_PRELANDING_MARKETING_ANGLES = [
     valueItems: [
       'как зайти без своего продукта и долгой подготовки',
       'почему человеку не нужно продавать в лоб на первом касании',
-      'какой следующий шаг откроется в выбранном мессенджере'
+      'какой следующий шаг подходит по результату мини-теста'
     ],
     actionTitle: 'Откройте разбор и заберите первый шаг',
-    actionSubtitle: 'Выберите удобный мессенджер. Разбор откроется в новой вкладке.'
+    actionSubtitle: 'Ответьте на четыре вопроса и перейдите к защищённой регистрации.'
   },
   {
     id: 'higher-level',
@@ -652,7 +652,7 @@ const CLIENT_PRELANDING_MARKETING_ANGLES = [
     cards: [
       { title: 'Потолок виден', text: 'Человек узнаёт свою ситуацию и понимает, почему прежний путь мог замедлиться.' },
       { title: 'Маршрут короче', text: 'Разбор показывает не всю систему сразу, а ближайший шаг к следующему уровню.' },
-      { title: 'Решение без давления', text: 'Человек сам выбирает Telegram или MAX и продолжает там.' }
+      { title: 'Решение без давления', text: 'Человек отвечает на четыре вопроса и сам решает, продолжать ли регистрацию.' }
     ],
     valueItems: [
       'почему текущий доход может упираться в потолок',
@@ -660,7 +660,7 @@ const CLIENT_PRELANDING_MARKETING_ANGLES = [
       'как продолжить разбор без закрытия лендинга'
     ],
     actionTitle: 'Посмотреть первый шаг',
-    actionSubtitle: 'Разбор откроется в выбранном мессенджере, лендинг останется доступным.'
+    actionSubtitle: 'Мини-тест покажет результат и откроет защищённую регистрацию Atmospace.'
   }
 ];
 
@@ -3076,7 +3076,7 @@ body{margin:0!important;background:${theme.light ? '#fbfaf6' : '#050505'}!import
     <div class="pl-steps">
       <div class="pl-card"><b>✓</b><h3>Ситуация</h3><p>Сначала понятно, какая проблема или желание ведёт человека на разбор.</p></div>
       <div class="pl-card"><b>✓</b><h3>Маршрут</h3><p>Понятно, какой смысл раскрыть и куда вести человека дальше.</p></div>
-      <div class="pl-card"><b>✓</b><h3>Первый шаг</h3><p>Без лишней подготовки: человек переходит к короткому разбору в мессенджере.</p></div>
+      <div class="pl-card"><b>✓</b><h3>Первый шаг</h3><p>Без лишней подготовки: человек проходит четыре вопроса и получает следующий шаг.</p></div>
     </div>
   </section>
   <section class="pl-final pl-wrap">
@@ -3152,7 +3152,7 @@ const MANUAL_PRELANDING_MODES = [
   {
     id: 'barrierProfileQuiz',
     title: 'Формат 6 / Профиль барьера',
-    desc: 'Пять вопросов о повторяющемся сбое, персональный профиль и первый реалистичный шаг.'
+    desc: 'Четыре вопроса о повторяющемся сбое, персональный профиль и первый реалистичный шаг.'
   }
 ];
 
@@ -3252,7 +3252,7 @@ function renderHeroSceneBlocksPrelanding({
   const actionNote = content.liveNote || '';
   const actionNoteHtml = actionNote ? `<div class="fh-hb-action-note">${esc(actionNote)}</div>` : '';
   const ctaTitle = content.actionTitle || 'Откройте разбор и заберите первый шаг';
-  const ctaSubtitle = content.actionSubtitle || content.ctaLead || 'Выберите удобный мессенджер. Разбор откроется в новой вкладке, а страница останется доступной.';
+  const ctaSubtitle = content.actionSubtitle || content.ctaLead || 'Ответьте на четыре вопроса и откройте защищённую форму регистрации Atmospace.';
   const heroImageHtml = images[0]
     ? `<img src="${esc(images[0])}" alt="" loading="eager" decoding="async" fetchpriority="high" onerror="var c=this.closest('.fh-hb-scene');if(c)c.classList.add('fh-image-failed');this.remove();">`
     : '';
@@ -3849,13 +3849,8 @@ function renderHeroSceneBlocksPrelanding({
       ${ctaImageHtml}
     </div>
   </section>
-
-  <label class="fh-hb-policy" for="atmospace-policy-consent">
-    <input id="atmospace-policy-consent" type="checkbox">
-    <span>Я принимаю <a href="https://modernisto.ru/politics" target="_blank" rel="noopener noreferrer">политику конфиденциальности</a> и <a href="https://modernisto.ru/approval" target="_blank" rel="noopener noreferrer">согласие на обработку персональных данных</a>.</span>
-  </label>
-  <div id="atmospace-policy-error" class="fh-hb-policy-error" role="alert" hidden>Для перехода в мессенджер подтвердите согласие на обработку персональных данных.</div>
-  <p class="fh-hb-legal">Нажимая кнопку, вы переходите в выбранный мессенджер для получения материала. Разбор откроется в новой вкладке, а эта страница останется доступной.</p>
+  ${renderAtmospaceSharedInlineQuiz({ accent: primary, accent2: secondary, background: '#071326', panel: '#10223d' })}
+  <p class="fh-hb-legal">Ответы мини-теста не сохраняются. Регистрация, согласие и пароль обрабатываются только на защищённой странице Atmospace.</p>
 </div>
 ${buildAtmospacePrelandingTrackingScript()}`;
 }
@@ -3917,7 +3912,7 @@ function renderNatureEditorialPrelanding({ content, projectData, landingMeta, sc
   const heroNote = content.methodName || content.liveNote || 'Не ещё читать. Начать применять.';
   const badge = content.badge || 'Короткий практический разбор';
   const finalTitle = content.actionTitle || 'Начните с короткого разбора';
-  const finalText = content.actionSubtitle || 'Выберите мессенджер. Разбор откроется в новой вкладке, а эта страница останется доступной.';
+  const finalText = content.actionSubtitle || 'Ответьте на четыре вопроса и продолжите на защищённой странице регистрации Atmospace.';
 
   return `${buildAtmospaceHeadConfig({
   projectData,
@@ -4101,13 +4096,8 @@ function renderNatureEditorialPrelanding({ content, projectData, landingMeta, sc
       </div>
     </div>
   </section>
-
-  <label class="fh-nd-policy" for="atmospace-policy-consent">
-    <input id="atmospace-policy-consent" type="checkbox">
-    <span>Я принимаю <a href="https://modernisto.ru/politics" target="_blank" rel="noopener noreferrer">политику конфиденциальности</a> и <a href="https://modernisto.ru/approval" target="_blank" rel="noopener noreferrer">согласие на обработку персональных данных</a>.</span>
-  </label>
-  <div id="atmospace-policy-error" class="fh-nd-policy-error" role="alert" hidden>Для перехода в мессенджер подтвердите согласие на обработку персональных данных.</div>
-  <p class="fh-nd-legal">Нажимая кнопку, вы переходите в выбранный мессенджер для получения материала. Разбор откроется в новой вкладке, а эта страница останется доступной.</p>
+  ${renderAtmospaceSharedInlineQuiz({ accent: paletteColors[0] || '#6f7554', accent2: paletteColors[1] || '#b96b4e', background: '#25231e', panel: '#342f29' })}
+  <p class="fh-nd-legal">Ответы мини-теста не сохраняются. Регистрация и согласие выполняются на защищённой странице Atmospace.</p>
 </div>
 ${buildAtmospacePrelandingTrackingScript()}`;
 }
@@ -4145,7 +4135,7 @@ function renderMinimalComparePrelanding({ content, projectData, landingMeta, sty
     ...(Array.isArray(effects) ? effects.map(item => `fh-mc-effect-${prelandingClassToken(item)}`) : [])
   ].filter(Boolean).join(' ');
   const badge = content.badge || 'Тихое сравнение';
-  const buttonLead = content.ctaLead || content.actionSubtitle || 'Разбор откроется в новой вкладке, а эта страница останется доступной.';
+  const buttonLead = content.ctaLead || content.actionSubtitle || 'После четырёх вопросов откроется защищённая форма регистрации Atmospace.';
   const miniHtml = miniItems.map((item) => `<div class="fh-mc-mini-item"><span class="fh-mc-mini-dot"></span><span>${esc(item)}</span></div>`).join('');
   const cardsHtml = cards.map((item, index) => `<article class="fh-mc-proof-card">
     <div class="fh-mc-proof-num">${String(index + 1).padStart(2, '0')}</div>
@@ -4214,6 +4204,8 @@ function renderMinimalComparePrelanding({ content, projectData, landingMeta, sty
 #fh-preland-root .fh-mc-policy input{width:14px;height:14px;margin:1px 0 0;accent-color:#fff;flex:0 0 auto}
 #fh-preland-root .fh-mc-policy a{color:#777;text-decoration:underline;text-underline-offset:2px}
 #fh-preland-root .fh-mc-error{display:none;margin-top:14px;font-size:12px;color:#c9c9c9}
+#fh-preland-root .fh-mc-legal{margin:30px 0 0;color:#666;font-size:10px;line-height:1.55}
+#fh-preland-root .fh-mc-legal a{color:#929292;text-decoration:underline;text-underline-offset:2px}
 #fh-preland-root.fh-mc-effect-fadein .fh-mc-kicker,
 #fh-preland-root.fh-mc-effect-fadein .fh-mc-title,
 #fh-preland-root.fh-mc-effect-fadein .fh-mc-description,
@@ -4250,13 +4242,10 @@ function renderMinimalComparePrelanding({ content, projectData, landingMeta, sty
         ${renderAtmospaceQuizButton('fh-mc-btn fh-mc-btn-primary')}
       </div>
       <p class="fh-mc-next">${esc(buttonLead)}</p>
-      <label class="fh-mc-policy" for="atmospace-policy-consent">
-        <input id="atmospace-policy-consent" type="checkbox">
-        <span>Я принимаю <a href="https://modernisto.ru/politics" target="_blank" rel="noopener noreferrer">политику конфиденциальности</a> и <a href="https://modernisto.ru/approval" target="_blank" rel="noopener noreferrer">согласие на обработку персональных данных</a>.</span>
-      </label>
-      <div id="atmospace-policy-error" class="fh-mc-error" role="alert" hidden>Чтобы открыть разбор, подтвердите согласие на обработку персональных данных.</div>
+      <p class="fh-mc-legal">Ответы мини-теста не сохраняются. Регистрация и согласие выполняются на защищённой странице Atmospace. <a href="https://modernisto.ru/politics" target="_blank" rel="noopener noreferrer">Политика конфиденциальности</a>.</p>
     </div>
   </main>
+  ${renderAtmospaceSharedInlineQuiz({ accent: rootTone === 'fh-mc-tone-blue' ? '#73b8ff' : '#ffffff', accent2: rootTone === 'fh-mc-tone-blue' ? '#2f6bff' : '#8b8b8b', background: '#050505', panel: '#111111' })}
 </div>
 ${buildAtmospacePrelandingTrackingScript()}`;
 }
@@ -4583,7 +4572,7 @@ function renderCoreMethodMiniQuiz() {
 
   return `<section id="atmospace-mini-quiz" class="atm-v1-quiz-band" aria-labelledby="atm-v1-quiz-title">
     <div class="atm-v1-shell">
-      <div class="atm-v1-quiz" data-atmospace-inline-quiz>
+      <div class="atm-v1-quiz" data-atmospace-inline-quiz data-atmospace-embedded-quiz="true" data-atmospace-question-count="4">
         <div class="atm-v1-quiz-intro">
           <p class="atm-v1-kicker">Мини-тест</p>
           <h2 id="atm-v1-quiz-title">Здесь нет правильных ответов.</h2>
@@ -4602,6 +4591,63 @@ function renderCoreMethodMiniQuiz() {
       </div>
     </div>
   </section>`;
+}
+
+function renderAtmospaceSharedInlineQuiz({
+  accent = '#2563eb',
+  accent2 = '#06b6d4',
+  background = '#081426',
+  panel = '#10213a',
+  resultTitle = 'Спасибо за честные ответы.',
+  resultText = 'Теперь откройте защищённую форму регистрации и продолжите на стороне Atmospace.'
+} = {}) {
+  const questions = ATMOSPACE_MINI_QUIZ.map((question, questionIndex) => `
+    <section class="atm-shared-question" data-atmospace-question="${questionIndex}" hidden>
+      <p class="atm-shared-label">Вопрос ${questionIndex + 1}</p>
+      <h3>${esc(question.title)}</h3>
+      <div class="atm-shared-options">
+        ${question.options.map((option) => `<button type="button" data-atmospace-option>${esc(option)}</button>`).join('')}
+      </div>
+      ${questionIndex > 0 ? '<button class="atm-shared-back" type="button" data-atmospace-quiz-back>Назад</button>' : ''}
+    </section>`).join('');
+
+  return `<style>
+.atm-shared-band,.atm-shared-band *{box-sizing:border-box}
+.atm-shared-band{--atmq-accent:${esc(accent)};--atmq-accent2:${esc(accent2)};--atmq-bg:${esc(background)};--atmq-panel:${esc(panel)};padding:clamp(64px,9vw,112px) 0;background:var(--atmq-bg);color:#f8fafc;font-family:Manrope,Inter,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+.atm-shared-shell{width:min(920px,calc(100% - 40px));margin:0 auto}
+.atm-shared-quiz{padding:clamp(24px,5vw,52px);border:1px solid rgba(255,255,255,.14);border-radius:8px;background:var(--atmq-panel);box-shadow:0 30px 80px rgba(0,0,0,.18)}
+.atm-shared-kicker,.atm-shared-label{margin:0 0 12px;color:var(--atmq-accent2);font-size:12px;line-height:1.2;font-weight:900;text-transform:uppercase}
+.atm-shared-intro{margin-bottom:30px}.atm-shared-intro h2{margin:0 0 14px;font-size:clamp(34px,6vw,62px);line-height:1.02;font-weight:900;letter-spacing:0}.atm-shared-intro p:not(.atm-shared-kicker){margin:6px 0;color:#cbd5e1;font-size:17px;line-height:1.5}
+.atm-shared-progress{height:8px;overflow:hidden;border-radius:999px;background:rgba(255,255,255,.12)}.atm-shared-progress span{display:block;width:25%;height:100%;background:linear-gradient(90deg,var(--atmq-accent),var(--atmq-accent2));transition:width .2s ease}
+.atm-shared-counter{margin:12px 0 24px;color:#94a3b8;font-size:13px;font-weight:900}
+.atm-shared-question h3,.atm-shared-result h3{max-width:820px;margin:0 0 24px;font-size:clamp(27px,4.5vw,44px);line-height:1.16;font-weight:900;letter-spacing:0}
+.atm-shared-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.atm-shared-options button{min-height:72px;padding:17px;border:1px solid rgba(255,255,255,.16);border-radius:8px;background:rgba(255,255,255,.055);color:#f8fafc;text-align:left;font:inherit;font-size:15px;line-height:1.42;font-weight:750;cursor:pointer}.atm-shared-options button:hover,.atm-shared-options button:focus-visible{border-color:var(--atmq-accent2);background:rgba(255,255,255,.10);outline:none}
+.atm-shared-back{margin-top:18px;padding:0;border:0;background:transparent;color:#a8b5c7;font:inherit;font-weight:800;cursor:pointer}
+.atm-shared-result{padding-top:26px}.atm-shared-result>p:not(.atm-shared-kicker){max-width:700px;margin:0;color:#cbd5e1;font-size:18px;line-height:1.55}.atm-shared-register{display:inline-flex;align-items:center;justify-content:center;min-height:64px;margin-top:26px;padding:17px 28px;border-radius:8px;background:linear-gradient(135deg,var(--atmq-accent),var(--atmq-accent2));color:#fff!important;text-decoration:none!important;font-size:17px;font-weight:900;box-shadow:0 18px 44px rgba(0,0,0,.22)}
+@media(max-width:680px){.atm-shared-shell{width:calc(100% - 24px)}.atm-shared-quiz{padding:22px 16px}.atm-shared-options{grid-template-columns:1fr}.atm-shared-options button{min-height:64px}.atm-shared-register{width:100%;padding-inline:14px}}
+</style>
+<section id="atmospace-mini-quiz" class="atm-shared-band" aria-labelledby="atm-shared-quiz-title">
+  <div class="atm-shared-shell">
+    <div class="atm-shared-quiz" data-atmospace-inline-quiz data-atmospace-embedded-quiz="true" data-atmospace-question-count="4">
+      <div class="atm-shared-intro">
+        <p class="atm-shared-kicker">Мини-тест</p>
+        <h2 id="atm-shared-quiz-title">Здесь нет правильных ответов.</h2>
+        <p><strong>Их никто не сохраняет и не оценивает - кроме тебя.</strong></p>
+        <p>Просто будь честен с самим собой.</p>
+      </div>
+      <div class="atm-shared-progress" aria-hidden="true"><span data-atmospace-quiz-progress></span></div>
+      <p class="atm-shared-counter" data-atmospace-quiz-counter>1 / ${ATMOSPACE_MINI_QUIZ.length}</p>
+      <div>${questions}</div>
+      <div class="atm-shared-result" data-atmospace-inline-result data-atmospace-registration-section hidden>
+        <p class="atm-shared-kicker">Мини-тест пройден</p>
+        <h3>${esc(resultTitle)}</h3>
+        <p>${esc(resultText)}</p>
+        ${renderAtmospaceRegistrationButton('atm-shared-register', 'Открыть форму регистрации')}
+        <p data-atmospace-runtime-message hidden></p>
+      </div>
+    </div>
+  </div>
+</section>`;
 }
 
 function renderCoreMethodFixedOffer({ valueImage, ctaImage }) {
@@ -4716,6 +4762,56 @@ function renderCoreMethodFixedOffer({ valueImage, ctaImage }) {
   </div>`;
 }
 
+function renderCoreMethodCompactOffer({ content, valueImage, ctaImage }) {
+  const fallbackItems = [
+    'увидеть повторяющийся сценарий, который незаметно возвращает в прежнюю точку',
+    'отделить реальную причину от очередной попытки заставить себя работать ещё больше',
+    'перейти к одному следующему шагу без нового рывка и перегруза'
+  ];
+  const sourceCards = Array.isArray(content?.cards) && content.cards.length
+    ? content.cards
+    : (Array.isArray(content?.valueItems) ? content.valueItems : fallbackItems);
+  const cards = sourceCards.slice(0, 3).map((item, index) => {
+    const title = typeof item === 'object' && item ? item.title : `Смысл ${index + 1}`;
+    const text = typeof item === 'object' && item ? item.text : item;
+    return `<article class="atm-v1-compact-card"><span>0${index + 1}</span><h3>${esc(title || `Смысл ${index + 1}`)}</h3><p>${esc(text || fallbackItems[index])}</p></article>`;
+  }).join('');
+  const offerTitle = stripHtml(content?.valueTitle || content?.actionTitle || 'Что станет понятнее после мини-теста');
+  const offerLead = stripHtml(content?.trustSmall || content?.ctaLead || 'Короткий разбор помогает увидеть не новую теорию, а конкретный повторяющийся сценарий и первый реалистичный шаг.');
+  const registrationTitle = stripHtml(content?.actionTitle || 'Продолжи на защищённой странице Atmospace');
+  const registrationText = stripHtml(content?.actionSubtitle || 'Сервер уже подготовил персональную форму регистрации и сохранил рекламную атрибуцию.');
+
+  return `<div id="atm-v1-offer" data-atmospace-offer hidden>
+    <section class="atm-v1-compact">
+      <div class="atm-v1-shell">
+        <div class="atm-v1-compact-head">
+          <div>
+            <p class="atm-v1-kicker">После мини-теста</p>
+            <h2>${esc(offerTitle)}</h2>
+            <p>${esc(offerLead)}</p>
+          </div>
+          <img src="${esc(valueImage)}" alt="Смысловой кадр к короткому разбору" loading="lazy" decoding="async">
+        </div>
+        <div class="atm-v1-compact-cards">${cards}</div>
+      </div>
+    </section>
+
+    <section id="atmospace-registration" class="atm-v1-registration" data-atmospace-registration-section aria-labelledby="atm-v1-registration-title">
+      <div class="atm-v1-shell atm-v1-registration-panel atm-v1-registration-grid">
+        <div>
+          <p class="atm-v1-kicker">Следующий шаг</p>
+          <h2 id="atm-v1-registration-title">${esc(registrationTitle)}</h2>
+          <p>${esc(registrationText)}</p>
+          ${renderAtmospaceRegistrationButton('atm-v1-register-button', 'Открыть форму регистрации')}
+          <p class="atm-v1-secure">Ссылка приходит напрямую с сервера. Лендинг не собирает пароль и не изменяет адрес регистрации.</p>
+          <p data-atmospace-runtime-message hidden></p>
+        </div>
+        <img src="${esc(ctaImage)}" alt="Следующий шаг после мини-теста" loading="lazy" decoding="async">
+      </div>
+    </section>
+  </div>`;
+}
+
 function renderCoreMethodInlinePrelanding({ templateId, content, projectData, landingMeta, sceneImage, valueImage, ctaImage }) {
   const safeTemplateId = [1, 2, 3].includes(Number(templateId)) ? Number(templateId) : 1;
   const titleText = stripHtml(content?.titleHtml || content?.title || 'Как реализовать себя, когда тебе 30+ и куча провалов');
@@ -4723,6 +4819,11 @@ function renderCoreMethodInlinePrelanding({ templateId, content, projectData, la
   const heroImage = bothelpImageSrc(sceneImage || PRELANDING_FALLBACK_IMAGES[0]);
   const offerImage = bothelpImageSrc(valueImage || PRELANDING_FALLBACK_IMAGES[1]);
   const finalImage = bothelpImageSrc(ctaImage || PRELANDING_FALLBACK_IMAGES[2]);
+  const heroLead = stripHtml(content?.trustTitle || content?.trustSmall || content?.ctaLead || 'Короткий мини-тест поможет увидеть повторяющийся сценарий и перейти к одному понятному следующему шагу.');
+  const heroPoints = (Array.isArray(content?.pills) && content.pills.length
+    ? content.pills
+    : ['4 честных вопроса', 'Ответы не сохраняются', 'Защищённая регистрация'])
+    .slice(0, 3);
 
   return `${buildAtmospaceHeadConfig({ projectData, ...(landingMeta || {}) })}
 <style>
@@ -4738,9 +4839,9 @@ function renderCoreMethodInlinePrelanding({ templateId, content, projectData, la
 .atm-v1-kicker{margin:0 0 18px;color:var(--atm-accent);font-size:13px;line-height:1.2;font-weight:900;text-transform:uppercase}
 .atm-v1-hero h1{max-width:760px;margin:0 0 24px;font-size:clamp(48px,7vw,94px);line-height:.96;font-weight:900;letter-spacing:0;text-wrap:balance}
 .atm-v1-lead{max-width:690px;margin:0 0 22px;color:#263449;font-size:clamp(18px,2vw,25px);line-height:1.48;font-weight:700}
-.atm-v1-points{display:grid;gap:7px;margin:0 0 24px;padding:0;list-style:none;color:#263449;font-size:18px;line-height:1.45;font-weight:800}
-.atm-v1-points li:before{content:'•';margin-right:10px;color:var(--atm-accent)}
-.atm-v1-question-lead{max-width:670px;margin:30px 0 0;padding:22px 0;border-top:1px solid var(--atm-line);color:var(--atm-ink);font-size:21px;line-height:1.45;font-weight:900}
+.atm-v1-hero-chips{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 24px;padding:0;list-style:none}
+.atm-v1-hero-chips li{display:inline-flex;align-items:center;min-height:40px;padding:9px 13px;border:1px solid var(--atm-line);border-radius:999px;background:rgba(255,255,255,.84);color:#263449;font-size:13px;line-height:1.3;font-weight:900}
+.atm-v1-question-lead{max-width:670px;margin:26px 0 0;padding:20px 0 0;border-top:1px solid var(--atm-line);color:var(--atm-ink);font-size:20px;line-height:1.45;font-weight:900}
 .atm-v1-primary{display:inline-flex;align-items:center;justify-content:center;min-height:64px;margin-top:26px;padding:17px 28px;border:0;border-radius:8px;background:linear-gradient(135deg,var(--atm-accent),var(--atm-accent2));box-shadow:0 18px 42px color-mix(in srgb,var(--atm-accent) 24%,transparent);color:#fff!important;text-decoration:none!important;font-size:17px;line-height:1.2;font-weight:900;cursor:pointer}
 .atm-v1-primary-wide{width:100%;margin-top:30px}
 .atm-v1-quiz-band{padding:clamp(64px,9vw,120px) 0;background:var(--atm-deep);color:#f8fafc}
@@ -4788,6 +4889,19 @@ function renderCoreMethodInlinePrelanding({ templateId, content, projectData, la
 .atm-v1-registration-panel{max-width:880px;margin:0 auto;text-align:center}
 .atm-v1-registration h2{margin:0 0 18px;font-size:clamp(40px,6vw,72px);line-height:1.02;font-weight:900;letter-spacing:0}
 .atm-v1-registration p{max-width:700px;margin:0 auto;color:#c8d3e2;font-size:18px;line-height:1.6}
+.atm-v1-compact{padding:clamp(68px,9vw,118px) 0;background:#fff}
+.atm-v1-compact-head{display:grid;grid-template-columns:minmax(0,.9fr) minmax(300px,.65fr);gap:clamp(30px,6vw,78px);align-items:center}
+.atm-v1-compact-head h2{margin:0;font-size:clamp(38px,5.6vw,68px);line-height:1.03;font-weight:900;letter-spacing:0;text-wrap:balance}
+.atm-v1-compact-head img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px}
+.atm-v1-compact-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:38px}
+.atm-v1-compact-card{min-height:190px;padding:24px;border:1px solid var(--atm-line);border-radius:8px;background:#f4f7fb}
+.atm-v1-compact-card span{display:block;margin-bottom:18px;color:var(--atm-accent);font-size:26px;font-weight:900}
+.atm-v1-compact-card h3{margin:0 0 10px;font-size:21px;line-height:1.25}
+.atm-v1-compact-card p{margin:0;color:var(--atm-muted);font-size:15px;line-height:1.55}
+.atm-v1-registration-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,.55fr);gap:clamp(30px,6vw,72px);align-items:center;text-align:left}
+.atm-v1-registration-grid img{display:block;width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:8px}
+.atm-v1-registration-grid .atm-v1-register-button{margin-left:0}
+.atm-v1-registration-grid .atm-v1-secure{margin-left:0!important}
 .atm-v1-register-button{display:flex;align-items:center;justify-content:center;width:min(520px,100%);min-height:68px;margin:30px auto 0;padding:18px 24px;border-radius:8px;background:linear-gradient(135deg,var(--atm-accent),var(--atm-accent2));color:#fff!important;text-decoration:none!important;font-size:18px;font-weight:900}
 .atm-v1-register-button[aria-disabled=true]{pointer-events:none;opacity:.58}
 .atm-v1-secure{margin-top:14px!important;color:#94a3b8!important;font-size:13px!important}
@@ -4795,7 +4909,7 @@ function renderCoreMethodInlinePrelanding({ templateId, content, projectData, la
 .atm-v1-footer-inner{display:flex;align-items:center;justify-content:space-between;gap:18px;font-size:12px;line-height:1.5}
 .atm-v1-footer-links{display:flex;flex-wrap:wrap;gap:18px}
 .atm-v1-footer a{color:#c8d3e2;text-decoration:underline;text-underline-offset:3px}
-@media(max-width:800px){.atm-v1-shell{width:min(100% - 28px,1180px)}.atm-v1-hero{min-height:auto;padding:360px 0 46px;background:linear-gradient(180deg,rgba(248,251,255,.05) 0%,rgba(248,251,255,.88) 42%,#f8fbff 58%),url('${esc(heroImage)}') 64% top/auto 430px no-repeat,#f8fbff}.atm-v1-hero h1{font-size:clamp(40px,12vw,58px)}.atm-v1-lead{font-size:17px}.atm-v1-copy-grid,.atm-v1-final-grid{grid-template-columns:1fr}.atm-v1-sticky-title{position:static}.atm-v1-options,.atm-v1-roadmap-grid{grid-template-columns:1fr}.atm-v1-roadmap article{min-height:auto}.atm-v1-final-grid img{aspect-ratio:16/10}.atm-v1-footer-inner{align-items:flex-start;flex-direction:column}.atm-v1-question h3{font-size:27px}}
+@media(max-width:800px){.atm-v1-shell{width:min(100% - 28px,1180px)}.atm-v1-hero{min-height:auto;padding:360px 0 46px;background:linear-gradient(180deg,rgba(248,251,255,.05) 0%,rgba(248,251,255,.88) 42%,#f8fbff 58%),url('${esc(heroImage)}') 64% top/auto 430px no-repeat,#f8fbff}.atm-v1-hero h1{font-size:clamp(40px,12vw,58px)}.atm-v1-lead{font-size:17px}.atm-v1-copy-grid,.atm-v1-final-grid,.atm-v1-compact-head,.atm-v1-registration-grid{grid-template-columns:1fr}.atm-v1-sticky-title{position:static}.atm-v1-options,.atm-v1-roadmap-grid,.atm-v1-compact-cards{grid-template-columns:1fr}.atm-v1-roadmap article,.atm-v1-compact-card{min-height:auto}.atm-v1-final-grid img,.atm-v1-compact-head img,.atm-v1-registration-grid img{aspect-ratio:16/10}.atm-v1-footer-inner{align-items:flex-start;flex-direction:column}.atm-v1-question h3{font-size:27px}}
 @media(max-width:420px){.atm-v1-shell{width:calc(100% - 22px)}.atm-v1-hero{padding-top:320px;background-size:auto 380px}.atm-v1-hero h1{font-size:39px}.atm-v1-primary{width:100%;padding-inline:16px}.atm-v1-options button{min-height:66px;padding:15px}.atm-v1-editorial,.atm-v1-roadmap,.atm-v1-final-story,.atm-v1-registration{padding:58px 0}}
 </style>
 <div id="fh-preland-root" class="${designClass}">
@@ -4803,41 +4917,27 @@ function renderCoreMethodInlinePrelanding({ templateId, content, projectData, la
     <section class="atm-v1-hero" aria-labelledby="atm-v1-title">
       <div class="atm-v1-shell">
         <div class="atm-v1-hero-copy">
-          <p class="atm-v1-kicker">Честный разговор с собой</p>
+          <p class="atm-v1-kicker">Короткий мини-тест</p>
           <h1 id="atm-v1-title">${esc(titleText)}</h1>
-          <p class="atm-v1-lead">Ты уже не первый год пытаешься перейти на новый уровень:</p>
-          <ul class="atm-v1-points"><li>увеличить доход</li><li>найти своё дело</li><li>изменить привычки</li><li>жить так, как хочешь именно ты</li></ul>
-          <p class="atm-v1-lead">Но что бы ты ни делал - результата <strong>НЕТ</strong>. Новая попытка как удар по вере в себя.</p>
-          <div class="atm-v1-question-lead">Сколько ты ещё так сможешь, пока окончательно не выгоришь?<br><br>Почему у других получается, а у тебя нет?<br>Готов увидеть <strong>НАСТОЯЩУЮ</strong> причину твоих проблем?</div>
+          <p class="atm-v1-lead">${esc(heroLead)}</p>
+          <ul class="atm-v1-hero-chips">${heroPoints.map((item) => `<li>${esc(item)}</li>`).join('')}</ul>
+          <div class="atm-v1-question-lead">Ответь честно на четыре вопроса. Результат увидишь сразу, ответы не сохраняются.</div>
           ${renderAtmospaceQuizButton('atm-v1-primary')}
         </div>
       </div>
     </section>
 
     ${renderCoreMethodMiniQuiz()}
-    ${renderCoreMethodFixedOffer({ valueImage: offerImage, ctaImage: finalImage })}
-
-    <div data-atmospace-registration-section hidden>
-      <section id="atmospace-registration" class="atm-v1-registration" aria-labelledby="atm-v1-registration-title">
-        <div class="atm-v1-shell atm-v1-registration-panel">
-          <p class="atm-v1-kicker">Форма регистрации</p>
-          <h2 id="atm-v1-registration-title">Продолжи на защищённой странице Атмосферы</h2>
-          <p>Сервер подготовит персональную регистрацию и сохранит рекламную атрибуцию. Пароль, CAPTCHA и создание аккаунта выполняются только на защищённом домене Atmospace.</p>
-          ${renderAtmospaceRegistrationButton('atm-v1-register-button', 'Открыть форму регистрации')}
-          <p class="atm-v1-secure">Ссылка приходит напрямую с сервера. Лендинг не собирает и не хранит пароль.</p>
-          <p data-atmospace-runtime-message hidden></p>
-        </div>
-      </section>
-      <footer class="atm-v1-footer">
-        <div class="atm-v1-shell atm-v1-footer-inner">
-          <span>Материал носит информационный характер. Результат зависит от действий участника.</span>
-          <nav class="atm-v1-footer-links" aria-label="Юридическая информация">
-            <a href="https://modernisto.ru/politics" target="_blank" rel="noopener noreferrer">Политика конфиденциальности</a>
-            <a href="https://modernisto.ru/approval" target="_blank" rel="noopener noreferrer">Согласие на обработку данных</a>
-          </nav>
-        </div>
-      </footer>
-    </div>
+    ${renderCoreMethodCompactOffer({ content, valueImage: offerImage, ctaImage: finalImage })}
+    <footer class="atm-v1-footer">
+      <div class="atm-v1-shell atm-v1-footer-inner">
+        <span>Материал носит информационный характер. Результат зависит от действий участника.</span>
+        <nav class="atm-v1-footer-links" aria-label="Юридическая информация">
+          <a href="https://modernisto.ru/politics" target="_blank" rel="noopener noreferrer">Политика конфиденциальности</a>
+          <a href="https://modernisto.ru/approval" target="_blank" rel="noopener noreferrer">Согласие на обработку данных</a>
+        </nav>
+      </div>
+    </footer>
   </main>
 </div>
 ${buildAtmospacePrelandingTrackingScript()}`;
@@ -4953,7 +5053,7 @@ function renderStaticLandingV1({
   const promiseItems = normalizeStaticLandingItems(content.valueItems, [
     'почему старый подход мог не сработать',
     'какой новый маршрут можно рассмотреть без долгой подготовки',
-    'какой первый шаг откроется после перехода в мессенджер'
+    'какой первый шаг подходит после четырёх ответов'
   ]).slice(0, 3);
   const audienceItems = normalizeStaticLandingItems(content.pills, [
     'Для тех, кто узнаёт проблему в заголовке',
@@ -4980,9 +5080,9 @@ function renderStaticLandingV1({
   const benefitHtml = benefits.map(item => `<article><span>✓</span><p>${esc(item)}</p></article>`).join('');
   const stepsHtml = storyCards.map((item, index) => `<article><b>${index + 1}</b><h3>${esc(item.title || `Шаг ${index + 1}`)}</h3><p>${esc(item.text || promiseItems[index] || 'Понятный шаг без лишней теории.')}</p></article>`).join('');
   const factsHtml = [
-    'Главная ранняя метрика: человек понял смысл и перешёл в выбранный мессенджер.',
-    'Все CTA собраны через единый компонент и могут быть заменены централизованно.',
-    'Сейчас CTA работает как безопасная заглушка, позже подключим рабочую схему централизованно.'
+    'Главная ранняя метрика: человек понял смысл и начал мини-тест.',
+    'Все CTA ведут в единый сценарий из четырёх вопросов.',
+    'После результата открывается серверная защищённая регистрация Atmospace.'
   ].map(item => `<li>${esc(item)}</li>`).join('');
   const faqHtml = [
     ['Это готовая продажа продукта?', 'Нет. Предлендинг делает короткий прогрев: показывает смысл, выгоды и переводит человека к следующему шагу.'],
@@ -5325,17 +5425,6 @@ function renderInteractiveQuizPrelanding({
         'Системы без перегруза',
         'Поддержки и обратной связи'
       ]
-    },
-    {
-      eyebrow: 'ТВОЙ ТЕМП',
-      title: 'В каком ритме тебе было бы реально двигаться?',
-      hint: 'Не максимум возможностей, а темп, который выдержит обычная неделя.',
-      options: [
-        'Один небольшой шаг каждый день',
-        'Два–три точных действия в неделю',
-        'Интенсивный старт с контролем',
-        'Пока не знаю — хочу определить'
-      ]
     }
   ];
   const barrierProfileQuestions = [
@@ -5381,17 +5470,6 @@ function renderInteractiveQuizPrelanding({
         { label: 'Безопасное маленькое первое действие', value: 'freeze' },
         { label: 'Жёсткое ограничение числа задач', value: 'overload' },
         { label: 'Одно ясное направление без метаний', value: 'drift' }
-      ]
-    },
-    {
-      eyebrow: 'РЕАЛИСТИЧНЫЙ ТЕМП',
-      title: 'Какой ритм выдержит ваша обычная неделя?',
-      hint: 'Не максимум возможностей. Выберите темп, который реально повторить несколько недель подряд.',
-      options: [
-        { label: '10 минут в день', value: 'pace' },
-        { label: 'Два–три действия в неделю', value: 'pace' },
-        { label: 'Один защищённый блок времени', value: 'pace' },
-        { label: 'Сначала хочу определить реалистичный темп', value: 'pace' }
       ]
     }
   ];
@@ -5483,7 +5561,7 @@ function renderInteractiveQuizPrelanding({
   #fh-preland-root.${rootModeClass} .fhq-result h2{font-size:34px}
 }
 </style>
-<div id="fh-preland-root" class="fhq-root ${rootModeClass} ${esc(prelandingClassToken(style || designRoute?.id || 'default'))}">
+<div id="fh-preland-root" class="fhq-root ${rootModeClass} ${esc(prelandingClassToken(style || designRoute?.id || 'default'))}" data-atmospace-embedded-quiz="true" data-atmospace-question-count="4">
   <main class="fhq-shell">
     <section class="fhq-hero" data-quiz-hero>
       <div class="fhq-copy">
@@ -5512,7 +5590,7 @@ function renderInteractiveQuizPrelanding({
           <div class="fhq-kicker">Результат готов</div>
           <h2 data-quiz-result-title>${esc(resultTitle)}</h2>
           <p class="fhq-result-copy" data-quiz-result-copy>${esc(resultText)}</p>
-          <div class="fhq-registration">
+          <div class="fhq-registration" data-atmospace-registration-section>
             <a href="#" data-atmospace-registration-link data-atmospace-state="loading" aria-disabled="true" class="fhq-cta">Перейти к форме регистрации</a>
           </div>
           <button class="fhq-restart" type="button" data-quiz-restart>Пройти заново</button>
@@ -5618,9 +5696,9 @@ function renderInteractiveQuizPrelanding({
     resultCopy.textContent=defaultResultText;
     if(isBarrier){
       var profile=getBarrierProfile();
-      var pace=answers[4]&&answers[4].label?answers[4].label:'один небольшой шаг, который можно повторить';
+      var pace=answers[3]&&answers[3].label?answers[3].label:'один небольшой шаг, который можно повторить';
       resultTitle.textContent=profile.title;
-      resultCopy.textContent=profile.text+pace+'. Открой короткий разбор и забери следующий шаг без нового рывка.';
+      resultCopy.textContent=profile.text+pace+'. Продолжи на защищённой странице регистрации Atmospace.';
     }else if(isPersonal){
       var support=answers[3]&&answers[3].label?answers[3].label:'';
       var title='Твоя точка старта — устойчивый ритм без перегруза';
@@ -5862,10 +5940,8 @@ function renderPrelandingHtml({ tpl, style, palette, photo, overrides, projectDa
     actionTitle: content.actionTitle || landingLogic.actionTitle,
     actionSubtitle: content.actionSubtitle || landingLogic.ctaLead,
     adAngleTitle: content.methodName || overrides?.adAngleTitle || content.actionTitle || landingLogic.actionTitle,
-    telegramLabel: 'Начать разбор в Telegram',
-    maxLabel: 'Начать разбор в MAX',
-    telegramHref: '#',
-    maxHref: '#'
+    quizLabel: 'Пройти мини-тест',
+    registrationLabel: 'Продолжить регистрацию'
   };
   if (isCoreMethod) {
     return renderCoreMethodInlinePrelanding({
@@ -6031,6 +6107,8 @@ function validateAtmospaceTildaHtml(html = '', config = {}) {
     '/api/landing-runtime/click',
     'data-atmospace-quiz-link',
     'data-atmospace-registration-link',
+    'data-atmospace-embedded-quiz="true"',
+    'data-atmospace-question-count="4"',
     'data-atmospace-state',
     'data-atmospace-runtime-retry',
     'aria-disabled="true"',
@@ -6096,6 +6174,12 @@ function validateAtmospaceTildaHtml(html = '', config = {}) {
   }
   if (source.includes('https://web.telegram.org/k/#')) {
     errors.push('В HTML найдена запрещённая прямая ссылка Telegram Web.');
+  }
+  if (/(?:Telegram|BotHelp|мессенджер|Перейти в MAX|Начать в MAX)/i.test(source)) {
+    errors.push('В боевом квиз-лендинге найден устаревший переход в Telegram/MAX или мессенджер.');
+  }
+  if (/data-atmospace-question-count=["'](?!4["'])\d+["']/i.test(source)) {
+    errors.push('Во всех боевых форматах квиз должен содержать ровно четыре вопроса.');
   }
 
   requiredConfig.forEach(([key, label]) => {
@@ -7649,9 +7733,9 @@ export default function Constructor() {
                     : manualPrelandingMode === 'directionQuiz'
                       ? 'Интерактивный квиз из 4 вопросов. По заголовку и тексту собирается диагностика направления, итог и одна смысловая AI-сцена.'
                       : manualPrelandingMode === 'personalRouteQuiz'
-                        ? 'Личный маршрут из 5 вопросов. Ответы формируют персональный итог, а одна AI-сцена поддерживает смысл первого экрана.'
+                        ? 'Личный маршрут из 4 вопросов. Ответы формируют персональный итог, а одна AI-сцена поддерживает смысл первого экрана.'
                         : manualPrelandingMode === 'barrierProfileQuiz'
-                          ? 'Пять вопросов выявляют повторяющийся сценарий срыва, показывают профиль барьера и дают один реалистичный первый шаг. Одна AI-сцена поддерживает смысл первого экрана.'
+                          ? 'Четыре вопроса выявляют повторяющийся сценарий срыва, показывают профиль барьера и дают один реалистичный первый шаг. Одна AI-сцена поддерживает смысл первого экрана.'
                           : 'Для этого режима оставлены только 3 рабочих варианта. Каждый сразу выставляет стиль, палитру, типографику, структуру и промпт для живых AI-фото.'}
               </p>
               <div className="grid md:grid-cols-3 gap-2">
@@ -7783,3 +7867,4 @@ export default function Constructor() {
     </div>
   );
 }
+

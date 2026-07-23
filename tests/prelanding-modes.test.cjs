@@ -26,6 +26,14 @@ assert(ordinaryRendererStart !== -1, 'First ordinary prelanding renderer must ex
 assert(ordinaryRendererEnd !== -1, 'Interactive quiz renderer must follow the ordinary renderers.');
 const ordinaryRenderers = source.slice(ordinaryRendererStart, ordinaryRendererEnd);
 
+function sliceBetween(startSnippet, endSnippet) {
+  const start = source.indexOf(startSnippet);
+  const end = source.indexOf(endSnippet, start + startSnippet.length);
+  assert(start !== -1, `Source must include ${startSnippet}`);
+  assert(end !== -1, `Source must include ${endSnippet} after ${startSnippet}`);
+  return source.slice(start, end);
+}
+
 [
   "id: 'templateStage'",
   "title: 'Формат 1 / Мини-тест + разбор'",
@@ -54,6 +62,9 @@ const ordinaryRenderers = source.slice(ordinaryRendererStart, ordinaryRendererEn
   '/api/landing-runtime/click',
   'data-atmospace-quiz-link',
   'data-atmospace-registration-link',
+  'data-atmospace-embedded-quiz="true"',
+  'data-atmospace-question-count="4"',
+  'data-atmospace-registration-section',
   'links.registration',
   'https://mc.yandex.ru/metrika/tag.js',
   'landing_view',
@@ -68,6 +79,24 @@ const ordinaryRenderers = source.slice(ordinaryRendererStart, ordinaryRendererEn
 ].forEach((snippet) => {
   assert(source.includes(snippet), `Source must include ${snippet}`);
 });
+
+assert(
+  (source.match(/renderAtmospaceSharedInlineQuiz\(\{/g) || []).length >= 3,
+  'Formats 2-4 must embed the shared four-question quiz.'
+);
+assert(source.includes('renderCoreMethodCompactOffer({'), 'Format 1 must use the compact post-quiz offer.');
+assert(!source.includes("telegramLabel: 'Начать разбор в Telegram'"), 'Generated config must not retain Telegram CTA labels.');
+assert(!source.includes("maxLabel: 'Начать разбор в MAX'"), 'Generated config must not retain MAX CTA labels.');
+assert(!source.includes('Пять вопросов выявляют'), 'Visible constructor copy must describe four questions.');
+
+const sharedQuizData = sliceBetween('const ATMOSPACE_MINI_QUIZ = Object.freeze([', ']);');
+assert((sharedQuizData.match(/title:/g) || []).length === 4, 'Shared quiz must contain exactly four questions.');
+
+const personalQuestions = sliceBetween('const personalRouteQuestions = [', 'const barrierProfileQuestions = [');
+assert((personalQuestions.match(/eyebrow:/g) || []).length === 4, 'Personal-route compatibility quiz must contain exactly four questions.');
+
+const barrierQuestions = sliceBetween('const barrierProfileQuestions = [', 'const questions = isBarrierProfile');
+assert((barrierQuestions.match(/eyebrow:/g) || []).length === 4, 'Barrier-profile quiz must contain exactly four questions.');
 
 assert(source.includes('один из шести форматов'), 'Constructor copy must describe all six available formats.');
 assert(source.includes('Доступны шесть форматов предлендинга'), 'Mode selector must describe all six available formats.');
@@ -191,7 +220,7 @@ assert(!bannerStudio.includes('lockTemplateCopy: true'), 'Banner to prelanding h
   'var barrierProfiles={',
   'data-quiz-result-copy',
   'Профиль барьера',
-  'Открой короткий разбор и забери следующий шаг без нового рывка.'
+  'Продолжи на защищённой странице регистрации Atmospace.'
 ].forEach((snippet) => {
   assert(quizRenderer.includes(snippet), `Barrier-profile quiz must include ${snippet}`);
 });
@@ -304,3 +333,4 @@ const built = fs.readFileSync(path.join(distAssetsDir, bundle), 'utf8');
 });
 
 console.log('Atmospace prelanding six-format test passed');
+

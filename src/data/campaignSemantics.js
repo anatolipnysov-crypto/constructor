@@ -35,7 +35,7 @@ const CAMPAIGN_SEMANTIC_PROFILES = [
       'какой первый шаг поможет перестать каждый месяц начинать с нуля'
     ],
     actionTitle: 'Разберитесь, куда уходит зарплата',
-    actionSubtitle: 'Выберите мессенджер и откройте разбор своей ситуации. Страница останется доступной.',
+    actionSubtitle: 'Ответьте на четыре вопроса, получите результат и откройте защищённую регистрацию.',
     bannerStyleHints: ['editorialGold', 'whiteGoldPremium', 'blueTrust', 'redWhite'],
     bannerSceneThemes: ['cozyHome', 'cityLifestyle', 'office'],
     bannerPersonas: ['woman', 'man', 'mixed'],
@@ -146,7 +146,7 @@ const CAMPAIGN_SEMANTIC_PROFILES = [
       'с чего начать, чтобы усилия наконец начали менять финансовую картину'
     ],
     actionTitle: 'Проверьте, почему усилия не меняют итог',
-    actionSubtitle: 'Откройте короткий разбор в Telegram или MAX и найдите точку, с которой стоит начать.',
+    actionSubtitle: 'Пройдите мини-тест и найдите точку, с которой стоит начать.',
     bannerStyleHints: ['newspaperShock', 'blueTrust', 'cleanSystem', 'darkOrange'],
     bannerSceneThemes: ['cityLifestyle', 'office', 'cozyHome'],
     bannerPersonas: ['man', 'woman', 'mixed'],
@@ -201,7 +201,7 @@ const CAMPAIGN_SEMANTIC_PROFILES = [
       'какой первый шаг создаёт запас без жёстких запретов для всей семьи'
     ],
     actionTitle: 'Разберите ситуацию без чувства вины',
-    actionSubtitle: 'Выберите удобный мессенджер и посмотрите, с какого шага можно начать.',
+    actionSubtitle: 'Ответьте на четыре вопроса и посмотрите, с какого шага можно начать.',
     bannerStyleHints: ['editorialGold', 'whiteGoldPremium', 'greenSystem', 'messengerNative'],
     bannerSceneThemes: ['cozyHome', 'cityLifestyle', 'hobby'],
     bannerPersonas: ['woman', 'man', 'mixed'],
@@ -256,7 +256,7 @@ const CAMPAIGN_SEMANTIC_PROFILES = [
       'какой первый шаг уменьшает зависимость месяца от одной поломки'
     ],
     actionTitle: 'Проверьте, почему бюджет не держит удар',
-    actionSubtitle: 'Откройте короткий разбор в удобном мессенджере и найдите первую точку для запаса.',
+    actionSubtitle: 'Пройдите короткий мини-тест и найдите первую точку для запаса.',
     bannerStyleHints: ['redWhite', 'newspaperShock', 'darkOrange', 'blueTrust'],
     bannerSceneThemes: ['cozyHome', 'office', 'cityLifestyle'],
     bannerPersonas: ['man', 'woman', 'mixed'],
@@ -328,7 +328,7 @@ const CAMPAIGN_SEMANTIC_PROFILES = [
       'как перейти от общего желания «больше» к конкретному первому действию'
     ],
     actionTitle: 'Найдите точку следующего роста',
-    actionSubtitle: 'Выберите Telegram или MAX и откройте короткий разбор без закрытия страницы.',
+    actionSubtitle: 'Получите результат мини-теста и откройте защищённую регистрацию.',
     bannerStyleHints: ['whiteGoldPremium', 'blueTrust', 'cleanSystem', 'outdoorFreedom'],
     bannerSceneThemes: ['cityLifestyle', 'office', 'nature'],
     bannerPersonas: ['woman', 'man', 'mixed'],
@@ -383,7 +383,7 @@ const FALLBACK_PROFILE = {
     'с какого небольшого действия логично начать сейчас'
   ],
   actionTitle: 'Откройте короткий разбор',
-  actionSubtitle: 'Выберите удобный мессенджер и перейдите к первому понятному шагу.',
+  actionSubtitle: 'Ответьте на четыре вопроса и перейдите к первому понятному шагу.',
   bannerStyleHints: ['editorialGold', 'blueTrust', 'greenSystem', 'whiteGoldPremium'],
   bannerSceneThemes: ['cityLifestyle', 'cozyHome', 'office', 'nature'],
   bannerPersonas: ['woman', 'man', 'mixed'],
@@ -444,7 +444,7 @@ function buildGroundedFallbackProfile(title = '', text = '') {
       'какой небольшой следующий шаг можно проверить первым'
     ],
     actionTitle: 'Откройте разбор своей ситуации',
-    actionSubtitle: 'Выберите удобный мессенджер и перейдите к разбору по указанному заголовку и тексту.',
+    actionSubtitle: 'Пройдите четыре вопроса и откройте результат по указанному заголовку и тексту.',
     bannerSubjectModes: ['noPerson', 'generatedPerson', 'metaphor', 'generatedPerson', 'noPerson', 'metaphor'],
     bannerNoPersonDirections: [
       `premium realistic object-led editorial scene with no people, based only on this exact brief: "${brief}". Show one concrete cause and its visible consequence. ${visualGuard}`,
@@ -520,7 +520,7 @@ export function buildCampaignLandingLogic({ title = '', text = '', mode = 'templ
     painItems: [...profile.painItems],
     valueItems: [...profile.valueItems],
     proofItems: [],
-    botTransition: 'Разбор откроется в выбранном мессенджере, а лендинг останется доступным.',
+    botTransition: 'После четырёх ответов откроется результат и защищённая регистрация Atmospace.',
     ctaLead: profile.actionSubtitle
   };
 }
@@ -561,3 +561,4 @@ export function pickCampaignVisualDirection(profile, seed = '', index = 0) {
 }
 
 export { CAMPAIGN_SEMANTIC_PROFILES };
+
