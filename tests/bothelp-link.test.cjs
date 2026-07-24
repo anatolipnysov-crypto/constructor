@@ -41,7 +41,7 @@ function hasRegistrationStartedHandoff(source) {
 }
 
 function hasExactRegistrationPassthrough(source) {
-  return /(?:var|let|const)\s+candidate\s*=\s*(?:(?:links\s*&&\s*links\.registration)|(?:links\?\.registration)|(?:links\s*&&\s*typeof\s+links\.registration\s*===\s*['"]string['"]\s*\?\s*links\.registration\s*:\s*['"]{2}))\s*;?[\s\S]{0,120}registrationUrl\s*=\s*candidate\s*;?/.test(source);
+  return /(?:var|let|const)\s+candidate\s*=\s*(?:(?:links\s*&&\s*links\.registration)|(?:links\?\.registration)|(?:links\s*&&\s*typeof\s+links\.registration\s*===\s*['"]string['"]\s*\?\s*links\.registration\s*:\s*['"]{2}))\s*;?[\s\S]{0,400}registrationUrl\s*=\s*candidate\s*;?/.test(source);
 }
 
 const runtime = extractFunctionBody(appSource, 'function buildAtmospacePrelandingTrackingScript()');

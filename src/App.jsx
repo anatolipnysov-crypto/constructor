@@ -1,9 +1,7 @@
 ﻿import { useState, useMemo, useEffect } from 'react';
-import { Copy, Check, Wand2, BookOpen, AlertCircle, ChevronDown, RotateCcw, Eye, Sun, Moon, Sparkles, Lightbulb, ShieldCheck, ListChecks } from 'lucide-react';
+import { Copy, Check, Wand2, AlertCircle, ChevronDown, RotateCcw, Eye, Sun, Moon, Sparkles, Lightbulb, ShieldCheck } from 'lucide-react';
 import AIBannerStudio from './components/AIBannerStudio';
 import { buildCampaignLandingLogic, resolveCampaignSemanticProfile } from './data/campaignSemantics';
-import LongQuizEditor from './features/atmospace/LongQuizEditor.jsx';
-import QuizPublishPanel from './features/atmospace/QuizPublishPanel.jsx';
 import { getAtmospaceGenerateErrorMessage, validateAtmospaceLandingInput } from './utils/atmospaceLandingInput';
 
 /* ================== УТИЛИТЫ ================== */
@@ -98,24 +96,22 @@ const TILDA_PRELAND_BUILD_VERSION = '20260601-modernisto-control-v2';
 const CONSTRUCTOR_ACCESS_MODE = 'owner_only';
 const OWNER_LOGIN = 'admin';
 const OWNER_PASSWORD = 'admin';
-const QUIZ_TOOL_QUERY_VALUE = 'atmosphere-quiz';
+const CONSTRUCTOR_TOOL_VALUES = new Set(['creative', 'pre']);
 
 function readConstructorTabFromLocation() {
-  if (typeof window === 'undefined') return 'pre';
+  if (typeof window === 'undefined') return 'creative';
   try {
-    return new URL(window.location.href).searchParams.get('tool') === QUIZ_TOOL_QUERY_VALUE
-      ? 'quiz'
-      : 'pre';
+    const requestedTool = new URL(window.location.href).searchParams.get('tool');
+    return CONSTRUCTOR_TOOL_VALUES.has(requestedTool) ? requestedTool : 'creative';
   } catch {
-    return 'pre';
+    return 'creative';
   }
 }
 
 function writeConstructorTabToLocation(tab) {
   if (typeof window === 'undefined') return;
   const url = new URL(window.location.href);
-  if (tab === 'quiz') url.searchParams.set('tool', QUIZ_TOOL_QUERY_VALUE);
-  else url.searchParams.delete('tool');
+  url.searchParams.set('tool', CONSTRUCTOR_TOOL_VALUES.has(tab) ? tab : 'creative');
   window.history.pushState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
 }
 
@@ -1980,9 +1976,9 @@ function prelandingModeTitle(mode = '') {
   if (mode === 'heroBlocks') return 'Формат 2 / Hero-картинка + блоки';
   if (mode === 'natureEditorial') return 'Формат 3 / Nature editorial';
   if (mode === 'minimalCompare') return 'Формат 4 / Тихое сравнение';
-  if (mode === 'directionQuiz') return 'Формат 5 / Квиз-направление';
+  if (mode === 'directionQuiz') return 'Формат 5 / Маршрут действия';
   if (mode === 'barrierProfileQuiz') return 'Формат 6 / Профиль барьера';
-  if (mode === 'personalRouteQuiz') return 'Сохранённый формат / Личный маршрут';
+  if (mode === 'personalRouteQuiz') return 'Сохранённый формат / Личный маршрут без квиза';
   return 'Формат 1 / Мини-тест + разбор';
 }
 
@@ -2350,7 +2346,7 @@ const CORE_METHOD_DESIGN_ROUTES = [
 
 const DIRECTION_QUIZ_DESIGN_ROUTES = [
   { id: 'direction-quiz-navy', label: 'Ночной синий маршрут', style: 'direction-quiz-navy', palette: 'deep-blue-ad', layout: 'quiz', typo: 'manrope', effects: ['fadein', 'micro'], imageStylePreset: 'blueTrust', visualMood: 'deep navy editorial quiz, restrained blue signal, premium honest diagnostic' },
-  { id: 'direction-quiz-gold', label: 'Тёмное золото', style: 'direction-quiz-gold', palette: 'black-yellow-ad', layout: 'quiz', typo: 'manrope', effects: ['fadein'], imageStylePreset: 'whiteGoldPremium', visualMood: 'dark premium quiz with warm gold signal, honest route and calm confidence' },
+  { id: 'direction-quiz-gold', label: 'Тёмное золото', style: 'direction-quiz-gold', palette: 'black-yellow-ad', layout: 'quiz', typo: 'manrope', effects: ['fadein'], imageStylePreset: 'whiteGoldPremium', visualMood: 'dark premium route with warm gold signal, honest direction and calm confidence' },
   { id: 'direction-quiz-forest', label: 'Лесная ясность', style: 'direction-quiz-forest', palette: 'green-money', layout: 'quiz', typo: 'manrope', effects: ['fadein', 'micro'], imageStylePreset: 'greenSystem', visualMood: 'deep green editorial quiz, natural clarity and a realistic first step' }
 ];
 
@@ -2573,23 +2569,23 @@ function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline,
   const imageStylePreset = designRoute?.imageStylePreset || prelandingImageStylePreset(style, palette);
   const variantSeed = `${mode}|${templateId}|${style}|${palette}|${title}|${subtitle}|${Date.now()}|${Math.random().toString(36).slice(2, 8)}`;
   if (mode === 'directionQuiz' || mode === 'personalRouteQuiz' || mode === 'barrierProfileQuiz') {
-    const quizLabel = mode === 'directionQuiz'
-      ? 'four-question direction diagnostic'
+    const routeLabel = mode === 'directionQuiz'
+      ? 'static direction and first-step landing'
       : mode === 'personalRouteQuiz'
-        ? 'five-question personal route diagnostic'
-        : 'five-question barrier profile diagnostic about a repeating failure pattern and a realistic first step';
+        ? 'static personal route landing'
+        : 'static barrier profile landing about a repeating failure pattern and a realistic first step';
     const semanticScene = routeScenes[0]
       || 'one meaningful editorial scene or visual metaphor that directly expresses the headline, with a real person only when the story needs one';
-    const quizContext = [
+    const routeContext = [
       `Landing headline: ${title}`,
       `Landing subtitle / meaning: ${subtitle}`,
-      `Quiz format: ${quizLabel}`,
+      `Landing format: ${routeLabel}`,
       `Marketing semantic: ${landingLogic.semanticId || 'problem-route'}; angle: ${landingLogic.label}`,
       `Client context: ${clientName || 'generic client'}`,
-      `Design route: ${designRoute?.label || style || 'premium quiz'}; palette: ${palette || 'deep restrained'}; visual mood: ${designMood}`,
+      `Design route: ${designRoute?.label || style || 'premium insight'}; palette: ${palette || 'deep restrained'}; visual mood: ${designMood}`,
       memoryLine,
       `Semantic scene: ${semanticScene}`,
-      'Create one premium cinematic editorial hero photo that literally supports the headline and the self-diagnostic journey.',
+      'Create one premium cinematic editorial hero photo that literally supports the headline and the promised first step.',
       'Use a person only when the headline needs a person; otherwise use a concrete place, object, route, doorway, map, desk, road, landscape or another clear metaphor.',
       'Place the main visual subject on the right half and leave calm, textured negative space on the left for HTML text.',
       'No text, no letters, no numbers, no logos, no UI, no split poster, no blank white studio, no generic stock success pose.',
@@ -2602,8 +2598,8 @@ function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline,
       persona: 'semantic',
       visualMode: 'generatedPerson',
       stylePreset: imageStylePreset,
-      variationKey: `${variantSeed}|quiz-hero`,
-      visualPrompt: quizContext
+      variationKey: `${variantSeed}|insight-hero`,
+      visualPrompt: routeContext
     }];
   }
   const heroSubject = mode === 'natureEditorial'
@@ -3146,13 +3142,13 @@ const MANUAL_PRELANDING_MODES = [
   },
   {
     id: 'directionQuiz',
-    title: 'Формат 5 / Квиз-направление',
-    desc: 'Интерактивный разбор из 4 вопросов: человек видит свою точку опоры и открывает форму регистрации.'
+    title: 'Формат 5 / Маршрут действия',
+    desc: 'Динамичный одностраничник: конфликт, маршрут, три смысловые опоры и прямая форма регистрации.'
   },
   {
     id: 'barrierProfileQuiz',
     title: 'Формат 6 / Профиль барьера',
-    desc: 'Четыре вопроса о повторяющемся сбое, персональный профиль и первый реалистичный шаг.'
+    desc: 'Контрастный профиль проблемы: повторяющийся сценарий, три признака и прямая форма регистрации.'
   }
 ];
 
@@ -3814,8 +3810,8 @@ function renderHeroSceneBlocksPrelanding({
           <div class="fh-hb-story-row">${cardsHtml}</div>
           <div class="fh-hb-actions">
             ${actionNoteHtml}
-            <div class="fh-hb-buttons" aria-label="Начать мини-тест">
-              ${renderAtmospaceQuizButton('fh-hb-btn fh-hb-btn-tg')}
+            <div class="fh-hb-buttons" aria-label="Открыть форму регистрации">
+              ${renderAtmospaceRegistrationButton('fh-hb-btn fh-hb-btn-tg')}
             </div>
           </div>
         </div>
@@ -3841,16 +3837,15 @@ function renderHeroSceneBlocksPrelanding({
       <div class="fh-hb-section-label">Следующий шаг</div>
       <h2 class="fh-hb-cta-title">${esc(ctaTitle)}</h2>
       <p class="fh-hb-cta-sub">${esc(ctaSubtitle)}</p>
-      <div class="fh-hb-buttons" aria-label="Начать мини-тест">
-        ${renderAtmospaceQuizButton('fh-hb-btn fh-hb-btn-tg')}
+      <div class="fh-hb-buttons" aria-label="Открыть форму регистрации">
+        ${renderAtmospaceRegistrationButton('fh-hb-btn fh-hb-btn-tg')}
       </div>
     </div>
     <div class="${ctaMediaClass}" aria-hidden="true">
       ${ctaImageHtml}
     </div>
   </section>
-  ${renderAtmospaceSharedInlineQuiz({ accent: primary, accent2: secondary, background: '#071326', panel: '#10223d' })}
-  <p class="fh-hb-legal">Ответы мини-теста не сохраняются. Регистрация, согласие и пароль обрабатываются только на защищённой странице Atmospace.</p>
+  <p class="fh-hb-legal">Регистрация, согласие и пароль обрабатываются только на защищённой странице Atmospace.</p>
 </div>
 ${buildAtmospacePrelandingTrackingScript()}`;
 }
@@ -4045,8 +4040,8 @@ function renderNatureEditorialPrelanding({ content, projectData, landingMeta, sc
         <div class="fh-nd-kicker">${esc(badge)}</div>
         <h1 class="fh-nd-title">${titleHtml}</h1>
         <p class="fh-nd-lead">${esc(leadText)}</p>
-        <div class="fh-nd-buttons" aria-label="Начать мини-тест">
-          ${renderAtmospaceQuizButton('fh-nd-btn fh-nd-btn-tg')}
+        <div class="fh-nd-buttons" aria-label="Открыть форму регистрации">
+          ${renderAtmospaceRegistrationButton('fh-nd-btn fh-nd-btn-tg')}
         </div>
         <div class="fh-nd-note"><i>✓</i><span>${esc(ctaLead)}</span></div>
       </div>
@@ -4090,14 +4085,13 @@ function renderNatureEditorialPrelanding({ content, projectData, landingMeta, sc
       <div class="fh-nd-box">
         <h2>${esc(finalTitle)}</h2>
         <p>${esc(finalText)}</p>
-        <div class="fh-nd-buttons" aria-label="Начать мини-тест">
-          ${renderAtmospaceQuizButton('fh-nd-btn fh-nd-btn-tg')}
+        <div class="fh-nd-buttons" aria-label="Открыть форму регистрации">
+          ${renderAtmospaceRegistrationButton('fh-nd-btn fh-nd-btn-tg')}
         </div>
       </div>
     </div>
   </section>
-  ${renderAtmospaceSharedInlineQuiz({ accent: paletteColors[0] || '#6f7554', accent2: paletteColors[1] || '#b96b4e', background: '#25231e', panel: '#342f29' })}
-  <p class="fh-nd-legal">Ответы мини-теста не сохраняются. Регистрация и согласие выполняются на защищённой странице Atmospace.</p>
+  <p class="fh-nd-legal">Регистрация и согласие выполняются на защищённой странице Atmospace.</p>
 </div>
 ${buildAtmospacePrelandingTrackingScript()}`;
 }
@@ -4135,7 +4129,7 @@ function renderMinimalComparePrelanding({ content, projectData, landingMeta, sty
     ...(Array.isArray(effects) ? effects.map(item => `fh-mc-effect-${prelandingClassToken(item)}`) : [])
   ].filter(Boolean).join(' ');
   const badge = content.badge || 'Тихое сравнение';
-  const buttonLead = content.ctaLead || content.actionSubtitle || 'После четырёх вопросов откроется защищённая форма регистрации Atmospace.';
+  const buttonLead = content.ctaLead || content.actionSubtitle || 'Следующий шаг откроется на защищённой странице регистрации Atmospace.';
   const miniHtml = miniItems.map((item) => `<div class="fh-mc-mini-item"><span class="fh-mc-mini-dot"></span><span>${esc(item)}</span></div>`).join('');
   const cardsHtml = cards.map((item, index) => `<article class="fh-mc-proof-card">
     <div class="fh-mc-proof-num">${String(index + 1).padStart(2, '0')}</div>
@@ -4238,14 +4232,13 @@ function renderMinimalComparePrelanding({ content, projectData, landingMeta, sty
       <div class="fh-mc-divider"></div>
       <div class="fh-mc-mini">${miniHtml}</div>
       <div class="fh-mc-proof" aria-label="Короткие смыслы">${cardsHtml}</div>
-      <div class="fh-mc-btn-group" aria-label="Начать мини-тест">
-        ${renderAtmospaceQuizButton('fh-mc-btn fh-mc-btn-primary')}
+      <div class="fh-mc-btn-group" aria-label="Открыть форму регистрации">
+        ${renderAtmospaceRegistrationButton('fh-mc-btn fh-mc-btn-primary')}
       </div>
       <p class="fh-mc-next">${esc(buttonLead)}</p>
-      <p class="fh-mc-legal">Ответы мини-теста не сохраняются. Регистрация и согласие выполняются на защищённой странице Atmospace. <a href="https://modernisto.ru/politics" target="_blank" rel="noopener noreferrer">Политика конфиденциальности</a>.</p>
+      <p class="fh-mc-legal">Регистрация и согласие выполняются на защищённой странице Atmospace. <a href="https://modernisto.ru/politics" target="_blank" rel="noopener noreferrer">Политика конфиденциальности</a>.</p>
     </div>
   </main>
-  ${renderAtmospaceSharedInlineQuiz({ accent: rootTone === 'fh-mc-tone-blue' ? '#73b8ff' : '#ffffff', accent2: rootTone === 'fh-mc-tone-blue' ? '#2f6bff' : '#8b8b8b', background: '#050505', panel: '#111111' })}
 </div>
 ${buildAtmospacePrelandingTrackingScript()}`;
 }
@@ -5747,16 +5740,152 @@ function renderInteractiveQuizPrelanding({
 ${buildAtmospacePrelandingTrackingScript()}`;
 }
 
+function renderStaticInsightPrelanding({
+  mode,
+  content,
+  projectData,
+  landingMeta,
+  sceneImage,
+  style,
+  palette,
+  designRoute
+}) {
+  const isBarrier = mode === 'barrierProfileQuiz';
+  const isPersonal = mode === 'personalRouteQuiz';
+  const title = stripHtml(content?.titleHtml || content?.title || 'Откройте короткий разбор и первый понятный шаг');
+  const lead = stripHtml(
+    content?.trustTitle
+      || content?.trustSmall
+      || content?.valueTitle
+      || 'Короткий разбор показывает повторяющийся сценарий и понятный следующий шаг.'
+  );
+  const cards = (content?.cards?.length
+    ? content.cards
+    : (content?.valueItems || []).map((text, index) => ({
+        title: ['Что удерживает', 'Что меняется', 'С чего начать'][index] || `Шаг ${index + 1}`,
+        text
+      })))
+    .slice(0, 3);
+  while (cards.length < 3) {
+    cards.push({
+      title: ['Точка старта', 'Понятный маршрут', 'Следующий шаг'][cards.length],
+      text: 'Без нового рывка: один смысл, который можно проверить в реальной жизни.'
+    });
+  }
+  const scene = bothelpImageSrc(sceneImage || content?.sceneImage || content?.heroImage || PRELANDING_FALLBACK_IMAGES[0]);
+  const styleKey = `${style || ''} ${palette || ''} ${designRoute?.id || ''}`.toLowerCase();
+  const theme = isBarrier
+    ? styleKey.includes('teal') || styleKey.includes('green')
+      ? { bg: '#061713', panel: '#0d251e', soft: '#12352a', accent: '#32d39a', accent2: '#a6f0d2', text: '#f4fff9', muted: '#b9d7cc', line: 'rgba(50,211,154,.24)' }
+      : { bg: '#180c0b', panel: '#261311', soft: '#361c18', accent: '#ff785f', accent2: '#ffc19f', text: '#fff8f5', muted: '#dfc5bd', line: 'rgba(255,120,95,.25)' }
+    : isPersonal
+      ? { bg: '#130d1d', panel: '#1d152b', soft: '#2b1f3e', accent: '#a884ff', accent2: '#6cc9ff', text: '#fbf8ff', muted: '#cdc4df', line: 'rgba(168,132,255,.25)' }
+      : styleKey.includes('gold') || styleKey.includes('yellow')
+        ? { bg: '#120f08', panel: '#1e190d', soft: '#2c2411', accent: '#f6c453', accent2: '#ffe8a5', text: '#fffaf0', muted: '#d8cdb3', line: 'rgba(246,196,83,.25)' }
+        : styleKey.includes('forest') || styleKey.includes('green')
+          ? { bg: '#071610', panel: '#0d2419', soft: '#143423', accent: '#46cf8e', accent2: '#9bedbc', text: '#f4fff8', muted: '#bdd9c9', line: 'rgba(70,207,142,.25)' }
+          : { bg: '#07111f', panel: '#0d1e34', soft: '#132b49', accent: '#57a0ff', accent2: '#83d3ff', text: '#f5f9ff', muted: '#bdcce0', line: 'rgba(87,160,255,.25)' };
+  const kicker = isBarrier ? 'Профиль повторяющегося барьера' : isPersonal ? 'Личный маршрут' : 'Маршрут действия';
+  const sectionTitle = isBarrier
+    ? 'Увидьте, где именно ломается привычный сценарий'
+    : 'Разложите задачу на три понятные опоры';
+  const finalTitle = content?.actionTitle || (isBarrier ? 'Откройте разбор своего сценария' : 'Заберите первый понятный шаг');
+  const finalText = content?.actionSubtitle || content?.ctaLead || 'Продолжение откроется на защищённой странице регистрации Atmospace.';
+  const cardsHtml = cards.map((card, index) => `<article class="fh-si-card">
+    <span>${String(index + 1).padStart(2, '0')}</span>
+    <h3>${esc(card?.title || `Смысл ${index + 1}`)}</h3>
+    <p>${esc(card?.text || '')}</p>
+  </article>`).join('');
+
+  return `${buildAtmospaceHeadConfig({
+  projectData,
+  ...(landingMeta || {})
+})}
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800;900&display=swap');
+#fh-preland-root.fh-si26,#fh-preland-root.fh-si26 *{box-sizing:border-box}
+#fh-preland-root.fh-si26{
+  --si-bg:${theme.bg};--si-panel:${theme.panel};--si-soft:${theme.soft};--si-accent:${theme.accent};--si-accent2:${theme.accent2};--si-text:${theme.text};--si-muted:${theme.muted};--si-line:${theme.line};
+  width:100vw;min-height:100svh;margin-left:calc(50% - 50vw);margin-right:calc(50% - 50vw);overflow:hidden;background:var(--si-bg);color:var(--si-text);font-family:'Manrope',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;letter-spacing:0
+}
+#fh-preland-root.fh-si26 a{color:inherit;text-decoration:none}
+#fh-preland-root .fh-si-shell{width:min(1180px,calc(100% - 32px));margin:0 auto}
+#fh-preland-root .fh-si-hero{min-height:100svh;display:grid;grid-template-columns:minmax(0,1fr) minmax(390px,.86fr);gap:46px;align-items:center;padding:46px 0}
+#fh-preland-root .fh-si-kicker{display:inline-flex;align-items:center;gap:9px;margin-bottom:22px;padding:9px 13px;border:1px solid var(--si-line);border-radius:999px;background:var(--si-soft);color:var(--si-accent2);font-size:12px;font-weight:900;text-transform:uppercase}
+#fh-preland-root .fh-si-kicker:before{content:'';width:8px;height:8px;border-radius:50%;background:var(--si-accent)}
+#fh-preland-root .fh-si-title{max-width:720px;margin:0 0 22px;font-size:clamp(44px,6vw,78px);line-height:1.02;font-weight:900;letter-spacing:0;text-wrap:balance}
+#fh-preland-root .fh-si-lead{max-width:680px;margin:0 0 28px;color:var(--si-muted);font-size:19px;line-height:1.55;font-weight:650}
+#fh-preland-root .fh-si-cta{display:flex;align-items:center;justify-content:center;width:min(420px,100%);min-height:66px;padding:16px 22px;border-radius:8px;background:var(--si-accent);color:#071019!important;font-size:17px;font-weight:900;box-shadow:0 18px 44px rgba(0,0,0,.24)}
+#fh-preland-root .fh-si-cta[aria-disabled=true]{pointer-events:none;opacity:.58}
+#fh-preland-root .fh-si-media{position:relative;min-height:590px;overflow:hidden;border:1px solid var(--si-line);border-radius:8px;background:var(--si-panel);box-shadow:0 28px 74px rgba(0,0,0,.34)}
+#fh-preland-root .fh-si-media img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+#fh-preland-root .fh-si-media:after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent 52%,rgba(0,0,0,.42));pointer-events:none}
+#fh-preland-root .fh-si-section{padding:82px 0;background:var(--si-panel);border-top:1px solid var(--si-line);border-bottom:1px solid var(--si-line)}
+#fh-preland-root .fh-si-section h2{max-width:820px;margin:0 0 34px;font-size:clamp(34px,4.7vw,58px);line-height:1.08;font-weight:900;letter-spacing:0;text-wrap:balance}
+#fh-preland-root .fh-si-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+#fh-preland-root .fh-si-card{min-height:230px;padding:24px;border:1px solid var(--si-line);border-radius:8px;background:var(--si-soft)}
+#fh-preland-root .fh-si-card>span{display:block;margin-bottom:28px;color:var(--si-accent);font-size:13px;font-weight:900}
+#fh-preland-root .fh-si-card h3{margin:0 0 12px;font-size:21px;line-height:1.18;font-weight:900}
+#fh-preland-root .fh-si-card p{margin:0;color:var(--si-muted);font-size:15px;line-height:1.52;font-weight:600}
+#fh-preland-root .fh-si-final{padding:84px 0}
+#fh-preland-root .fh-si-final-inner{display:grid;grid-template-columns:minmax(0,1fr) minmax(290px,420px);gap:34px;align-items:end;padding:38px;border:1px solid var(--si-line);border-radius:8px;background:linear-gradient(135deg,var(--si-panel),var(--si-soft))}
+#fh-preland-root .fh-si-final h2{margin:0 0 14px;font-size:clamp(34px,4.4vw,58px);line-height:1.06;font-weight:900;letter-spacing:0;text-wrap:balance}
+#fh-preland-root .fh-si-final p{margin:0;color:var(--si-muted);font-size:17px;line-height:1.55;font-weight:600}
+#fh-preland-root .fh-si-legal{margin:18px auto 0;color:var(--si-muted);font-size:11px;line-height:1.5;text-align:center}
+@media(max-width:900px){
+  #fh-preland-root .fh-si-hero,#fh-preland-root .fh-si-final-inner{grid-template-columns:1fr}
+  #fh-preland-root .fh-si-hero{min-height:auto;padding:34px 0}
+  #fh-preland-root .fh-si-media{min-height:0;aspect-ratio:16/10}
+}
+@media(max-width:640px){
+  #fh-preland-root .fh-si-shell{width:calc(100% - 24px)}
+  #fh-preland-root .fh-si-title{font-size:clamp(36px,11vw,50px);line-height:1.05}
+  #fh-preland-root .fh-si-lead{font-size:16px}
+  #fh-preland-root .fh-si-media{aspect-ratio:4/3}
+  #fh-preland-root .fh-si-section,#fh-preland-root .fh-si-final{padding:54px 0}
+  #fh-preland-root .fh-si-cards{grid-template-columns:1fr}
+  #fh-preland-root .fh-si-card{min-height:auto}
+  #fh-preland-root .fh-si-final-inner{padding:24px}
+}
+</style>
+<div id="fh-preland-root" class="fh-si26 ${isBarrier ? 'fh-si-barrier' : isPersonal ? 'fh-si-personal' : 'fh-si-direction'}">
+  <main class="fh-si-shell fh-si-hero" aria-label="Главный экран">
+    <div>
+      <div class="fh-si-kicker">${esc(kicker)}</div>
+      <h1 class="fh-si-title">${esc(title)}</h1>
+      <p class="fh-si-lead">${esc(lead)}</p>
+      <div data-atmospace-registration-section>${renderAtmospaceRegistrationButton('fh-si-cta')}</div>
+    </div>
+    <div class="fh-si-media" aria-hidden="true"><img src="${esc(scene)}" alt="" loading="eager" decoding="async" fetchpriority="high"></div>
+  </main>
+  <section class="fh-si-section" aria-label="Ключевые смыслы">
+    <div class="fh-si-shell">
+      <div class="fh-si-kicker">Ключевые смыслы</div>
+      <h2>${esc(sectionTitle)}</h2>
+      <div class="fh-si-cards">${cardsHtml}</div>
+    </div>
+  </section>
+  <section class="fh-si-final" aria-label="Форма регистрации">
+    <div class="fh-si-shell fh-si-final-inner">
+      <div><h2>${esc(finalTitle)}</h2><p>${esc(finalText)}</p></div>
+      <div data-atmospace-registration-section>${renderAtmospaceRegistrationButton('fh-si-cta')}</div>
+    </div>
+    <p class="fh-si-legal">Регистрация и согласие выполняются на защищённой странице Atmospace.</p>
+  </section>
+</div>
+${buildAtmospacePrelandingTrackingScript()}`;
+}
+
 function renderDirectionQuizPrelanding(props) {
-  return renderInteractiveQuizPrelanding({ ...props, mode: 'directionQuiz' });
+  return renderStaticInsightPrelanding({ ...props, mode: 'directionQuiz' });
 }
 
 function renderPersonalRouteQuizPrelanding(props) {
-  return renderInteractiveQuizPrelanding({ ...props, mode: 'personalRouteQuiz' });
+  return renderStaticInsightPrelanding({ ...props, mode: 'personalRouteQuiz' });
 }
 
 function renderBarrierProfileQuizPrelanding(props) {
-  return renderInteractiveQuizPrelanding({ ...props, mode: 'barrierProfileQuiz' });
+  return renderStaticInsightPrelanding({ ...props, mode: 'barrierProfileQuiz' });
 }
 
 function renderPrelandingHtml({ tpl, style, palette, photo, overrides, projectData, landingMeta, layout = 'split', typo = 'manrope', effects = [] }) {
@@ -6047,10 +6176,11 @@ function countMatches(text, pattern) {
   return (String(text || '').match(pattern) || []).length;
 }
 
-function validateAtmospaceTildaHtml(html = '', config = {}) {
+function validateAtmospaceTildaHtml(html = '', config = {}, options = {}) {
   const source = String(html || '');
   const errors = [];
   const warnings = [];
+  const quizRequired = options.quizRequired === true;
   const marker = (...parts) => parts.join('');
   const patternFrom = (...parts) => new RegExp(parts.join(''), 'i');
   const requiredConfig = [
@@ -6105,26 +6235,18 @@ function validateAtmospaceTildaHtml(html = '', config = {}) {
     ATMOSPACE_PUBLIC_API_BASE_URL,
     '/api/landing-runtime/init',
     '/api/landing-runtime/click',
-    'data-atmospace-quiz-link',
     'data-atmospace-registration-link',
-    'data-atmospace-embedded-quiz="true"',
-    'data-atmospace-question-count="4"',
     'data-atmospace-state',
     'data-atmospace-runtime-retry',
     'aria-disabled="true"',
     'landing_opened',
-    'quiz_start_click',
     'landing_view',
-    'question_answered',
-    'questionNumber',
-    'quiz_completed',
     'registration_started',
     'links.registration',
     'registrationUrl = candidate',
     'window.location.assign(registrationUrl)',
     'isTrustedRegistrationUrl',
     'requestRegistration',
-    "eventType !== 'landing_opened' && eventType !== 'quiz_start_click'",
     'https://mc.yandex.ru/metrika/tag.js',
     'window.__atmospaceMetrikaInited',
     'landing_variant_code',
@@ -6154,6 +6276,23 @@ function validateAtmospaceTildaHtml(html = '', config = {}) {
     if (!source.includes(marker)) errors.push(`В Atmospace HTML не найден обязательный маркер: ${marker}.`);
   });
 
+  const quizMarkers = [
+    'data-atmospace-quiz-link',
+    'data-atmospace-embedded-quiz="true"',
+    'data-atmospace-question-count="4"',
+    'quiz_start_click',
+    'question_answered',
+    'questionNumber',
+    'quiz_completed'
+  ];
+  if (quizRequired) {
+    quizMarkers.forEach((quizMarker) => {
+      if (!source.includes(quizMarker)) errors.push(`В формате с мини-тестом не найден обязательный маркер: ${quizMarker}.`);
+    });
+  } else if (/<[^>]+\sdata-atmospace-(?:quiz-link|inline-quiz|embedded-quiz|question-count)(?:[\s=>])/i.test(source)) {
+    errors.push('В формате без мини-теста найдена видимая квиз-разметка. Используйте прямую регистрацию Atmospace.');
+  }
+
   if (countMatches(source, /window\.ATMOSPACE_LANDING_CONFIG\s*=/g) !== 1) {
     errors.push('В HTML должен быть ровно один объект window.ATMOSPACE_LANDING_CONFIG.');
   }
@@ -6176,10 +6315,10 @@ function validateAtmospaceTildaHtml(html = '', config = {}) {
     errors.push('В HTML найдена запрещённая прямая ссылка Telegram Web.');
   }
   if (/(?:Telegram|BotHelp|мессенджер|Перейти в MAX|Начать в MAX)/i.test(source)) {
-    errors.push('В боевом квиз-лендинге найден устаревший переход в Telegram/MAX или мессенджер.');
+    errors.push('В боевом лендинге найден устаревший переход в Telegram/MAX или мессенджер.');
   }
-  if (/data-atmospace-question-count=["'](?!4["'])\d+["']/i.test(source)) {
-    errors.push('Во всех боевых форматах квиз должен содержать ровно четыре вопроса.');
+  if (quizRequired && /data-atmospace-question-count=["'](?!4["'])\d+["']/i.test(source)) {
+    errors.push('В формате с мини-тестом должно быть ровно четыре вопроса.');
   }
 
   requiredConfig.forEach(([key, label]) => {
@@ -6797,12 +6936,12 @@ export default function Constructor() {
     designVariant: currentPrelandingVariantMeta?.landingVariant || '',
     generatorBuild: currentPrelandingVariantMeta?.generatorBuild || ''
   }), [currentPrelandingVariantMeta, landingRuntimeMeta]);
-  const isQuizPrelandingMode = manualPrelandingMode === 'directionQuiz'
+  const isSingleImagePrelandingMode = manualPrelandingMode === 'directionQuiz'
     || manualPrelandingMode === 'personalRouteQuiz'
     || manualPrelandingMode === 'barrierProfileQuiz';
   const prelandingAiImagesReady = manualPrelandingMode === 'minimalCompare'
     ? Boolean(prelandingAiImages?.key === prelandingImageBuildKey)
-    : isQuizPrelandingMode
+    : isSingleImagePrelandingMode
       ? Boolean(prelandingAiImages?.key === prelandingImageBuildKey && currentPrelandingAiImages?.sceneImage)
       : Boolean(
         currentPrelandingAiImages?.sceneImage
@@ -6887,8 +7026,8 @@ export default function Constructor() {
       ? 'Продолжаю сборку: готовые кадры сохранены, генерирую только недостающие.'
       : manualPrelandingMode === 'minimalCompare'
       ? 'Собираю минималистичный Tilda HTML без AI-картинок.'
-      : isQuizPrelandingMode
-        ? 'OpenAI генерирует одну смысловую hero-картинку для интерактивного квиза. Если ответ зависнет, конструктор сам перезапустит попытку.'
+      : isSingleImagePrelandingMode
+        ? 'OpenAI генерирует одну смысловую hero-картинку для одностраничника. Если ответ зависнет, конструктор сам перезапустит попытку.'
         : 'OpenAI генерирует 3 разные картинки для предлендинга. Если ответ зависнет, конструктор сам перезапустит попытку.');
 
     const cachedImages = resumableAiState?.images || {};
@@ -7033,8 +7172,9 @@ export default function Constructor() {
   };
 
   const openTab = (nextTab) => {
-    writeConstructorTabToLocation(nextTab);
-    setTab(nextTab);
+    const safeTab = CONSTRUCTOR_TOOL_VALUES.has(nextTab) ? nextTab : 'creative';
+    writeConstructorTabToLocation(safeTab);
+    setTab(safeTab);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -7304,17 +7444,17 @@ export default function Constructor() {
       || manualPrelandingMode === 'barrierProfileQuiz') {
       const isPersonalRoute = manualPrelandingMode === 'personalRouteQuiz';
       const isBarrierProfile = manualPrelandingMode === 'barrierProfileQuiz';
-      const quizPresets = isBarrierProfile
+      const insightPresets = isBarrierProfile
         ? BARRIER_PROFILE_QUIZ_PRESETS
         : isPersonalRoute
           ? PERSONAL_ROUTE_QUIZ_PRESETS
           : DIRECTION_QUIZ_PRESETS;
-      const fallbackPreset = quizPresets[0];
-      const quizPreset = quizPresets.find((preset) => preset.id === activePresetId) || fallbackPreset;
-      const quizDesign = currentPrelandingDesignRoute || quizPreset;
-      const quizStyle = quizDesign.style || quizPreset.style;
-      const quizPalette = quizDesign.palette || quizPreset.palette;
-      const quizEffects = quizDesign.effects || quizPreset.effects || [];
+      const fallbackPreset = insightPresets[0];
+      const insightPreset = insightPresets.find((preset) => preset.id === activePresetId) || fallbackPreset;
+      const insightDesign = currentPrelandingDesignRoute || insightPreset;
+      const insightStyle = insightDesign.style || insightPreset.style;
+      const insightPalette = insightDesign.palette || insightPreset.palette;
+      const insightEffects = insightDesign.effects || insightPreset.effects || [];
       const title = enteredHeadline || (isBarrierProfile
         ? 'Почему в самый важный момент всё снова срывается?'
         : isPersonalRoute
@@ -7322,50 +7462,60 @@ export default function Constructor() {
           : 'Как найти направление, которое подходит именно вам?');
       const landingLogic = resolveClientPrelandingLogic(title, enteredText, manualPrelandingMode);
       const textLead = enteredText || landingLogic.lead;
-      const imageSeed = `manual-${manualPrelandingMode}-${quizDesign.id || quizPreset.id}-${quizStyle}-${quizPalette}-${title}-${textLead}`;
+      const imageSeed = `manual-${manualPrelandingMode}-${insightDesign.id || insightPreset.id}-${insightStyle}-${insightPalette}-${title}-${textLead}`;
       return renderPrelandingHtml({
         tpl: 1,
-        style: quizStyle,
-        palette: quizPalette,
+        style: insightStyle,
+        palette: insightPalette,
         photo,
-        layout: 'quiz',
+        layout: 'insight',
         typo: 'manrope',
-        effects: quizEffects,
+        effects: insightEffects,
         overrides: {
           prelandingMode: manualPrelandingMode,
           renderMode: isBarrierProfile
-            ? 'barrierProfileQuiz'
+            ? 'barrierProfile'
             : isPersonalRoute
-              ? 'personalRouteQuiz'
-              : 'directionQuiz',
+              ? 'personalRoute'
+              : 'directionRoute',
           templateId: 1,
-          themeStyle: quizStyle,
+          themeStyle: insightStyle,
           designFamily: isBarrierProfile
-            ? 'barrier-profile-quiz'
+            ? 'barrier-profile'
             : isPersonalRoute
-              ? 'personal-route-quiz'
-              : 'direction-quiz',
+              ? 'personal-route'
+              : 'direction-route',
           landingVariant: isBarrierProfile
-            ? `bpq-${quizDesign.id || quizPreset.id}`
+            ? `bp-${insightDesign.id || insightPreset.id}`
             : isPersonalRoute
-              ? `prq-${quizDesign.id || quizPreset.id}`
-              : `dq-${quizDesign.id || quizPreset.id}`,
-          layoutMode: 'quiz',
+              ? `pr-${insightDesign.id || insightPreset.id}`
+              : `dr-${insightDesign.id || insightPreset.id}`,
+          layoutMode: 'insight',
           typeMode: 'manrope',
-          effects: quizEffects,
+          effects: insightEffects,
           variantKey: imageSeed,
           visualSource: 'scene',
           badge: landingLogic.badge,
           title,
           titleHtml: esc(title),
+          painTitle: landingLogic.label,
+          painAlert: landingLogic.defaultText,
           trustTitle: textLead,
-          trustSmall: textLead,
+          trustSmall: landingLogic.trustSmall,
           methodName: landingLogic.methodName,
+          valueTitle: landingLogic.valueTitle,
+          valueItems: landingLogic.valueItems,
+          cards: landingLogic.cards,
+          proofItems: [],
+          liveNote: landingLogic.botTransition,
+          ctaLead: landingLogic.ctaLead,
+          actionSubtitle: landingLogic.ctaLead,
+          actionTitle: landingLogic.actionTitle,
           sceneImage: currentPrelandingAiImages.sceneImage,
           valueImage: '',
           ctaImage: '',
-          designRoute: quizDesign,
-          designRouteId: quizDesign.id || quizPreset.id
+          designRoute: insightDesign,
+          designRouteId: insightDesign.id || insightPreset.id
         },
         projectData: prelandingRuntimeProjectData,
         landingMeta: effectivePrelandingVariantMeta
@@ -7443,8 +7593,10 @@ export default function Constructor() {
     [prelandingRuntimeProjectData, landingRuntimeMeta]
   );
   const prelandingHtmlValidation = useMemo(
-    () => validateAtmospaceTildaHtml(prelandingHtml, prelandingHtmlConfig),
-    [prelandingHtml, prelandingHtmlConfig]
+    () => validateAtmospaceTildaHtml(prelandingHtml, prelandingHtmlConfig, {
+      quizRequired: manualPrelandingMode === 'templateStage'
+    }),
+    [prelandingHtml, prelandingHtmlConfig, manualPrelandingMode]
   );
 
   const prelandingPresetForBannerStyle = (bannerStyle) => {
@@ -7553,29 +7705,9 @@ export default function Constructor() {
         <div className={`mb-4 sticky top-2 z-20 ${dark ? 'bg-slate-950/80' : 'bg-slate-50/80'} backdrop-blur p-2 -m-2 rounded-2xl`}>
           <div className="flex flex-wrap gap-2">
             <Tab active={tab === 'creative'} onClick={() => openTab('creative')} icon={Lightbulb} dark={dark}>Креативы</Tab>
-            <Tab active={tab === 'pre'} onClick={() => openTab('pre')} icon={Wand2} dark={dark}>Предлендинг</Tab>
-            <Tab active={tab === 'quiz'} onClick={() => openTab('quiz')} icon={ListChecks} dark={dark}>Квиз</Tab>
-            <Tab active={tab === 'how'} onClick={() => openTab('how')} icon={BookOpen} dark={dark}>Инструкция</Tab>
+            <Tab active={tab === 'pre'} onClick={() => openTab('pre')} icon={Wand2} dark={dark}>Лендинги</Tab>
           </div>
         </div>
-
-        {tab === 'quiz' && (
-          <div className="space-y-4">
-            <LongQuizEditor onBack={() => openTab('pre')} />
-            <QuizPublishPanel />
-          </div>
-        )}
-
-        {/* === ПАРАМЕТРЫ ДИРЕКТА === */}
-        {tab === 'how' && (
-          <div className={`${card} rounded-3xl p-6 md:p-8 shadow-sm border`}>
-            <h2 className={`text-2xl font-black mb-4 ${text}`}>Параметры URL для Директа</h2>
-            <div className={`w-full overflow-x-auto whitespace-pre-wrap font-mono text-[12px] leading-relaxed break-words rounded-xl p-4 ${dark ? 'bg-slate-950/70 text-blue-100' : 'bg-slate-50 text-slate-800'}`}>{YANDEX_DIRECT_URL_PARAMS}</div>
-            <div className="mt-4 max-w-sm">
-              <CopyBtn text={YANDEX_DIRECT_URL_PARAMS} label="Скопировать URL-параметры" dark={dark} />
-            </div>
-          </div>
-        )}
 
         {/* === КРЕАТИВЫ === */}
         {tab === 'creative' && (
@@ -7716,7 +7848,7 @@ export default function Constructor() {
                     : manualPrelandingMode === 'natureEditorial'
                       ? 'Формат 3: nature editorial'
                       : manualPrelandingMode === 'directionQuiz'
-                        ? 'Формат 5: квиз-направление'
+                        ? 'Формат 5: маршрут действия'
                         : manualPrelandingMode === 'personalRouteQuiz'
                           ? 'Сохранённый формат: личный маршрут'
                           : manualPrelandingMode === 'barrierProfileQuiz'
@@ -7731,11 +7863,11 @@ export default function Constructor() {
                   : manualPrelandingMode === 'natureEditorial'
                     ? 'Для этого режима оставлены 3 editorial-варианта. Каждый задаёт журнальную палитру, типографику, структуру и отдельный визуальный маршрут для AI-фото.'
                     : manualPrelandingMode === 'directionQuiz'
-                      ? 'Интерактивный квиз из 4 вопросов. По заголовку и тексту собирается диагностика направления, итог и одна смысловая AI-сцена.'
+                      ? 'По заголовку и тексту собирается динамичный смысловой одностраничник, три опоры и прямая регистрация. Одна AI-сцена поддерживает первый экран.'
                       : manualPrelandingMode === 'personalRouteQuiz'
-                        ? 'Личный маршрут из 4 вопросов. Ответы формируют персональный итог, а одна AI-сцена поддерживает смысл первого экрана.'
+                        ? 'Сохранённый личный маршрут работает как смысловой одностраничник с прямой регистрацией и одной AI-сценой.'
                         : manualPrelandingMode === 'barrierProfileQuiz'
-                          ? 'Четыре вопроса выявляют повторяющийся сценарий срыва, показывают профиль барьера и дают один реалистичный первый шаг. Одна AI-сцена поддерживает смысл первого экрана.'
+                          ? 'Повторяющийся сценарий раскрывается через три смысловых признака и один реалистичный первый шаг. Далее — прямая регистрация Atmospace.'
                           : 'Для этого режима оставлены только 3 рабочих варианта. Каждый сразу выставляет стиль, палитру, типографику, структуру и промпт для живых AI-фото.'}
               </p>
               <div className="grid md:grid-cols-3 gap-2">
@@ -7769,7 +7901,7 @@ export default function Constructor() {
                   <Sparkles className="w-8 h-8 mx-auto mb-2 text-yellow-200 animate-pulse" />
                   <p className="text-sm font-bold">{prelandingAiStatus || (manualPrelandingMode === 'minimalCompare'
                     ? 'Собираю минималистичный HTML. Старый код скрыт, чтобы его не вставить повторно.'
-                    : isQuizPrelandingMode
+                    : isSingleImagePrelandingMode
                       ? 'OpenAI генерирует одну смысловую hero-картинку. Старый код скрыт, чтобы его не вставить повторно.'
                       : 'OpenAI генерирует 3 разные картинки. Старый код скрыт, чтобы его не вставить повторно.')}</p>
                   <p className="mt-2 text-xs text-white/80">{manualPrelandingMode === 'minimalCompare' ? 'HTML появится автоматически после подготовки варианта.' : 'После публикации изображений HTML появится автоматически.'}</p>
@@ -7794,7 +7926,7 @@ export default function Constructor() {
                   <Sparkles className="w-8 h-8 mx-auto mb-2 text-yellow-200" />
                   <p className="text-sm font-bold">{manualPrelandingMode === 'minimalCompare'
                     ? 'HTML появится после подготовки минималистичного формата. Картинки для этого режима не нужны.'
-                    : isQuizPrelandingMode
+                    : isSingleImagePrelandingMode
                       ? 'HTML появится после публикации одной смысловой hero-картинки. Если OpenAI зависнет, конструктор сам перезапустит попытку.'
                       : 'HTML появится после публикации трёх AI-картинок: hero, блок ценности и CTA. Если OpenAI зависнет, конструктор сам перезапустит попытку.'}</p>
                   <button
@@ -7805,7 +7937,7 @@ export default function Constructor() {
                   >
                     {manualPrelandingMode === 'minimalCompare'
                       ? 'Собрать HTML'
-                      : isQuizPrelandingMode
+                      : isSingleImagePrelandingMode
                         ? 'Сгенерировать hero-картинку и HTML'
                         : 'Сгенерировать AI-картинки и HTML'}
                   </button>
@@ -7859,10 +7991,19 @@ export default function Constructor() {
                 </div>
               )}
             </div>
+
+            <details className={`${card} rounded-3xl border p-5 shadow-sm`}>
+              <summary className={`cursor-pointer text-base font-black ${text}`}>Параметры URL для Яндекс Директа</summary>
+              <p className={`mt-2 text-xs ${textMuted}`}>Добавьте эту строку к адресу лендинга на уровне кампании. Она передаёт рекламные UTM и параметры Директа без ручной переделки.</p>
+              <div className={`mt-4 w-full overflow-x-auto whitespace-pre-wrap break-words rounded-xl p-4 font-mono text-[12px] leading-relaxed ${dark ? 'bg-slate-950/70 text-blue-100' : 'bg-slate-50 text-slate-800'}`}>{YANDEX_DIRECT_URL_PARAMS}</div>
+              <div className="mt-4 max-w-sm">
+                <CopyBtn text={YANDEX_DIRECT_URL_PARAMS} label="Скопировать URL-параметры" dark={dark} />
+              </div>
+            </details>
           </div>
         )}
 
-        <div className={`text-center text-xs ${textMuted} mt-8 pb-4`}>Конструктор лендингов — Креативы → Предлендинг → Инструкция</div>
+        <div className={`text-center text-xs ${textMuted} mt-8 pb-4`}>Конструктор — Креативы → Лендинги</div>
       </div>
     </div>
   );

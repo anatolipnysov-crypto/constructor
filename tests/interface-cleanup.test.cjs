@@ -14,10 +14,10 @@ const tabs = [...source.matchAll(/<Tab active=\{tab === '([^']+)'\}[^\r\n]*>([^<
 
 assert.deepEqual(tabs, [
   { id: 'creative', label: 'Креативы' },
-  { id: 'pre', label: 'Предлендинг' },
-  { id: 'quiz', label: 'Квиз' },
-  { id: 'how', label: 'Инструкция' },
+  { id: 'pre', label: 'Лендинги' },
 ]);
+
+assert.ok(source.includes("const CONSTRUCTOR_TOOL_VALUES = new Set(['creative', 'pre'])"), 'Only creative and landing tools may be opened.');
 
 assert.ok(source.includes(directParams), 'The exact Yandex Direct URL parameter string must remain available.');
 assert.ok(source.includes('label="Скопировать URL-параметры"'), 'The Direct parameters must have a copy button.');
@@ -38,11 +38,11 @@ assert.ok(mainSource.includes('ConstructorRecoveryBoundary'), 'A stale browser p
 assert.ok(mainSource.includes("import App from './App.jsx'"), 'The production entrypoint must mount the authorization-aware constructor.');
 assert.ok(mainSource.includes('<App />'), 'The production entrypoint must not bypass the constructor authorization gate.');
 assert.equal(mainSource.includes('ConstructorRouter'), false, 'A top-level quiz router would bypass the constructor authorization gate.');
-assert.ok(source.includes("import LongQuizEditor from './features/atmospace/LongQuizEditor.jsx'"), 'The authorized constructor must expose the long quiz editor.');
-assert.ok(source.includes("import QuizPublishPanel from './features/atmospace/QuizPublishPanel.jsx'"), 'The authorized constructor must expose quiz publishing.');
-const authorizationGateIndex = source.indexOf('return <LoginGate dark={dark} onLogin={handleLogin} />;');
-const quizRenderIndex = source.indexOf("{tab === 'quiz' && (");
-assert.ok(authorizationGateIndex !== -1 && quizRenderIndex > authorizationGateIndex, 'Quiz rendering must remain behind the authorization gate.');
+assert.equal(source.includes('LongQuizEditor'), false, 'The constructor must not expose a separate long-quiz editor.');
+assert.equal(source.includes('QuizPublishPanel'), false, 'The constructor must not expose a separate quiz-publishing panel.');
+assert.equal(source.includes("{tab === 'quiz' && ("), false, 'The constructor must not render a separate quiz tab.');
+assert.equal(source.includes("{tab === 'how' && ("), false, 'The constructor must not render the removed instructions tab.');
+assert.ok(source.includes('return <LoginGate dark={dark} onLogin={handleLogin} />;'), 'The constructor must keep the authorization gate.');
 assert.ok(mainSource.includes("key.startsWith('constructorProjectData:')"), 'Per-account stale project caches must be recoverable.');
 for (const protectedKey of [
   'constructorAuthorizedClient',

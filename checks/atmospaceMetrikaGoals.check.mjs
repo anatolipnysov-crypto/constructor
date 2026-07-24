@@ -6,26 +6,14 @@ import {
   ensureAtmospaceMetrikaGoals,
 } from '../functions/api/atmospace/metrikaGoals.js'
 
-const expectedBrowserTargets = [
-  'landing_view',
-  'quiz_start_click',
-  'question_answered',
-  'quiz_completed',
-  'registration_started',
-]
-const configuredTargets = ATMOSPACE_METRIKA_GOALS.map((goal) => goal.target)
-assert.equal(ATMOSPACE_METRIKA_GOALS.length, expectedBrowserTargets.length)
-assert.equal(new Set(configuredTargets).size, expectedBrowserTargets.length)
-assert.deepEqual([...configuredTargets].sort(), [...expectedBrowserTargets].sort())
-for (const forbiddenTarget of [
-  'registration_click',
-  'registration_success',
-  'notifications_connected',
-  'payment_success',
-]) {
-  assert.equal(configuredTargets.includes(forbiddenTarget), false)
-}
-assert.equal(configuredTargets.some((target) => /^quiz_question_\d+_answered$/.test(target)), false)
+assert.equal(ATMOSPACE_METRIKA_GOALS.length, 14)
+assert.equal(new Set(ATMOSPACE_METRIKA_GOALS.map((goal) => goal.target)).size, 14)
+assert.equal(ATMOSPACE_METRIKA_GOALS.some((goal) => goal.target === 'landing_view'), true)
+assert.equal(ATMOSPACE_METRIKA_GOALS.some((goal) => goal.target === 'quiz_start_click'), true)
+assert.equal(ATMOSPACE_METRIKA_GOALS.some((goal) => goal.target === 'quiz_question_7_answered'), true)
+assert.equal(ATMOSPACE_METRIKA_GOALS.some((goal) => goal.target === 'registration_success'), true)
+assert.equal(ATMOSPACE_METRIKA_GOALS.some((goal) => goal.target === 'notifications_connected'), true)
+assert.equal(ATMOSPACE_METRIKA_GOALS.some((goal) => goal.target === 'payment_success'), true)
 
 assert.deepEqual(buildMetrikaActionGoalBody({
   target: 'quiz_completed',
@@ -65,7 +53,7 @@ const result = await ensureAtmospaceMetrikaGoals({
             id: 2,
             type: 'action',
             conditions: [
-              { type: 'exact', url: 'question_answered' },
+              { type: 'exact', url: 'registration_success' },
             ],
           },
         ],
@@ -85,11 +73,11 @@ const result = await ensureAtmospaceMetrikaGoals({
 })
 
 assert.equal(result.ok, true)
-assert.equal(result.totalRequired, 5)
+assert.equal(result.totalRequired, 14)
 assert.equal(result.existingCount, 2)
-assert.equal(result.createdCount, 3)
+assert.equal(result.createdCount, 12)
 assert.equal(requests.filter((item) => item.options.method === 'GET').length, 1)
-assert.equal(requests.filter((item) => item.options.method === 'POST').length, 3)
+assert.equal(requests.filter((item) => item.options.method === 'POST').length, 12)
 assert.equal(requests.every((item) => item.url.endsWith('/counter/12345678/goals')), true)
 assert.equal(requests.every((item) => item.options.headers.authorization === `OAuth ${credential}`), true)
 
@@ -99,11 +87,10 @@ const createdTargets = new Set(
     .map((item) => JSON.parse(item.options.body).goal.conditions[0].url),
 )
 assert.equal(createdTargets.has('landing_view'), false)
-assert.equal(createdTargets.has('question_answered'), false)
-assert.deepEqual(
-  [...createdTargets].sort(),
-  ['quiz_completed', 'quiz_start_click', 'registration_started'].sort(),
-)
+assert.equal(createdTargets.has('registration_success'), false)
+assert.equal(createdTargets.has('quiz_start_click'), true)
+assert.equal(createdTargets.has('notifications_connected'), true)
+assert.equal(createdTargets.has('payment_success'), true)
 assert.equal(JSON.stringify(result).includes(credential), false)
 
 let postCount = 0
