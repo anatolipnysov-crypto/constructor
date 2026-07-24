@@ -74,8 +74,10 @@ export function buildQuizRuntimeScript(project, publishConfig, {
     throw new TypeError('Страница ещё не подготовлена для публикации.')
   }
 
+  const normalizedApiBaseUrl = normalizeApiBaseUrl(apiBaseUrl)
   const runtimeConfig = {
-    apiBaseUrl: normalizeApiBaseUrl(apiBaseUrl),
+    apiBaseUrl: normalizedApiBaseUrl,
+    clickEndpoint: `${normalizedApiBaseUrl}/api/landing-runtime/click`,
     publicLandingKey: safeConfig.publicLandingKey,
     counterId: safeConfig.counterId,
     landingVariantCode: normalizeText(project?.id, 256) ?? 'atmospace-long-quiz',
@@ -94,6 +96,9 @@ export function buildQuizRuntimeScript(project, publishConfig, {
     const registrationButton = runtimeRoot.querySelector('.quiz-registration__button');
     const registrationStatus = runtimeRoot.querySelector('.quiz-registration__status');
     const answeredGoalIndexes = new Set();
+    const pendingAtmospaceEvents = [];
+    let atmospaceReady = false;
+    let quizStartedSent = false;
     let quizCompletedSent = false;
     let registrationNavigationStarted = false;
 
@@ -119,6 +124,8 @@ export function buildQuizRuntimeScript(project, publishConfig, {
         return randomReference();
       }
     }
+
+    const pageInstanceId = readPageInstanceId();
 
     function readAdvertisingContext() {
       const params = new URLSearchParams(window.location.search);
@@ -147,6 +154,35 @@ export function buildQuizRuntimeScript(project, publishConfig, {
     })();
     const pendingMetrikaGoals = [];
     let metrikaFlushScheduled = false;
+
+    function ensureMetrikaRuntime() {
+      if (!metrikaCounterId || typeof window.ym === 'function') return;
+
+      const ym = function () {
+        (ym.a = ym.a || []).push(arguments);
+      };
+      ym.l = Date.now();
+      window.ym = ym;
+
+      const hasTag = Array.from(document.scripts || []).some((script) =>
+        typeof script.src === 'string' && script.src.includes('mc.yandex.ru/metrika/tag.js')
+      );
+
+      if (!hasTag) {
+        const tag = document.createElement('script');
+        tag.async = true;
+        tag.src = 'https://mc.yandex.ru/metrika/tag.js';
+        tag.dataset.atmospaceMetrika = 'true';
+        (document.head || document.documentElement).appendChild(tag);
+      }
+
+      window.ym(metrikaCounterId, 'init', {
+        clickmap: true,
+        trackLinks: true,
+        accurateTrackBounce: true,
+        webvisor: false,
+      });
+    }
 
     function finishPendingMetrikaGoals() {
       while (pendingMetrikaGoals.length > 0) {
@@ -216,15 +252,66 @@ export function buildQuizRuntimeScript(project, publishConfig, {
       scheduleMetrikaFlush();
     }
 
+    function postAtmospaceEvent(eventType, details = {}) {
+      const payload = {
+        public_landing_key: config.publicLandingKey,
+        page_instance_id: pageInstanceId,
+        counter_id: String(config.counterId),
+        event_type: eventType,
+        page_url: window.location.href,
+        referrer: document.referrer || null,
+        runtime_version: 'atmospace-long-quiz-v1',
+        client_time: new Date().toISOString(),
+        ...details,
+      };
+
+      fetch(config.clickEndpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+        mode: 'cors',
+        credentials: 'omit',
+        keepalive: true,
+      }).catch(() => {});
+    }
+
+    function sendAtmospaceEvent(eventType, details = {}) {
+      if (!atmospaceReady) {
+        pendingAtmospaceEvents.push({ eventType, details });
+        return;
+      }
+      postAtmospaceEvent(eventType, details);
+    }
+
+    function flushPendingAtmospaceEvents() {
+      while (pendingAtmospaceEvents.length > 0) {
+        const item = pendingAtmospaceEvents.shift();
+        postAtmospaceEvent(item.eventType, item.details);
+      }
+    }
+
+    ensureMetrikaRuntime();
     reachGoal('landing_view');
 
     function updateQuizGoals(input) {
       const questionSection = input.closest('.quiz-question');
       const questions = Array.from(form?.querySelectorAll('.quiz-question') || []);
       const questionIndex = questions.indexOf(questionSection);
+
+      if (!quizStartedSent) {
+        quizStartedSent = true;
+        reachGoal('quiz_start_click');
+        sendAtmospaceEvent('quiz_start_click');
+      }
+
       if (questionIndex >= 0 && !answeredGoalIndexes.has(questionIndex)) {
         answeredGoalIndexes.add(questionIndex);
+        const questionRef = questionSection?.getAttribute('data-question-id') || 'question-' + String(questionIndex + 1);
         reachGoal('quiz_question_' + String(questionIndex + 1) + '_answered');
+        sendAtmospaceEvent('question_answered', {
+          event_ref: questionRef,
+          question_index: questionIndex + 1,
+        });
       }
 
       const answeredCount = form
@@ -233,6 +320,7 @@ export function buildQuizRuntimeScript(project, publishConfig, {
       if (!quizCompletedSent && answeredCount === config.questionCount) {
         quizCompletedSent = true;
         reachGoal('quiz_completed');
+        sendAtmospaceEvent('quiz_completed');
       }
     }
 
@@ -284,6 +372,7 @@ export function buildQuizRuntimeScript(project, publishConfig, {
           window.location.assign(registrationUrl);
         };
 
+        sendAtmospaceEvent('registration_started');
         window.setTimeout(navigate, 800);
         reachGoal('registration_click', navigate);
       }, true);
@@ -293,7 +382,7 @@ export function buildQuizRuntimeScript(project, publishConfig, {
       const advertising = readAdvertisingContext();
       const payload = {
         public_landing_key: config.publicLandingKey,
-        page_instance_id: readPageInstanceId(),
+        page_instance_id: pageInstanceId,
         page_url: window.location.href,
         landing_variant_code: config.landingVariantCode,
         landing_variant_name: config.landingVariantName,
@@ -318,6 +407,8 @@ export function buildQuizRuntimeScript(project, publishConfig, {
         if (!response.ok || data?.ok !== true || !registrationUrl) {
           throw new Error('registration_not_ready');
         }
+        atmospaceReady = true;
+        flushPendingAtmospaceEvents();
         enableRegistration(registrationUrl);
       } catch {
         setRegistrationError('Сейчас не удалось открыть регистрацию. Попробуйте ещё раз чуть позже.');

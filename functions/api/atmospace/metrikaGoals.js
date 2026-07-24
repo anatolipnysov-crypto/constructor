@@ -2,6 +2,7 @@ const METRIKA_MANAGEMENT_BASE_URL = 'https://api-metrika.yandex.net/management/v
 
 export const ATMOSPACE_METRIKA_GOALS = Object.freeze([
   { target: 'landing_view', name: 'Квиз — посещение' },
+  { target: 'quiz_start_click', name: 'Квиз — начало' },
   { target: 'quiz_question_1_answered', name: 'Квиз — ответ на вопрос 1' },
   { target: 'quiz_question_2_answered', name: 'Квиз — ответ на вопрос 2' },
   { target: 'quiz_question_3_answered', name: 'Квиз — ответ на вопрос 3' },
