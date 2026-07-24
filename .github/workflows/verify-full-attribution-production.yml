@@ -1,0 +1,178 @@
+name: Verify full attribution production
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/full-attribution-production.trigger
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: verify-full-attribution-production
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify production attribution contour
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Confirm one-time trigger
+        run: |
+          set -euo pipefail
+          grep -qx 'VERIFY_FULL_ATTRIBUTION_PRODUCTION' .github/full-attribution-production.trigger
+
+      - name: Verify production constructor bundle
+        run: |
+          set -euo pipefail
+          ROOT='https://constructor-3oa.pages.dev'
+          READY='false'
+
+          for attempt in $(seq 1 36); do
+            rm -rf /tmp/constructor-production
+            mkdir -p /tmp/constructor-production
+
+            if curl -fsS --max-time 20 "${ROOT}/" -o /tmp/constructor-production/index.html; then
+              grep -oE '(src|href)="[^"]+\.js"' /tmp/constructor-production/index.html \
+                | sed -E 's/^(src|href)="([^"]+)"$/\2/' \
+                | sort -u > /tmp/constructor-production/assets.txt || true
+
+              : > /tmp/constructor-production/bundle.js
+              while IFS= read -r asset; do
+                [ -n "${asset}" ] || continue
+                case "${asset}" in
+                  http://*|https://*) asset_url="${asset}" ;;
+                  /*) asset_url="${ROOT}${asset}" ;;
+                  *) asset_url="${ROOT}/${asset}" ;;
+                esac
+                curl -fsS --max-time 20 "${asset_url}" >> /tmp/constructor-production/bundle.js || true
+              done < /tmp/constructor-production/assets.txt
+
+              if grep -Fq '/api/landing-runtime/click' /tmp/constructor-production/bundle.js \
+                && grep -Fq 'quiz_start_click' /tmp/constructor-production/bundle.js \
+                && grep -Fq 'question_answered' /tmp/constructor-production/bundle.js \
+                && grep -Fq 'quiz_completed' /tmp/constructor-production/bundle.js \
+                && grep -Fq 'registration_started' /tmp/constructor-production/bundle.js \
+                && grep -Fq 'mc.yandex.ru/metrika/tag.js' /tmp/constructor-production/bundle.js \
+                && grep -Fq 'yclid' /tmp/constructor-production/bundle.js; then
+                READY='true'
+                break
+              fi
+            fi
+
+            sleep 10
+          done
+
+          test "${READY}" = 'true'
+          echo 'PRODUCTION_BUNDLE=PASS'
+
+      - name: Verify constructor bridge and Atmospace API
+        run: |
+          set -euo pipefail
+
+          BRIDGE="$(curl -fsS --max-time 20 'https://constructor-3oa.pages.dev/api/atmospace/generate')"
+          printf '%s' "${BRIDGE}" | node -e '
+            let raw = ""
+            process.stdin.setEncoding("utf8")
+            process.stdin.on("data", (chunk) => { raw += chunk })
+            process.stdin.on("end", () => {
+              const value = JSON.parse(raw)
+              const ok = value?.ok === true
+                && value?.service === "constructor-atmospace-bridge"
+                && value?.data?.atmospace === "ready"
+                && value?.data?.contract === "landing-runtime-generate-v1"
+              process.exit(ok ? 0 : 1)
+            })
+          '
+
+          API_HEALTH="$(curl -fsS --max-time 20 'https://api.atmospace.pro/health')"
+          printf '%s' "${API_HEALTH}" | node -e '
+            let raw = ""
+            process.stdin.setEncoding("utf8")
+            process.stdin.on("data", (chunk) => { raw += chunk })
+            process.stdin.on("end", () => process.exit(JSON.parse(raw)?.ok === true ? 0 : 1))
+          '
+
+          DB_HEALTH="$(curl -fsS --max-time 20 'https://api.atmospace.pro/health/db')"
+          printf '%s' "${DB_HEALTH}" | node -e '
+            let raw = ""
+            process.stdin.setEncoding("utf8")
+            process.stdin.on("data", (chunk) => { raw += chunk })
+            process.stdin.on("end", () => {
+              const value = JSON.parse(raw)
+              process.exit(value?.ok === true && value?.database === "ready" ? 0 : 1)
+            })
+          '
+
+          GENERATE_STATUS="$(curl -sS --max-time 20 -o /tmp/generate.json -w '%{http_code}' \
+            -X POST 'https://api.atmospace.pro/api/landing-runtime/generate' \
+            -H 'content-type: application/json' \
+            --data '{}')"
+          test "${GENERATE_STATUS}" = '400'
+          grep -q 'landing_name_required' /tmp/generate.json
+
+          echo 'BRIDGE=PASS'
+          echo 'ATMOSPACE_API=PASS'
+          echo 'ATMOSPACE_DATABASE=PASS'
+          echo 'GENERATION_BOUNDARY=PASS'
+
+      - name: Verify public landing runtime CORS
+        run: |
+          set -euo pipefail
+          ORIGIN='https://client-landing.example'
+
+          CORS_STATUS="$(curl -sS --max-time 20 -D /tmp/cors.headers -o /dev/null -w '%{http_code}' \
+            -X OPTIONS 'https://api.atmospace.pro/api/landing-runtime/init' \
+            -H "Origin: ${ORIGIN}" \
+            -H 'Access-Control-Request-Method: POST' \
+            -H 'Access-Control-Request-Headers: content-type')"
+
+          test "${CORS_STATUS}" = '204'
+          tr -d '\r' < /tmp/cors.headers | grep -qi "^access-control-allow-origin: ${ORIGIN}$"
+
+          CLICK_STATUS="$(curl -sS --max-time 20 -D /tmp/click.headers -o /tmp/click.json -w '%{http_code}' \
+            -X POST 'https://api.atmospace.pro/api/landing-runtime/click' \
+            -H "Origin: ${ORIGIN}" \
+            -H 'content-type: application/json' \
+            --data '{}')"
+
+          test "${CLICK_STATUS}" = '400'
+          grep -q 'public_landing_key_required' /tmp/click.json
+          tr -d '\r' < /tmp/click.headers | grep -qi "^access-control-allow-origin: ${ORIGIN}$"
+
+          echo 'PUBLIC_RUNTIME_CORS=PASS'
+          echo 'CLICK_BOUNDARY=PASS'
+
+      - name: Record verification success
+        if: ${{ success() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue comment 14 --repo "${GITHUB_REPOSITORY}" --body "FULL_ATTRIBUTION_PRODUCTION=PASS
+          SHA=${GITHUB_SHA}
+          PRODUCTION_BUNDLE=PASS
+          QUIZ_EVENTS=PASS
+          METRIKA_RUNTIME=PASS
+          UTM_YCLID_RUNTIME=PASS
+          CONSTRUCTOR_BRIDGE=PASS
+          ATMOSPACE_API=PASS
+          ATMOSPACE_DATABASE=PASS
+          GENERATION_BOUNDARY=PASS
+          PUBLIC_RUNTIME_CORS=PASS"
+
+      - name: Record verification failure
+        if: ${{ failure() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue comment 14 --repo "${GITHUB_REPOSITORY}" --body "FULL_ATTRIBUTION_PRODUCTION=FAIL
+          SHA=${GITHUB_SHA}
+          ACTION_REQUIRED=inspect_workflow_run"
