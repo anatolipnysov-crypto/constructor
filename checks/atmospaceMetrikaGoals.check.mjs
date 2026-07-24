@@ -6,9 +6,10 @@ import {
   ensureAtmospaceMetrikaGoals,
 } from '../functions/api/atmospace/metrikaGoals.js'
 
-assert.equal(ATMOSPACE_METRIKA_GOALS.length, 13)
-assert.equal(new Set(ATMOSPACE_METRIKA_GOALS.map((goal) => goal.target)).size, 13)
+assert.equal(ATMOSPACE_METRIKA_GOALS.length, 14)
+assert.equal(new Set(ATMOSPACE_METRIKA_GOALS.map((goal) => goal.target)).size, 14)
 assert.equal(ATMOSPACE_METRIKA_GOALS.some((goal) => goal.target === 'landing_view'), true)
+assert.equal(ATMOSPACE_METRIKA_GOALS.some((goal) => goal.target === 'quiz_start_click'), true)
 assert.equal(ATMOSPACE_METRIKA_GOALS.some((goal) => goal.target === 'quiz_question_7_answered'), true)
 assert.equal(ATMOSPACE_METRIKA_GOALS.some((goal) => goal.target === 'registration_success'), true)
 assert.equal(ATMOSPACE_METRIKA_GOALS.some((goal) => goal.target === 'notifications_connected'), true)
@@ -72,11 +73,11 @@ const result = await ensureAtmospaceMetrikaGoals({
 })
 
 assert.equal(result.ok, true)
-assert.equal(result.totalRequired, 13)
+assert.equal(result.totalRequired, 14)
 assert.equal(result.existingCount, 2)
-assert.equal(result.createdCount, 11)
+assert.equal(result.createdCount, 12)
 assert.equal(requests.filter((item) => item.options.method === 'GET').length, 1)
-assert.equal(requests.filter((item) => item.options.method === 'POST').length, 11)
+assert.equal(requests.filter((item) => item.options.method === 'POST').length, 12)
 assert.equal(requests.every((item) => item.url.endsWith('/counter/12345678/goals')), true)
 assert.equal(requests.every((item) => item.options.headers.authorization === `OAuth ${credential}`), true)
 
@@ -87,6 +88,7 @@ const createdTargets = new Set(
 )
 assert.equal(createdTargets.has('landing_view'), false)
 assert.equal(createdTargets.has('registration_success'), false)
+assert.equal(createdTargets.has('quiz_start_click'), true)
 assert.equal(createdTargets.has('notifications_connected'), true)
 assert.equal(createdTargets.has('payment_success'), true)
 assert.equal(JSON.stringify(result).includes(credential), false)
