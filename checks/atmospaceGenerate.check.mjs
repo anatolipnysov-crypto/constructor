@@ -15,9 +15,9 @@ const handler = createGenerateHandler({
     }
     return {
       ok: true,
-      totalRequired: 13,
+      totalRequired: 14,
       existingCount: 5,
-      createdCount: 8,
+      createdCount: 9,
     }
   },
   fetchImpl: async (url, options) => {
