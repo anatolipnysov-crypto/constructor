@@ -1072,7 +1072,7 @@ function buildAtmospacePrelandingTrackingScript() {
   }
 
   function postJson(url, payload, keepalive) {
-    if (!url || typeof fetch !== 'function') return Promise.resolve(null);
+    if (!url || typeof fetch !== 'function') return Promise.resolve({ ok: false, status: 0, body: null });
     return fetch(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -1080,37 +1080,51 @@ function buildAtmospacePrelandingTrackingScript() {
       keepalive: Boolean(keepalive)
     }).then(function (response) {
       return response.json().catch(function () { return null; }).then(function (body) {
-        return { ok: response.ok, body: body };
+        return { ok: response.ok, status: response.status, body: body };
       });
-    }).catch(function () { return null; });
+    }).catch(function () { return { ok: false, status: 0, body: null }; });
   }
 
-  function addSafeEventParams(payload, params) {
-    if (!params || typeof params !== 'object') return payload;
-    Object.keys(params).forEach(function (key) {
-      if (/answer|text|label|option/i.test(key)) return;
-      payload[key] = params[key];
-    });
+  function addSafeEventParams(payload, eventType, params) {
+    if (eventType !== 'question_answered' || !params || typeof params !== 'object') return payload;
+    var questionIndex = Number(params.question_index);
+    if (Number.isInteger(questionIndex) && questionIndex >= 1 && questionIndex <= 100) {
+      payload.question_index = questionIndex;
+    }
+    var eventRef = String(params.event_ref || '');
+    if (/^[a-z0-9._:-]{1,80}$/.test(eventRef)) payload.event_ref = eventRef;
     return payload;
+  }
+
+  function deliverClickEvent(payload) {
+    return postJson(clickEndpoint, payload, true).then(function (result) {
+      if (!result || !result.ok) {
+        console.error('[Atmospace] Event delivery failed.', {
+          event_type: payload.event_type,
+          status: result && result.status ? result.status : 0
+        });
+      }
+      return result;
+    });
   }
 
   function flushPendingClickEvents() {
     if (!initCompleted || !clickEndpoint) return;
     while (pendingClickEvents.length) {
-      postJson(clickEndpoint, pendingClickEvents.shift(), true);
+      deliverClickEvent(pendingClickEvents.shift());
     }
   }
 
   function sendEvent(eventType, params) {
     if (!ALLOWED_CLICK_EVENTS[eventType]) return;
-    var payload = addSafeEventParams(buildBasePayload(), params);
+    var payload = addSafeEventParams(buildBasePayload(), eventType, params);
     payload.event_type = eventType;
     payload.client_time = new Date().toISOString();
     if (!initCompleted) {
       pendingClickEvents.push(payload);
       return;
     }
-    postJson(clickEndpoint, payload, true);
+    deliverClickEvent(payload);
   }
 
   var metrikaCounterId = (function () {
@@ -1298,11 +1312,12 @@ function buildAtmospacePrelandingTrackingScript() {
   function markQuestionAnswered(index) {
     if (answeredGoalIndexes[index]) return;
     answeredGoalIndexes[index] = true;
+    var questionIndex = index + 1;
     sendEvent('question_answered', {
-      questionNumber: index + 1,
-      question_id: 'q' + String(index + 1)
+      question_index: questionIndex,
+      event_ref: 'question-' + String(questionIndex)
     });
-    reachGoal('question_answered', { questionNumber: index + 1 });
+    reachGoal('question_answered', { question_index: questionIndex });
   }
 
   function markQuizCompleted() {
@@ -1314,8 +1329,8 @@ function buildAtmospacePrelandingTrackingScript() {
 
   document.addEventListener('atmospace:quiz-start', markQuizStarted);
   document.addEventListener('atmospace:quiz-answer', function (event) {
-    var questionNumber = Number(event && event.detail ? event.detail.questionNumber : 0);
-    if (questionNumber > 0) markQuestionAnswered(questionNumber - 1);
+    var questionIndex = Number(event && event.detail ? event.detail.questionIndex : 0);
+    if (questionIndex > 0) markQuestionAnswered(questionIndex - 1);
   });
   document.addEventListener('atmospace:quiz-complete', function () {
     markQuizCompleted();
@@ -5241,7 +5256,7 @@ function renderInteractiveQuizPrelanding({
       button.textContent=item.label;
       button.addEventListener('click',function(){
         answers[index]={label:item.label,value:item.value||'',optionIndex:optionIndex};
-        document.dispatchEvent(new CustomEvent('atmospace:quiz-answer',{detail:{questionNumber:index+1}}));
+        document.dispatchEvent(new CustomEvent('atmospace:quiz-answer',{detail:{questionIndex:index+1}}));
         index+=1;
         if(index>=questions.length){showResult();return;}
         renderQuestion();
@@ -5901,7 +5916,8 @@ function validateAtmospaceTildaHtml(html = '', config = {}, options = {}) {
     'data-atmospace-question-count="4"',
     'quiz_start_click',
     'question_answered',
-    'questionNumber',
+    'question_index',
+    'event_ref',
     'quiz_completed'
   ];
   if (quizRequired) {
@@ -5920,6 +5936,12 @@ function validateAtmospaceTildaHtml(html = '', config = {}, options = {}) {
   }
   if (source.includes('sessionStorage')) {
     errors.push('page_instance_id не должен сохраняться в sessionStorage.');
+  }
+  if (/\bquestionNumber\s*:|\bquestion_id\s*:/.test(source)) {
+    errors.push('В HTML найден устаревший формат события ответа квиза.');
+  }
+  if (quizRequired && !/question_index\s*:\s*questionIndex[\s\S]{0,160}event_ref\s*:\s*['"]question-['"]\s*\+\s*String\(questionIndex\)/.test(source)) {
+    errors.push('Событие ответа квиза не соответствует текущему контракту.');
   }
   if (countMatches(source, /window\.ym\(metrikaCounterId,\s*['"]init['"]/g) !== 1) {
     errors.push('Счётчик Метрики должен инициализироваться ровно один раз защитным ядром лендинга.');
@@ -7221,6 +7243,18 @@ export default function Constructor() {
     }),
     [prelandingHtml, prelandingHtmlConfig, manualPrelandingMode]
   );
+  const prelandingValidationErrors = prelandingHtmlValidation.errors.join('\n');
+  const prelandingValidationWarnings = prelandingHtmlValidation.warnings.join('\n');
+  useEffect(() => {
+    if (!prelandingHtml.trim()) return;
+    if (prelandingValidationErrors) {
+      console.error('[Constructor] Atmospace HTML validation failed.', prelandingHtmlValidation.errors);
+      return;
+    }
+    if (prelandingValidationWarnings) {
+      console.warn('[Constructor] Atmospace HTML validation warning.', prelandingHtmlValidation.warnings);
+    }
+  }, [prelandingHtml, prelandingValidationErrors, prelandingValidationWarnings]);
 
   const prelandingPresetForBannerStyle = (bannerStyle) => {
     const map = {
@@ -7574,16 +7608,16 @@ export default function Constructor() {
                     <p className="mt-3 rounded-xl bg-white/10 p-3 text-xs font-bold text-white">{prelandingAiStatus}</p>
                   )}
                 </div>
+              ) : !prelandingHtml.trim() ? (
+                <div className="bg-white/15 rounded-xl p-4">
+                  <AlertCircle className="w-8 h-8 mx-auto mb-2 text-yellow-200" />
+                  <p className="text-center text-sm font-black">Сначала подготовьте HTML.</p>
+                </div>
               ) : prelandingHtmlValidation.errors.length ? (
                 <div className="bg-white/15 rounded-xl p-4">
                   <AlertCircle className="w-8 h-8 mx-auto mb-2 text-yellow-200" />
-                  <p className="text-center text-sm font-black">HTML заблокирован автоматической проверкой.</p>
-                  <div className="mt-3 space-y-2">
-                    {prelandingHtmlValidation.errors.map((item, index) => (
-                      <div key={index} className="rounded-lg bg-red-500/25 p-2 text-xs font-bold text-white">{item}</div>
-                    ))}
-                  </div>
-                  <p className="mt-3 text-center text-xs text-white/80">Исправьте поля клиента или перегенерируйте код. Кнопка копирования появится только после чистой проверки.</p>
+                  <p className="text-center text-sm font-black">Не удалось подготовить страницу.</p>
+                  <p className="mt-3 text-center text-xs text-white/80">Проверьте данные и запустите генерацию ещё раз.</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -7592,14 +7626,11 @@ export default function Constructor() {
                   )}
                   {prelandingHtmlValidation.warnings.length > 0 && (
                     <div className="rounded-xl bg-yellow-300/20 p-3 text-xs font-bold text-yellow-50">
-                      <div className="mb-1 text-white">Предупреждения проверки:</div>
-                      {prelandingHtmlValidation.warnings.map((item, index) => (
-                        <div key={index}>• {item}</div>
-                      ))}
+                      Проверьте заполненные данные перед публикацией страницы.
                     </div>
                   )}
                   <div className="rounded-xl bg-emerald-300/20 p-3 text-xs font-black text-white">
-                    Проверка пройдена: Tilda HTML собран на Atmospace runtime, с publicLandingKey, /init, /click и безопасными CTA.
+                    Проверка пройдена. HTML готов к копированию.
                   </div>
                   <div className="grid md:grid-cols-1 gap-2">
                     <CopyBtn text={prelandingHtml} label="Скопировать HTML-код" big />

@@ -79,7 +79,8 @@ const runtime = extractFunctionBody(appSource, 'function buildAtmospacePrelandin
   'landing_view',
   'quiz_start_click',
   'question_answered',
-  'questionNumber',
+  'question_index',
+  'event_ref',
   'quiz_completed',
   'registration_started'
 ].forEach((snippet) => {
@@ -104,8 +105,18 @@ assert.doesNotMatch(
 
 assert.match(
   runtime,
-  /(?:reachGoal|sendMetrikaGoal)\(\s*['"]question_answered['"]\s*,\s*\{[\s\S]{0,180}questionNumber/,
-  'question_answered must contain only the safe questionNumber parameter.'
+  /(?:reachGoal|sendMetrikaGoal)\(\s*['"]question_answered['"]\s*,\s*\{[\s\S]{0,180}question_index/,
+  'question_answered must contain the safe question_index parameter.'
+);
+assert.match(
+  runtime,
+  /sendEvent\(\s*['"]question_answered['"]\s*,\s*\{[\s\S]{0,120}question_index[\s\S]{0,120}event_ref/,
+  'question_answered must contain only safe question_index and event_ref fields.'
+);
+assert.doesNotMatch(
+  runtime,
+  /\bquestionNumber\s*:|\bquestion_id\s*:/,
+  'Legacy questionNumber/question_id fields must not return to the runtime.'
 );
 assert.ok(
   hasRegistrationStartedHandoff(runtime),

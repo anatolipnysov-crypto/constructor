@@ -478,43 +478,52 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
   }
 
   function postJson(url,payload,keepalive){
-    if(!url||typeof fetch!=="function")return Promise.resolve(null);
+    if(!url||typeof fetch!=="function")return Promise.resolve({ok:false,status:0,body:null});
     return fetch(url,{
       method:"POST",
       headers:{"content-type":"application/json"},
       body:JSON.stringify(payload),
       keepalive:Boolean(keepalive)
     }).then(function(response){
-      return response.json().catch(function(){return null;}).then(function(body){return{ok:response.ok,body:body};});
-    }).catch(function(){return null;});
+      return response.json().catch(function(){return null;}).then(function(body){return{ok:response.ok,status:response.status,body:body};});
+    }).catch(function(){return{ok:false,status:0,body:null};});
   }
 
-  function addSafeEventParams(payload,params){
-    if(!params||typeof params!=="object")return payload;
-    Object.keys(params).forEach(function(key){
-      if(/answer|text|label|option/i.test(key))return;
-      payload[key]=params[key];
-    });
+  function addSafeEventParams(payload,eventType,params){
+    if(eventType!=="question_answered"||!params||typeof params!=="object")return payload;
+    var questionIndex=Number(params.question_index);
+    if(Number.isInteger(questionIndex)&&questionIndex>=1&&questionIndex<=100)payload.question_index=questionIndex;
+    var eventRef=String(params.event_ref||"");
+    if(/^[a-z0-9._:-]{1,80}$/.test(eventRef))payload.event_ref=eventRef;
     return payload;
+  }
+
+  function deliverClickEvent(payload){
+    return postJson(clickEndpoint,payload,true).then(function(result){
+      if(!result||!result.ok){
+        console.error("[Atmospace] Event delivery failed.",{event_type:payload.event_type,status:result&&result.status?result.status:0});
+      }
+      return result;
+    });
   }
 
   function flushPendingClickEvents(){
     if(!atmospaceReady)return;
     while(pendingClickEvents.length){
-      postJson(clickEndpoint,pendingClickEvents.shift(),true);
+      deliverClickEvent(pendingClickEvents.shift());
     }
   }
 
   function sendEvent(eventType,params){
     if(!ALLOWED_CLICK_EVENTS[eventType])return;
-    var payload=addSafeEventParams(basePayload(),params);
+    var payload=addSafeEventParams(basePayload(),eventType,params);
     payload.event_type=eventType;
     payload.client_time=new Date().toISOString();
     if(!atmospaceReady){
       pendingClickEvents.push(payload);
       return;
     }
-    postJson(clickEndpoint,payload,true);
+    deliverClickEvent(payload);
   }
 
   function sendLandingOpenedOnce(){
@@ -614,11 +623,11 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
   }
 
   function markQuestionAnswered(event){
-    var questionNumber=Math.floor(Number(event&&event.detail?event.detail.questionNumber:0));
-    if(questionNumber<1||questionNumber>100||answeredQuestionNumbers[questionNumber])return;
-    answeredQuestionNumbers[questionNumber]=true;
-    sendEvent("question_answered",{questionNumber:questionNumber,question_id:"q"+String(questionNumber)});
-    reachGoal("question_answered",{questionNumber:questionNumber});
+    var questionIndex=Math.floor(Number(event&&event.detail?event.detail.questionIndex:0));
+    if(questionIndex<1||questionIndex>100||answeredQuestionNumbers[questionIndex])return;
+    answeredQuestionNumbers[questionIndex]=true;
+    sendEvent("question_answered",{question_index:questionIndex,event_ref:"question-"+String(questionIndex)});
+    reachGoal("question_answered",{question_index:questionIndex});
   }
 
   function markQuizCompleted(){
@@ -770,7 +779,8 @@ function validateAtmospaceEmbedCode({ embedCode, publicLandingKey, counterId, la
     'quiz_start_click',
     'landing_view',
     'question_answered',
-    'questionNumber',
+    'question_index',
+    'event_ref',
     'quiz_completed',
     'registration_started',
     'links.registration',
@@ -808,6 +818,10 @@ function validateAtmospaceEmbedCode({ embedCode, publicLandingKey, counterId, la
   if (!source.includes('ALLOWED_CLICK_EVENTS')) errors.push('click_event_allowlist_missing');
   if (!source.includes('pendingClickEvents') || !source.includes('flushPendingClickEvents')) errors.push('click_event_queue_missing');
   if (!source.includes('advertising_params')) errors.push('advertising_params_missing');
+  if (/\bquestionNumber\s*:|\bquestion_id\s*:/.test(source)) errors.push('question_answered_legacy_payload_forbidden');
+  if (!/sendEvent\("question_answered",\{question_index:questionIndex,event_ref:"question-"\+String\(questionIndex\)\}\)/.test(source)) {
+    errors.push('question_answered_contract_invalid');
+  }
   if ((source.match(/window\.ym\([^\n]+["']init["']/g) || []).length !== 1) errors.push('metrika_init_contract_invalid');
   if (source.includes('https://web.telegram.org/k/#')) errors.push('telegram_web_link_forbidden');
   if (!source.includes('registrationUrl=candidate') && !source.includes('registrationUrl = candidate')) errors.push('canonical_registration_link_missing');

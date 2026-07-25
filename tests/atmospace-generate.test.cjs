@@ -59,7 +59,8 @@ function assertFinalRuntimeContract(name, runtime) {
     'landing_view',
     'quiz_start_click',
     'question_answered',
-    'questionNumber',
+    'question_index',
+    'event_ref',
     'quiz_completed',
     'registration_started',
   ]) {
@@ -94,8 +95,16 @@ function assertFinalRuntimeContract(name, runtime) {
     `${name}: runtime must derive the Atmospace click endpoint exactly once`,
   );
   expect(
-    /(?:reachGoal|sendMetrikaGoal)\(\s*["']question_answered["']\s*,\s*\{[\s\S]{0,180}questionNumber/.test(runtime),
-    `${name}: question_answered must carry questionNumber`,
+    /(?:reachGoal|sendMetrikaGoal)\(\s*["']question_answered["']\s*,\s*\{[\s\S]{0,180}question_index/.test(runtime),
+    `${name}: question_answered must carry question_index`,
+  );
+  expect(
+    /sendEvent\(\s*["']question_answered["']\s*,\s*\{[\s\S]{0,120}question_index[\s\S]{0,120}event_ref/.test(runtime),
+    `${name}: question_answered must carry the safe question_index and event_ref fields`,
+  );
+  expect(
+    !/\bquestionNumber\s*:|\bquestion_id\s*:/.test(runtime),
+    `${name}: legacy questionNumber/question_id payload fields are forbidden`,
   );
   expect(
     hasRegistrationStartedHandoff(runtime),

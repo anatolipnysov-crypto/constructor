@@ -230,7 +230,7 @@ const built = fs.readFileSync(path.join(distAssetsDir, bundle), 'utf8');
   '/api/landing-runtime/click',
   'data-atmospace-registration-link',
   'data-atmospace-question-count="4"',
-  'Проверка пройдена: Tilda HTML собран на Atmospace runtime'
+  'Проверка пройдена. HTML готов к копированию.'
 ].forEach((snippet) => {
   assert(built.includes(snippet), `Built bundle must contain ${snippet}`);
 });
