@@ -95,16 +95,17 @@ function assertFinalRuntimeContract(name, runtime) {
     `${name}: runtime must derive the Atmospace click endpoint exactly once`,
   );
   expect(
-    /(?:reachGoal|sendMetrikaGoal)\(\s*["']question_answered["']\s*,\s*\{[\s\S]{0,180}question_index/.test(runtime),
-    `${name}: question_answered must carry question_index`,
-  );
-  expect(
     /sendEvent\(\s*["']question_answered["']\s*,\s*\{[\s\S]{0,120}question_index[\s\S]{0,120}event_ref/.test(runtime),
     `${name}: question_answered must carry the safe question_index and event_ref fields`,
   );
   expect(
     !/\bquestionNumber\s*:|\bquestion_id\s*:/.test(runtime),
     `${name}: legacy questionNumber/question_id payload fields are forbidden`,
+  );
+  const browserMetrikaGoals = literalCalls(runtime, 'reachGoal').sort();
+  expect(
+    JSON.stringify(browserMetrikaGoals) === JSON.stringify(['landing_view', 'quiz_completed', 'registration_started'].sort()),
+    `${name}: browser Metrika must receive only landing_view, quiz_completed and registration_started`,
   );
   expect(
     hasRegistrationStartedHandoff(runtime),

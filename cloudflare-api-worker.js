@@ -964,7 +964,6 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
     if(quizStartSent)return;
     quizStartSent=true;
     sendEvent("quiz_start_click");
-    reachGoal("quiz_start_click");
   }
 
   function markQuestionAnswered(event){
@@ -972,7 +971,6 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
     if(questionIndex<1||questionIndex>100||answeredQuestionNumbers[questionIndex])return;
     answeredQuestionNumbers[questionIndex]=true;
     sendEvent("question_answered",{question_index:questionIndex,event_ref:"question-"+String(questionIndex)});
-    reachGoal("question_answered",{question_index:questionIndex});
   }
 
   function markQuizCompleted(){
@@ -1207,12 +1205,15 @@ function validateAtmospaceEmbedCode({ embedCode, publicLandingKey, counterId, la
   if (!runtime.includes('pendingClickEvents') || !runtime.includes('flushPendingClickEvents')) errors.push('click_event_queue_missing');
   if (!runtime.includes('advertising_params')) errors.push('advertising_params_missing');
 
-  const requiredGoals = ['landing_view', 'quiz_start_click', 'question_answered', 'quiz_completed', 'registration_started'];
-  requiredGoals.forEach((goalName) => {
-    if (!runtime.includes(`reachGoal("${goalName}"`)) errors.push(`metrika_goal_missing:${goalName}`);
+  const browserMetrikaGoals = Array.from(runtime.matchAll(/reachGoal\("([^"]+)"/g), (match) => match[1]);
+  const requiredBrowserMetrikaGoals = ['landing_view', 'quiz_completed', 'registration_started'];
+  requiredBrowserMetrikaGoals.forEach((goalName) => {
+    if (browserMetrikaGoals.filter((candidate) => candidate === goalName).length !== 1) {
+      errors.push(`metrika_goal_invalid:${goalName}`);
+    }
   });
-  if (!/reachGoal\("question_answered",\{question_index:questionIndex\}\)/.test(runtime)) {
-    errors.push('question_answered_params_invalid');
+  if (browserMetrikaGoals.some((goalName) => !requiredBrowserMetrikaGoals.includes(goalName))) {
+    errors.push('metrika_goal_set_invalid');
   }
   if (/\bquestionNumber\s*:|\bquestion_id\s*:/.test(runtime)) errors.push('question_answered_legacy_payload_forbidden');
   if (!/sendEvent\("question_answered",\{question_index:questionIndex,event_ref:"question-"\+String\(questionIndex\)\}\)/.test(runtime)) {

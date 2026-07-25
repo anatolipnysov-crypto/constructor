@@ -290,9 +290,6 @@ export function buildQuizRuntimeScript(project, publishConfig, {
       }
     }
 
-    ensureMetrikaRuntime();
-    reachGoal('landing_view');
-
     function updateQuizGoals(input) {
       const questionSection = input.closest('.quiz-question');
       const questions = Array.from(form?.querySelectorAll('.quiz-question') || []);
@@ -300,14 +297,12 @@ export function buildQuizRuntimeScript(project, publishConfig, {
 
       if (!quizStartedSent) {
         quizStartedSent = true;
-        reachGoal('quiz_start_click');
         sendAtmospaceEvent('quiz_start_click');
       }
 
       if (questionIndex >= 0 && !answeredGoalIndexes.has(questionIndex)) {
         answeredGoalIndexes.add(questionIndex);
-        const questionRef = questionSection?.getAttribute('data-question-id') || 'question-' + String(questionIndex + 1);
-        reachGoal('quiz_question_' + String(questionIndex + 1) + '_answered');
+        const questionRef = 'question-' + String(questionIndex + 1);
         sendAtmospaceEvent('question_answered', {
           event_ref: questionRef,
           question_index: questionIndex + 1,
@@ -374,7 +369,7 @@ export function buildQuizRuntimeScript(project, publishConfig, {
 
         sendAtmospaceEvent('registration_started');
         window.setTimeout(navigate, 800);
-        reachGoal('registration_click', navigate);
+        reachGoal('registration_started', navigate);
       }, true);
     }
 
@@ -408,8 +403,10 @@ export function buildQuizRuntimeScript(project, publishConfig, {
           throw new Error('registration_not_ready');
         }
         atmospaceReady = true;
-        flushPendingAtmospaceEvents();
         enableRegistration(registrationUrl);
+        ensureMetrikaRuntime();
+        reachGoal('landing_view');
+        flushPendingAtmospaceEvents();
       } catch {
         setRegistrationError('Сейчас не удалось открыть регистрацию. Попробуйте ещё раз чуть позже.');
       }

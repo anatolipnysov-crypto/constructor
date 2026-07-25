@@ -105,11 +105,6 @@ assert.doesNotMatch(
 
 assert.match(
   runtime,
-  /(?:reachGoal|sendMetrikaGoal)\(\s*['"]question_answered['"]\s*,\s*\{[\s\S]{0,180}question_index/,
-  'question_answered must contain the safe question_index parameter.'
-);
-assert.match(
-  runtime,
   /sendEvent\(\s*['"]question_answered['"]\s*,\s*\{[\s\S]{0,120}question_index[\s\S]{0,120}event_ref/,
   'question_answered must contain only safe question_index and event_ref fields.'
 );
@@ -117,6 +112,11 @@ assert.doesNotMatch(
   runtime,
   /\bquestionNumber\s*:|\bquestion_id\s*:/,
   'Legacy questionNumber/question_id fields must not return to the runtime.'
+);
+assert.deepEqual(
+  literalCalls(runtime, 'reachGoal').sort(),
+  ['landing_view', 'quiz_completed', 'registration_started'].sort(),
+  'Browser Metrika must receive only landing_view, quiz_completed and registration_started.'
 );
 assert.ok(
   hasRegistrationStartedHandoff(runtime),

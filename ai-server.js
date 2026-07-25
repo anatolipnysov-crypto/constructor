@@ -619,7 +619,6 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
     if(quizStartSent)return;
     quizStartSent=true;
     sendEvent("quiz_start_click");
-    reachGoal("quiz_start_click");
   }
 
   function markQuestionAnswered(event){
@@ -627,7 +626,6 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
     if(questionIndex<1||questionIndex>100||answeredQuestionNumbers[questionIndex])return;
     answeredQuestionNumbers[questionIndex]=true;
     sendEvent("question_answered",{question_index:questionIndex,event_ref:"question-"+String(questionIndex)});
-    reachGoal("question_answered",{question_index:questionIndex});
   }
 
   function markQuizCompleted(){
@@ -818,6 +816,16 @@ function validateAtmospaceEmbedCode({ embedCode, publicLandingKey, counterId, la
   if (!source.includes('ALLOWED_CLICK_EVENTS')) errors.push('click_event_allowlist_missing');
   if (!source.includes('pendingClickEvents') || !source.includes('flushPendingClickEvents')) errors.push('click_event_queue_missing');
   if (!source.includes('advertising_params')) errors.push('advertising_params_missing');
+  const browserMetrikaGoals = Array.from(source.matchAll(/reachGoal\(["']([^"']+)["']/g), (match) => match[1]);
+  const requiredBrowserMetrikaGoals = ['landing_view', 'quiz_completed', 'registration_started'];
+  requiredBrowserMetrikaGoals.forEach((goalName) => {
+    if (browserMetrikaGoals.filter((candidate) => candidate === goalName).length !== 1) {
+      errors.push(`metrika_goal_invalid:${goalName}`);
+    }
+  });
+  if (browserMetrikaGoals.some((goalName) => !requiredBrowserMetrikaGoals.includes(goalName))) {
+    errors.push('metrika_goal_set_invalid');
+  }
   if (/\bquestionNumber\s*:|\bquestion_id\s*:/.test(source)) errors.push('question_answered_legacy_payload_forbidden');
   if (!/sendEvent\("question_answered",\{question_index:questionIndex,event_ref:"question-"\+String\(questionIndex\)\}\)/.test(source)) {
     errors.push('question_answered_contract_invalid');

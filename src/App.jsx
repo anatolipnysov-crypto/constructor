@@ -703,7 +703,7 @@ const CLIENT_ACCOUNTS = [
     role: 'client',
     label: 'Михаил Кузнецов',
     clientId: 'client_101_mihail_kuznetsov',
-    metrikaId: '109150890',
+    metrikaId: '',
     metrikaToken: '',
     getcourseLink: 'https://voronkapodkluch.getcourse.ru/page2?gcao=54688&gcpc=1b9f5',
     partnerCode: '1b9f5',
@@ -1306,7 +1306,6 @@ function buildAtmospacePrelandingTrackingScript() {
     if (quizStartSent) return;
     quizStartSent = true;
     sendEvent('quiz_start_click');
-    reachGoal('quiz_start_click');
   }
 
   function markQuestionAnswered(index) {
@@ -1317,7 +1316,6 @@ function buildAtmospacePrelandingTrackingScript() {
       question_index: questionIndex,
       event_ref: 'question-' + String(questionIndex)
     });
-    reachGoal('question_answered', { question_index: questionIndex });
   }
 
   function markQuizCompleted() {
@@ -5943,6 +5941,18 @@ function validateAtmospaceTildaHtml(html = '', config = {}, options = {}) {
   if (quizRequired && !/question_index\s*:\s*questionIndex[\s\S]{0,160}event_ref\s*:\s*['"]question-['"]\s*\+\s*String\(questionIndex\)/.test(source)) {
     errors.push('Событие ответа квиза не соответствует текущему контракту.');
   }
+  const browserMetrikaGoals = Array.from(source.matchAll(/\breachGoal\(\s*['"]([^'"]+)['"]/g), (match) => match[1]);
+  const expectedBrowserMetrikaGoals = ['landing_view', 'quiz_completed', 'registration_started'];
+  const unexpectedBrowserMetrikaGoals = browserMetrikaGoals.filter((goalName) => !expectedBrowserMetrikaGoals.includes(goalName));
+  if (unexpectedBrowserMetrikaGoals.length || expectedBrowserMetrikaGoals.some((goalName) => !browserMetrikaGoals.includes(goalName))) {
+    errors.push('Набор браузерных целей Метрики не соответствует текущей версии лендинга.');
+  }
+  expectedBrowserMetrikaGoals.forEach((goalName) => {
+    const goalPattern = new RegExp(`\\breachGoal\\(\\s*['"]${goalName}['"]`, 'g');
+    if (countMatches(source, goalPattern) !== 1) {
+      errors.push('Каждая браузерная цель Метрики должна отправляться из runtime ровно один раз.');
+    }
+  });
   if (countMatches(source, /window\.ym\(metrikaCounterId,\s*['"]init['"]/g) !== 1) {
     errors.push('Счётчик Метрики должен инициализироваться ровно один раз защитным ядром лендинга.');
   }
