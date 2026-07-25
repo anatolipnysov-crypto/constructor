@@ -69,10 +69,28 @@ const formatOneRenderer = sliceBetween(
   "renderAtmospaceQuizButton('atm-v1-primary', 'Пройти тест')",
   'data-atmospace-first-fold',
   'data-atmospace-first-fold-cta',
+  '--atm-hero-bg:#07111f',
+  'background:var(--atm-hero-bg)',
+  'color:#fff',
   'renderCoreMethodCompactOffer',
   'buildAtmospacePrelandingTrackingScript'
 ].forEach((snippet) => {
   assert(formatOneRenderer.includes(snippet), `Format 1 must include ${snippet}`);
+});
+assert(!formatOneRenderer.includes('.atm-v1-hero{position:relative;min-height:min(900px,100svh)'), 'Format 1 must not regress to the pale split hero.');
+
+const imageSpecBuilder = sliceBetween(
+  source,
+  'function buildPrelandingImageSpecs',
+  'function prelandingThemeForStyle'
+);
+[
+  'High-contrast premium masculine editorial photography',
+  'never as a generic man in a blue shirt sitting beside a laptop',
+  'Never use pale pastel haze or a washed-out white page look',
+  "persona: isCoreMethod ? 'man'"
+].forEach((snippet) => {
+  assert(imageSpecBuilder.includes(snippet), `Format 1 image contract must include ${snippet}`);
 });
 
 const formatOneQuizRenderer = sliceBetween(

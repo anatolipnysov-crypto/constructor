@@ -2149,7 +2149,10 @@ function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline,
     : rotateItems(fallbackRouteScenes, fallbackRouteScenes.length ? semanticRotation % fallbackRouteScenes.length : 0).slice(0, 3);
   const routePersonas = rotateItems(semanticPersonas, semanticPersonas.length ? semanticRotation % semanticPersonas.length : 0);
   const designMood = designRoute?.visualMood || 'clean premium light prelanding design';
-  const modeDescription = mode === 'heroBlocks'
+  const isCoreMethod = mode === 'coreMethod' || mode === 'core-method';
+  const modeDescription = isCoreMethod
+    ? 'premium masculine mini-test landing with one strong cinematic first-screen story'
+    : mode === 'heroBlocks'
     ? 'client prelanding from headline and subtitle, bright hero scene with white blocks'
     : mode === 'natureEditorial'
       ? 'Nature editorial prelanding, warm paper/sage/olive visual language, magazine-like premium layout with collage and calm first step'
@@ -2169,9 +2172,15 @@ function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline,
     `Landing rules: ${CLIENT_PRELANDING_RULES.join('; ')}.`,
     'Visual story must literally support the exact problem in the landing headline and subtitle. Do not replace a salary problem, family choice, overwork or broken appliance with a generic successful person walking in a city.',
     'Do not add any brand, internal product name, readable UI or unrelated mythology.',
-    'Bright clean premium lifestyle photography for a modern Russian ad landing, not gloomy, not dark, not stock-like.',
-    'The person must look alive and modern, age 32-50, visible face and natural emotion, not elderly, not tired, not overexposed.',
-    'Avoid washed-out white backgrounds and blown highlights: keep readable skin tone, natural contrast, real room/cafe/city depth, vivid daylight, crisp focus.',
+    isCoreMethod
+      ? 'High-contrast premium masculine editorial photography: deep graphite, navy or forest shadows, one restrained warm accent, cinematic directional light, realistic materials and crisp focus. Never use pale pastel haze or a washed-out white page look.'
+      : 'Bright clean premium lifestyle photography for a modern Russian ad landing, not gloomy, not dark, not stock-like.',
+    isCoreMethod
+      ? 'The hero is an adult man age 32-48 with character and a natural focused emotion. Show him inside a meaningful action, choice or visual metaphor from the exact headline, never as a generic man in a blue shirt sitting beside a laptop.'
+      : 'The person must look alive and modern, age 32-50, visible face and natural emotion, not elderly, not tired, not overexposed.',
+    isCoreMethod
+      ? 'Build depth with a real location, weather, architecture, workshop, road, water, landscape or another semantically justified environment. The scene must feel specific to this headline, not like reusable office stock photography.'
+      : 'Avoid washed-out white backgrounds and blown highlights: keep readable skin tone, natural contrast, real room/cafe/city depth, vivid daylight, crisp focus.',
     'Keep the face and upper body comfortably framed, never cropped at the edge; leave safe negative space for text without making the whole image empty white.',
     'Every image must be a different scene, different camera angle, different background, different clothes and different composition.',
     'Three-image story contract: hero shows one concrete triggering event; value shows its consequence or changed choice in another location; CTA shows relief, direction and the next step after the problem.',
@@ -2215,17 +2224,23 @@ function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline,
       visualPrompt: routeContext
     }];
   }
-  const heroSubject = mode === 'natureEditorial'
+  const heroSubject = isCoreMethod
+    ? 'hero image: one cinematic adult man actively living the exact conflict, decision or metaphor from the headline; strong posture and authentic emotion; a specific premium environment with texture and depth; no generic office desk, no plain shirt portrait, no laptop pose, no blank white interior; subject on the right third with protected darker space on the left for white HTML headline'
+    : mode === 'natureEditorial'
     ? `hero collage image: ${routeScenes[0] || 'one thoughtful adult person in a warm bright home studio, books/notebook/plant details, natural premium editorial mood'}, enough negative space for a serif headline, soft paper colors, no stock cliche`
     : mode === 'heroBlocks'
     ? `hero image: ${routeScenes[0] || 'one confident adult person in a bright modern apartment, cafe terrace or city workspace'}, face clearly visible, expressive but calm, subject on the right third, clean open space on the left for headline, premium ad photography, feeling of a person ready to return to action`
     : `hero image: ${routeScenes[0] || 'ordinary confident adult person 35-55 in a bright modern home office or city cafe'}, calm but energetic, open white/blue/pastel atmosphere, subtle sense of route and first step`;
-  const valueSubject = mode === 'natureEditorial'
+  const valueSubject = isCoreMethod
+    ? `middle section image: ${routeScenes[1] || 'a different adult man in a different location confronting the real consequence of the problem or making a concrete new choice'}, cinematic documentary detail, distinct action, clothes, setting and camera angle, no repeated hero object`
+    : mode === 'natureEditorial'
     ? `story section image: ${routeScenes[1] || 'different editorial scene with books, notebook, tea/coffee and a person making a simple plan'}, warm beige/sage palette, tactile paper feeling, no readable text`
     : mode === 'heroBlocks'
     ? `middle section image: ${routeScenes[1] || 'different live scene with a person and simple planning objects'}, laptop/phone/notebook as details only, warm daylight, visible depth, no blank white wall, no readable screens, atmosphere of testing and movement map`
     : `middle section image: ${routeScenes[1] || 'different scene, practical route/system metaphor, desk with notebook and phone, person reviewing a simple path'}, high-key editorial light, first-step mood without text`;
-  const ctaSubject = mode === 'natureEditorial'
+  const ctaSubject = isCoreMethod
+    ? `final CTA image: ${routeScenes[2] || 'a different adult man moving toward a clear next step in a new outdoor, architectural or workshop setting'}, restrained confidence and relief, cinematic contrast, no repeated location or prop`
+    : mode === 'natureEditorial'
     ? `final CTA image: ${routeScenes[2] || 'different adult person with phone near plants or a bright cafe window, ready to open messenger'}, warm natural light, premium calm trust, no logos`
     : mode === 'heroBlocks'
     ? `CTA image: ${routeScenes[2] || 'different scene, person choosing next step on phone in a bright cafe/city/home environment'}, friendly messenger-like feeling without logos, clear face or hands, energetic but trustworthy`
@@ -2236,7 +2251,7 @@ function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline,
       slot: 'hero',
       headline: title,
       methodName: subtitle,
-      persona: routePersonas[0] || 'woman',
+      persona: isCoreMethod ? 'man' : (routePersonas[0] || 'woman'),
       visualMode: 'generatedPerson',
       stylePreset: imageStylePreset,
       variationKey: `${variantSeed}|hero`,
@@ -2246,7 +2261,7 @@ function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline,
       slot: 'value',
       headline: title,
       methodName: subtitle,
-      persona: routePersonas[1] || 'man',
+      persona: isCoreMethod ? 'man' : (routePersonas[1] || 'man'),
       visualMode: 'generatedPerson',
       stylePreset: imageStylePreset,
       variationKey: `${variantSeed}|value`,
@@ -2256,7 +2271,7 @@ function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline,
       slot: 'cta',
       headline: title,
       methodName: subtitle,
-      persona: routePersonas[2] || 'mixed',
+      persona: isCoreMethod ? 'man' : (routePersonas[2] || 'mixed'),
       visualMode: 'generatedPerson',
       stylePreset: imageStylePreset,
       variationKey: `${variantSeed}|cta`,
@@ -4447,28 +4462,30 @@ function renderCoreMethodInlinePrelanding({ templateId, content, projectData, la
   return `${buildAtmospaceHeadConfig({ projectData, ...(landingMeta || {}) })}
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800;900&display=swap');
-#fh-preland-root{--atm-bg:#f5f8fc;--atm-ink:#0b1324;--atm-muted:#526176;--atm-accent:#ef6c33;--atm-accent2:#f4b942;--atm-deep:#111d31;--atm-line:rgba(37,55,83,.14);width:100vw;min-height:100vh;margin-left:calc(50% - 50vw);margin-right:calc(50% - 50vw);overflow:hidden;background:var(--atm-bg);color:var(--atm-ink);font-family:'Manrope',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;-webkit-font-smoothing:antialiased}
-#fh-preland-root.atm-v1-blue{--atm-accent:#2576f3;--atm-accent2:#39b7e8;--atm-deep:#0a1d39}
-#fh-preland-root.atm-v1-green{--atm-accent:#168f68;--atm-accent2:#92c83e;--atm-deep:#0c2923}
+#fh-preland-root{--atm-bg:#f5f8fc;--atm-ink:#0b1324;--atm-muted:#526176;--atm-accent:#ef6c33;--atm-accent2:#f4b942;--atm-deep:#111d31;--atm-line:rgba(37,55,83,.14);--atm-hero-bg:#07111f;--atm-hero-overlay:linear-gradient(90deg,#07111f 0%,#07111f 27%,rgba(7,17,31,.94) 42%,rgba(7,17,31,.52) 65%,rgba(7,17,31,.15) 100%),linear-gradient(180deg,rgba(4,10,19,.04),rgba(4,10,19,.34));width:100vw;min-height:100vh;margin-left:calc(50% - 50vw);margin-right:calc(50% - 50vw);overflow:hidden;background:var(--atm-bg);color:var(--atm-ink);font-family:'Manrope',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;-webkit-font-smoothing:antialiased}
+#fh-preland-root.atm-v1-blue{--atm-accent:#2576f3;--atm-accent2:#39b7e8;--atm-deep:#0a1d39;--atm-hero-bg:#07182d;--atm-hero-overlay:linear-gradient(90deg,#07182d 0%,#07182d 27%,rgba(7,24,45,.94) 42%,rgba(7,24,45,.52) 65%,rgba(7,24,45,.14) 100%),linear-gradient(180deg,rgba(3,13,27,.04),rgba(3,13,27,.34))}
+#fh-preland-root.atm-v1-green{--atm-accent:#1aaa75;--atm-accent2:#a6d34b;--atm-deep:#0c2923;--atm-hero-bg:#071f1a;--atm-hero-overlay:linear-gradient(90deg,#071f1a 0%,#071f1a 27%,rgba(7,31,26,.94) 42%,rgba(7,31,26,.52) 65%,rgba(7,31,26,.14) 100%),linear-gradient(180deg,rgba(2,18,14,.04),rgba(2,18,14,.34))}
 #fh-preland-root *{box-sizing:border-box}
 #fh-preland-root [hidden]{display:none!important}
 .atm-v1-shell{width:min(1180px,calc(100% - 40px));margin:0 auto}
-.atm-v1-hero{position:relative;min-height:min(900px,100svh);display:grid;align-items:center;overflow:hidden;isolation:isolate;padding:56px 0;background:#f8fbff}
+.atm-v1-hero{position:relative;min-height:100svh;display:grid;align-items:center;overflow:hidden;isolation:isolate;padding:clamp(32px,5vh,56px) 0;background:var(--atm-hero-bg);color:#f8fafc}
 .atm-v1-hero>.atm-v1-shell{position:relative;z-index:2}
-.atm-v1-hero-visual{position:absolute;z-index:0;inset:0 0 0 52%;overflow:hidden;background:#dce6ef}
-.atm-v1-hero-visual img{display:block;width:100%;height:100%;object-fit:cover;object-position:center}
-.atm-v1-hero-visual:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,#f8fbff 0%,rgba(248,251,255,.78) 8%,rgba(248,251,255,.08) 26%,transparent 44%);pointer-events:none}
-.atm-v1-hero-copy{max-width:700px}
-.atm-v1-kicker{margin:0 0 18px;color:var(--atm-accent);font-size:13px;line-height:1.2;font-weight:900;text-transform:uppercase}
-.atm-v1-hero h1{max-width:700px;margin:0 0 20px;font-size:clamp(46px,5vw,72px);line-height:.96;font-weight:900;letter-spacing:0;text-wrap:balance}
-.atm-v1-hero h1.atm-v1-title-medium{font-size:clamp(42px,4.5vw,64px)}
-.atm-v1-hero h1.atm-v1-title-long{font-size:clamp(38px,4vw,56px)}
-.atm-v1-lead{max-width:690px;margin:0 0 22px;color:#263449;font-size:clamp(18px,2vw,25px);line-height:1.48;font-weight:700}
+.atm-v1-hero-visual{position:absolute;z-index:0;inset:0 0 0 42%;overflow:hidden;background:#111d2c}
+.atm-v1-hero-visual img{display:block;width:100%;height:100%;object-fit:cover;object-position:center;filter:saturate(1.1) contrast(1.12) brightness(.9);transform:scale(1.01)}
+.atm-v1-hero-visual:after{content:"";position:absolute;inset:0;background:var(--atm-hero-overlay);pointer-events:none}
+.atm-v1-hero-copy{max-width:650px}
+.atm-v1-kicker{margin:0 0 16px;color:var(--atm-accent2);font-size:13px;line-height:1.2;font-weight:900;text-transform:uppercase}
+.atm-v1-hero h1{max-width:650px;margin:0 0 18px;color:#fff;font-size:clamp(42px,4.6vw,66px);line-height:.98;font-weight:900;letter-spacing:0;text-wrap:balance;text-shadow:0 18px 50px rgba(0,0,0,.28)}
+.atm-v1-hero h1.atm-v1-title-medium{font-size:clamp(38px,4.1vw,58px)}
+.atm-v1-hero h1.atm-v1-title-long{font-size:clamp(34px,3.7vw,52px)}
+.atm-v1-lead{max-width:610px;margin:0 0 20px;color:#d5deeb;font-size:clamp(17px,1.55vw,22px);line-height:1.45;font-weight:700;text-shadow:0 8px 28px rgba(0,0,0,.28)}
 .atm-v1-hero-chips{display:none;flex-wrap:wrap;gap:10px;margin:0 0 24px;padding:0;list-style:none}
 .atm-v1-hero-chips li{display:inline-flex;align-items:center;min-height:40px;padding:9px 13px;border:1px solid var(--atm-line);border-radius:999px;background:rgba(255,255,255,.84);color:#263449;font-size:13px;line-height:1.3;font-weight:900}
 .atm-v1-question-lead{display:none;max-width:670px;margin:26px 0 0;padding:20px 0 0;border-top:1px solid var(--atm-line);color:var(--atm-ink);font-size:20px;line-height:1.45;font-weight:900}
-.atm-v1-primary{display:inline-flex;align-items:center;justify-content:center;min-height:64px;margin-top:26px;padding:17px 28px;border:0;border-radius:8px;background:linear-gradient(135deg,var(--atm-accent),var(--atm-accent2));box-shadow:0 18px 42px color-mix(in srgb,var(--atm-accent) 24%,transparent);color:#fff!important;text-decoration:none!important;font-size:17px;line-height:1.2;font-weight:900;cursor:pointer}
-.atm-v1-hero .atm-v1-primary{margin-top:4px}
+.atm-v1-primary{display:inline-flex;align-items:center;justify-content:center;min-height:64px;margin-top:26px;padding:17px 30px;border:1px solid rgba(255,255,255,.18);border-radius:8px;background:linear-gradient(135deg,var(--atm-accent),var(--atm-accent2));box-shadow:0 18px 46px color-mix(in srgb,var(--atm-accent) 34%,transparent);color:#fff!important;text-decoration:none!important;font-size:17px;line-height:1.2;font-weight:900;cursor:pointer;transition:transform .18s ease,filter .18s ease}
+.atm-v1-primary:hover{transform:translateY(-2px);filter:brightness(1.06)}
+.atm-v1-primary:focus-visible{outline:3px solid rgba(255,255,255,.84);outline-offset:4px}
+.atm-v1-hero .atm-v1-primary{margin-top:2px}
 .atm-v1-primary-wide{width:100%;margin-top:30px}
 .atm-v1-quiz-band{padding:clamp(64px,9vw,120px) 0;background:var(--atm-deep);color:#f8fafc}
 .atm-v1-quiz{max-width:900px;margin:0 auto}
@@ -4535,21 +4552,21 @@ function renderCoreMethodInlinePrelanding({ templateId, content, projectData, la
 .atm-v1-footer-inner{display:flex;align-items:center;justify-content:space-between;gap:18px;font-size:12px;line-height:1.5}
 .atm-v1-footer-links{display:flex;flex-wrap:wrap;gap:18px}
 .atm-v1-footer a{color:#c8d3e2;text-decoration:underline;text-underline-offset:3px}
-@media(max-height:920px) and (min-width:801px){.atm-v1-hero{padding:32px 0}.atm-v1-hero h1{font-size:clamp(42px,4.6vw,66px);margin-bottom:16px}.atm-v1-hero h1.atm-v1-title-medium{font-size:clamp(38px,4.1vw,58px)}.atm-v1-hero h1.atm-v1-title-long{font-size:clamp(34px,3.7vw,50px)}.atm-v1-lead{font-size:18px;line-height:1.4;margin-bottom:16px}.atm-v1-primary{min-height:58px}}
+@media(max-height:920px) and (min-width:801px){.atm-v1-hero{padding:28px 0}.atm-v1-hero h1{font-size:clamp(40px,4.25vw,60px);margin-bottom:14px}.atm-v1-hero h1.atm-v1-title-medium{font-size:clamp(36px,3.8vw,54px)}.atm-v1-hero h1.atm-v1-title-long{font-size:clamp(32px,3.35vw,47px)}.atm-v1-lead{font-size:17px;line-height:1.38;margin-bottom:14px}.atm-v1-primary{min-height:58px}}
 @media(max-width:800px){
   .atm-v1-shell{width:min(100% - 28px,1180px)}
-  .atm-v1-hero{min-height:100svh;align-items:start;padding:clamp(250px,34svh,330px) 0 18px;background:#f8fbff}
-  .atm-v1-hero-visual{inset:0 0 auto;height:clamp(230px,32svh,310px)}
-  .atm-v1-hero-visual img{object-position:center 18%}
-  .atm-v1-hero-visual:after{background:linear-gradient(180deg,transparent 48%,rgba(248,251,255,.5) 72%,#f8fbff 100%)}
+  .atm-v1-hero{min-height:100svh;align-items:end;padding:clamp(235px,34svh,310px) 0 22px;background:var(--atm-hero-bg)}
+  .atm-v1-hero-visual{inset:0;height:100%}
+  .atm-v1-hero-visual img{object-position:64% 12%;filter:saturate(1.08) contrast(1.1) brightness(.82)}
+  .atm-v1-hero-visual:after{background:linear-gradient(180deg,rgba(7,17,31,.02) 0%,rgba(7,17,31,.16) 34%,rgba(7,17,31,.9) 61%,var(--atm-hero-bg) 82%)}
   .atm-v1-hero-copy{max-width:100%}
-  .atm-v1-kicker{margin-bottom:10px;font-size:11px}
-  .atm-v1-hero h1{font-size:clamp(31px,8vw,42px);line-height:.98;margin-bottom:12px}
-  .atm-v1-hero h1.atm-v1-title-medium{font-size:clamp(29px,7.4vw,38px)}
-  .atm-v1-hero h1.atm-v1-title-long{font-size:clamp(26px,6.7vw,34px)}
-  .atm-v1-lead{font-size:15px;line-height:1.38;margin-bottom:14px}
+  .atm-v1-kicker{margin-bottom:9px;font-size:11px}
+  .atm-v1-hero h1{font-size:clamp(30px,8vw,40px);line-height:1;margin-bottom:11px}
+  .atm-v1-hero h1.atm-v1-title-medium{font-size:clamp(28px,7.35vw,36px)}
+  .atm-v1-hero h1.atm-v1-title-long{font-size:clamp(25px,6.6vw,32px)}
+  .atm-v1-lead{color:#d5deeb;font-size:14px;line-height:1.4;margin-bottom:13px}
   .atm-v1-hero-chips,.atm-v1-question-lead{display:none}
-  .atm-v1-primary{width:100%;min-height:58px;margin-top:6px;padding:15px 18px}
+  .atm-v1-primary{width:100%;min-height:58px;margin-top:3px;padding:15px 18px}
   .atm-v1-copy-grid,.atm-v1-final-grid,.atm-v1-compact-head,.atm-v1-registration-grid{grid-template-columns:1fr}
   .atm-v1-sticky-title{position:static}
   .atm-v1-options,.atm-v1-roadmap-grid,.atm-v1-compact-cards{grid-template-columns:1fr}
@@ -4558,7 +4575,7 @@ function renderCoreMethodInlinePrelanding({ templateId, content, projectData, la
   .atm-v1-footer-inner{align-items:flex-start;flex-direction:column}
   .atm-v1-question h3{font-size:27px}
 }
-@media(max-width:420px){.atm-v1-shell{width:calc(100% - 22px)}.atm-v1-hero{padding-top:clamp(230px,31svh,280px)}.atm-v1-hero-visual{height:clamp(210px,29svh,265px)}.atm-v1-hero h1{font-size:31px}.atm-v1-hero h1.atm-v1-title-medium{font-size:29px}.atm-v1-hero h1.atm-v1-title-long{font-size:26px}.atm-v1-primary{width:100%;padding-inline:16px}.atm-v1-options button{min-height:66px;padding:15px}.atm-v1-editorial,.atm-v1-roadmap,.atm-v1-final-story,.atm-v1-registration{padding:58px 0}}
+@media(max-width:420px){.atm-v1-shell{width:calc(100% - 22px)}.atm-v1-hero{padding-top:clamp(210px,30svh,265px);padding-bottom:18px}.atm-v1-hero h1{font-size:29px}.atm-v1-hero h1.atm-v1-title-medium{font-size:27px}.atm-v1-hero h1.atm-v1-title-long{font-size:24px}.atm-v1-primary{width:100%;padding-inline:16px}.atm-v1-options button{min-height:66px;padding:15px}.atm-v1-editorial,.atm-v1-roadmap,.atm-v1-final-story,.atm-v1-registration{padding:58px 0}}
 </style>
 <div id="fh-preland-root" class="${designClass}">
   <main>
