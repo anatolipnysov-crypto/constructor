@@ -129,6 +129,24 @@ function assertFinalRuntimeContract(name, runtime) {
 for (const [name, source] of [['worker', worker], ['local api', localApi]]) {
   const handler = handlerSource(source);
   const runtime = namedFunctionSource(source, 'function buildAtmospaceRuntimeScript');
+  const legacyDetectorSource = namedFunctionSource(source, 'function hasLegacyAtmospaceEmbed');
+  const runtimeInjector = namedFunctionSource(source, 'function ensureAtmospaceRuntimeEmbed');
+  expect(Boolean(legacyDetectorSource), `${name}: missing legacy Atmospace embed detector`);
+  if (legacyDetectorSource) {
+    const detectsLegacyEmbed = Function(`return (${legacyDetectorSource})`)();
+    expect(
+      detectsLegacyEmbed('<a data-atmospace-messenger="telegram">Telegram</a>'),
+      `${name}: legacy messenger embed must be detected`,
+    );
+    expect(
+      !detectsLegacyEmbed('<a data-atmospace-registration-link>Регистрация</a>'),
+      `${name}: current registration CTA must not be treated as legacy`,
+    );
+  }
+  expect(
+    runtimeInjector.includes('hasLegacyAtmospaceEmbed') && runtimeInjector.includes('return runtimeScript'),
+    `${name}: legacy upstream embed must be replaced by the clean constructor runtime`,
+  );
   expect(source.includes("const ATMOSPACE_API_BASE_URL = 'https://api.atmospace.pro'"), `${name}: missing Atmospace API base`);
   expect(source.includes("const ATMOSPACE_GENERATE_PATH = '/api/landing-runtime/generate'"), `${name}: missing Atmospace generate path`);
   expect(source.includes("const ATMOSPACE_INIT_PATH = '/api/landing-runtime/init'"), `${name}: missing Atmospace init path`);

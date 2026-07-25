@@ -610,6 +610,10 @@ function extractAtmospaceRuntimeBlocks(source) {
   return blocks;
 }
 
+function hasLegacyAtmospaceEmbed(source) {
+  return /data-atmospace-messenger|data-fh-messenger|fh-(?:tg|max)-btn|window\.(?:FH_CONFIG|FUNNEL_CONFIG)|telegramDomain|maxDomain|buildBotLink|goToMessenger|messenger_button_clicked|links\.telegram|links\.max|r\.bothelp\.io|atmospace-policy-consent|registration_click/i.test(String(source || ''));
+}
+
 function hasAtmospaceRuntime(source) {
   const blocks = extractAtmospaceRuntimeBlocks(source);
   if (blocks.length !== 1) return false;
@@ -648,13 +652,12 @@ function hasAtmospaceRuntime(source) {
     'atmospace:quiz-answer',
     'atmospace:quiz-complete'
   ];
-  const legacyPattern = /data-atmospace-messenger|data-fh-messenger|fh-(?:tg|max)-btn|window\.(?:FH_CONFIG|FUNNEL_CONFIG)|telegramDomain|maxDomain|buildBotLink|goToMessenger|messenger_button_clicked|links\.telegram|links\.max|r\.bothelp\.io|atmospace-policy-consent|registration_click/i;
   const quizRewritePattern = /buildQuizUrl|pathname\s*=\s*["']\/quiz|replaceState\([^)]*["']\/quiz/i;
   return requiredMarkers.every((marker) => runtime.includes(marker))
     && runtime.includes('registrationUrl=candidate;')
     && runtime.includes('button.setAttribute("href",registrationUrl)')
     && runtime.includes('window.location.assign(registrationUrl)')
-    && !legacyPattern.test(runtime)
+    && !hasLegacyAtmospaceEmbed(runtime)
     && !quizRewritePattern.test(runtime);
 }
 
@@ -1049,6 +1052,9 @@ function ensureAtmospaceRuntimeEmbed(embedCode, publicLandingKey, counterId, lan
 
   const htmlSource = stripAtmospaceRuntimeScripts(source);
   const runtimeScript = buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName, landingCode });
+  if (hasLegacyAtmospaceEmbed(htmlSource)) {
+    return runtimeScript;
+  }
   if (/<\/body\s*>/i.test(htmlSource)) {
     return htmlSource.replace(/<\/body\s*>/i, `${runtimeScript}\n</body>`);
   }
@@ -1157,8 +1163,7 @@ function validateAtmospaceEmbedCode({ embedCode, publicLandingKey, counterId, la
     errors.push('question_answered_params_invalid');
   }
 
-  const legacyPattern = /data-atmospace-messenger|data-fh-messenger|fh-(?:tg|max)-btn|window\.(?:FH_CONFIG|FUNNEL_CONFIG)|telegramDomain|maxDomain|buildBotLink|goToMessenger|messenger_button_clicked|links\.telegram|links\.max|r\.bothelp\.io|atmospace-policy-consent|registration_click/i;
-  if (legacyPattern.test(source)) errors.push('legacy_runtime_forbidden');
+  if (hasLegacyAtmospaceEmbed(source)) errors.push('legacy_runtime_forbidden');
   if (/buildQuizUrl|pathname\s*=\s*["']\/quiz|replaceState\([^)]*["']\/quiz/i.test(source)) {
     errors.push('quiz_url_rewrite_forbidden');
   }

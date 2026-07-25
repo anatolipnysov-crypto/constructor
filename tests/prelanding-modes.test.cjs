@@ -135,6 +135,10 @@ assert(
   source.includes("В формате без мини-теста найдена видимая квиз-разметка. Используйте прямую регистрацию Atmospace."),
   'The validator must block visible quiz markup in Formats 2-6.'
 );
+assert(
+  !source.includes('Не удалось подготовить продолжение. Проверьте подключение и попробуйте ещё раз.'),
+  'HTML validation must verify runtime structure instead of requiring an obsolete UI error sentence.'
+);
 
 [
   'window.ATMOSPACE_LANDING_CONFIG',

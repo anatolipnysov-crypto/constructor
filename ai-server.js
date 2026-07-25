@@ -548,7 +548,11 @@ function hasAtmospaceRuntime(source) {
   ];
   return requiredMarkers.every((marker) => htmlSource.includes(marker))
     && htmlSource.includes('window.location.assign(registrationUrl)')
-    && !/data-atmospace-messenger|messenger_button_clicked|links\.telegram|links\.max/.test(htmlSource);
+    && !hasLegacyAtmospaceEmbed(htmlSource);
+}
+
+function hasLegacyAtmospaceEmbed(source) {
+  return /data-atmospace-messenger|data-fh-messenger|fh-(?:tg|max)-btn|window\.(?:FH_CONFIG|FUNNEL_CONFIG)|telegramDomain|maxDomain|buildBotLink|goToMessenger|messenger_button_clicked|links\.telegram|links\.max|r\.bothelp\.io|atmospace-policy-consent|registration_click/i.test(String(source || ''));
 }
 
 function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName, landingCode }) {
@@ -882,11 +886,14 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
 function ensureAtmospaceRuntimeEmbed(embedCode, publicLandingKey, counterId, landingName, landingCode) {
   let htmlSource = String(embedCode || '');
   if (!htmlSource || hasAtmospaceRuntime(htmlSource)) return htmlSource;
-  if (htmlSource.includes(ATMOSPACE_INIT_PATH) || htmlSource.includes(ATMOSPACE_CLICK_PATH) || htmlSource.includes('data-atmospace-runtime=')) {
-    return htmlSource;
-  }
 
   const runtimeScript = buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName, landingCode });
+  if (hasLegacyAtmospaceEmbed(htmlSource)
+    || htmlSource.includes(ATMOSPACE_INIT_PATH)
+    || htmlSource.includes(ATMOSPACE_CLICK_PATH)
+    || htmlSource.includes('data-atmospace-runtime=')) {
+    return runtimeScript;
+  }
   if (/<\/body\s*>/i.test(htmlSource)) {
     return htmlSource.replace(/<\/body\s*>/i, `${runtimeScript}\n</body>`);
   }

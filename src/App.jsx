@@ -6268,7 +6268,6 @@ function validateAtmospaceTildaHtml(html = '', config = {}, options = {}) {
     'result && result.body',
     'var pageInstanceId = makePageInstanceId();',
     'Сейчас переход временно недоступен. Попробуйте ещё раз чуть позже.',
-    'Не удалось подготовить продолжение. Проверьте подключение и попробуйте ещё раз.',
     'href="#"',
     'public_landing_key',
     'counter_id'
