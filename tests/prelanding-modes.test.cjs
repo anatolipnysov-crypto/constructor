@@ -88,9 +88,22 @@ const imageSpecBuilder = sliceBetween(
   'High-contrast premium masculine editorial photography',
   'never as a generic man in a blue shirt sitting beside a laptop',
   'Never use pale pastel haze or a washed-out white page look',
-  "persona: isCoreMethod ? 'man'"
+  "persona: isCoreMethod ? 'man'",
+  'Masculine visual language comes from decisive composition',
+  'A person is optional and must never be the automatic default',
+  'face and torso centered around 68-74 percent of frame width',
+  "persona: 'mixed'",
+  "visualMode: 'metaphor'"
 ].forEach((snippet) => {
   assert(imageSpecBuilder.includes(snippet), `Format 1 image contract must include ${snippet}`);
+});
+
+[
+  '.atm-v1-hero-visual{position:absolute;z-index:0;inset:0 0 0 30%',
+  'object-position:66% 50%',
+  'object-position:68% 12%'
+].forEach((snippet) => {
+  assert(formatOneRenderer.includes(snippet), `Format 1 hero framing must include ${snippet}`);
 });
 
 const formatOneQuizRenderer = sliceBetween(

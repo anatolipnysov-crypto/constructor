@@ -2207,18 +2207,23 @@ function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline,
       `Design route: ${designRoute?.label || style || 'premium insight'}; palette: ${palette || 'deep restrained'}; visual mood: ${designMood}`,
       memoryLine,
       `Semantic scene: ${semanticScene}`,
-      'Create one premium cinematic editorial hero photo that literally supports the headline and the promised first step.',
-      'Use a person only when the headline needs a person; otherwise use a concrete place, object, route, doorway, map, desk, road, landscape or another clear metaphor.',
-      'Place the main visual subject on the right half and leave calm, textured negative space on the left for HTML text.',
+      'Create one premium cinematic editorial hero photo that literally supports the headline, subtitle and promised first step. The viewer must understand the emotional conflict before reading every word.',
+      'Masculine visual language comes from decisive composition, restrained graphite/navy color, tactile wood, metal, concrete, leather, water or road textures and purposeful action. It does not require a male portrait.',
+      'Choose the strongest literal scene, action, object, place or visual metaphor from the headline and subtitle. A person is optional and must never be the automatic default.',
+      'Do not create a generic thoughtful or successful man, a passive office portrait, a person beside a laptop, or a model merely looking away. Every visible element must carry the exact headline meaning.',
+      'If a person is genuinely necessary, use a medium-close or waist-up three-quarter composition with authentic tension, decision or action. The person must occupy about 34-44 percent of the frame, with face and torso centered around 68-74 percent of frame width, at least 8-12 percent clear space at the right edge, and must never be tiny, distant, cropped or glued to the edge.',
+      'If a person is not necessary, build one dominant masculine focal scene from an object, threshold, route, unfinished action, damaged system, locked mechanism, empty place, storm, workshop, road or another concrete metaphor that directly explains the headline.',
+      'Use a closer 35mm or 50mm editorial camera and a clear foreground-to-background hierarchy. Avoid distant full-body framing unless distance itself is the headline metaphor.',
+      'Keep the left 44-50 percent darker, calm and low-detail for readable HTML text, while the semantic focal point stays strong in the middle-right rather than at the extreme edge.',
       'No text, no letters, no numbers, no logos, no UI, no split poster, no blank white studio, no generic stock success pose.',
-      'Natural contrast, deep but readable shadows, crisp focus, realistic materials and modern premium Russian advertising mood.'
+      'High contrast, deep but readable shadows, crisp focus, realistic materials and a modern premium Russian advertising mood. The result must feel specific, masculine, cinematic and emotionally compelling rather than like stock photography.'
     ].join('\n');
     return [{
       slot: 'hero',
       headline: title,
       methodName: subtitle,
-      persona: 'semantic',
-      visualMode: 'generatedPerson',
+      persona: 'mixed',
+      visualMode: 'metaphor',
       stylePreset: imageStylePreset,
       variationKey: `${variantSeed}|insight-hero`,
       visualPrompt: routeContext
@@ -4470,8 +4475,8 @@ function renderCoreMethodInlinePrelanding({ templateId, content, projectData, la
 .atm-v1-shell{width:min(1180px,calc(100% - 40px));margin:0 auto}
 .atm-v1-hero{position:relative;min-height:100svh;display:grid;align-items:center;overflow:hidden;isolation:isolate;padding:clamp(32px,5vh,56px) 0;background:var(--atm-hero-bg);color:#f8fafc}
 .atm-v1-hero>.atm-v1-shell{position:relative;z-index:2}
-.atm-v1-hero-visual{position:absolute;z-index:0;inset:0 0 0 42%;overflow:hidden;background:#111d2c}
-.atm-v1-hero-visual img{display:block;width:100%;height:100%;object-fit:cover;object-position:center;filter:saturate(1.1) contrast(1.12) brightness(.9);transform:scale(1.01)}
+.atm-v1-hero-visual{position:absolute;z-index:0;inset:0 0 0 30%;overflow:hidden;background:#111d2c}
+.atm-v1-hero-visual img{display:block;width:100%;height:100%;object-fit:cover;object-position:66% 50%;filter:saturate(1.1) contrast(1.12) brightness(.9);transform:scale(1.01)}
 .atm-v1-hero-visual:after{content:"";position:absolute;inset:0;background:var(--atm-hero-overlay);pointer-events:none}
 .atm-v1-hero-copy{max-width:650px}
 .atm-v1-kicker{margin:0 0 16px;color:var(--atm-accent2);font-size:13px;line-height:1.2;font-weight:900;text-transform:uppercase}
@@ -4557,7 +4562,7 @@ function renderCoreMethodInlinePrelanding({ templateId, content, projectData, la
   .atm-v1-shell{width:min(100% - 28px,1180px)}
   .atm-v1-hero{min-height:100svh;align-items:end;padding:clamp(235px,34svh,310px) 0 22px;background:var(--atm-hero-bg)}
   .atm-v1-hero-visual{inset:0;height:100%}
-  .atm-v1-hero-visual img{object-position:64% 12%;filter:saturate(1.08) contrast(1.1) brightness(.82)}
+  .atm-v1-hero-visual img{object-position:68% 12%;filter:saturate(1.08) contrast(1.1) brightness(.82)}
   .atm-v1-hero-visual:after{background:linear-gradient(180deg,rgba(7,17,31,.02) 0%,rgba(7,17,31,.16) 34%,rgba(7,17,31,.9) 61%,var(--atm-hero-bg) 82%)}
   .atm-v1-hero-copy{max-width:100%}
   .atm-v1-kicker{margin-bottom:9px;font-size:11px}
