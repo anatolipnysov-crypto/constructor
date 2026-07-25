@@ -66,6 +66,9 @@ const formatOneRenderer = sliceBetween(
 [
   'renderCoreMethodMiniQuiz()',
   'renderAtmospaceQuizButton',
+  "renderAtmospaceQuizButton('atm-v1-primary', 'Пройти тест')",
+  'data-atmospace-first-fold',
+  'data-atmospace-first-fold-cta',
   'renderCoreMethodCompactOffer',
   'buildAtmospacePrelandingTrackingScript'
 ].forEach((snippet) => {
@@ -91,7 +94,9 @@ const ordinaryRenderers = sliceBetween(
   'function renderHeroSceneBlocksPrelanding',
   'function renderNatureEditorialPrelanding',
   'function renderMinimalComparePrelanding',
-  'renderAtmospaceRegistrationButton'
+  'renderAtmospaceRegistrationButton',
+  'data-atmospace-first-fold',
+  'data-atmospace-first-fold-cta'
 ].forEach((snippet) => {
   assert(ordinaryRenderers.includes(snippet), `Formats 2-4 must include ${snippet}`);
 });
@@ -105,6 +110,8 @@ const insightRenderer = sliceBetween(
 );
 [
   'data-atmospace-registration-section',
+  'data-atmospace-first-fold',
+  'data-atmospace-first-fold-cta',
   "renderAtmospaceRegistrationButton('fh-si-cta')",
   'buildAtmospacePrelandingTrackingScript'
 ].forEach((snippet) => {

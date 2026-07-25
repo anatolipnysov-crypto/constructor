@@ -3101,7 +3101,7 @@ function renderHeroSceneBlocksPrelanding({
   width:min(1120px,88vw);
   min-width:0;
   display:grid;
-  grid-template-columns:minmax(0,1fr) minmax(330px,.72fr);
+  grid-template-columns:1fr;
   gap:14px;
   align-items:end;
 }
@@ -3150,6 +3150,8 @@ function renderHeroSceneBlocksPrelanding({
   display:flex;
   flex-direction:column;
   gap:10px;
+  width:min(430px,100%);
+  margin-top:24px;
 }
 #fh-preland-root .fh-hb-action-note{
   display:inline-flex;
@@ -3360,9 +3362,9 @@ function renderHeroSceneBlocksPrelanding({
   #fh-preland-root.fh-hb-layout-classic .fh-hb-hero,
   #fh-preland-root.fh-hb-layout-cards .fh-hb-hero,
   #fh-preland-root.fh-hb-layout-timeline .fh-hb-hero{grid-template-columns:1fr}
-  #fh-preland-root .fh-hb-stage{min-height:auto;padding-top:clamp(270px,58vw,430px);background:linear-gradient(180deg,#f9fcff 0%,#f4f9ff 100%)}
+  #fh-preland-root .fh-hb-stage{min-height:100svh;padding-top:clamp(220px,34svh,330px);background:linear-gradient(180deg,#f9fcff 0%,#f4f9ff 100%)}
   #fh-preland-root .fh-hb-stage:before{background:linear-gradient(180deg,rgba(249,252,255,.04) 0%,rgba(249,252,255,.50) 46%,rgba(249,252,255,.98) 100%)}
-  #fh-preland-root .fh-hb-scene{bottom:auto;height:clamp(300px,64vw,480px);border-radius:0 0 28px 28px}
+  #fh-preland-root .fh-hb-scene{bottom:auto;height:clamp(230px,36svh,350px);border-radius:0 0 28px 28px}
   #fh-preland-root .fh-hb-scene img{object-position:center 24%;filter:saturate(1.08) contrast(1.04) brightness(.98)}
   #fh-preland-root .fh-hb-scene:after{opacity:.16;mask-image:linear-gradient(180deg,#000 0%,rgba(0,0,0,.62) 48%,transparent 100%)}
   #fh-preland-root .fh-hb-bottom{grid-column:1;width:100%;grid-template-columns:1fr}
@@ -3375,13 +3377,15 @@ function renderHeroSceneBlocksPrelanding({
   #fh-preland-root .fh-hb-legal,
   #fh-preland-root .fh-hb-policy,
   #fh-preland-root .fh-hb-policy-error{width:calc(100% - 24px)}
-  #fh-preland-root .fh-hb-hero{padding:16px 0 18px;gap:12px}
-  #fh-preland-root .fh-hb-copy{width:100%;max-width:100%;min-width:0;padding:16px;border-radius:24px;background:rgba(255,255,255,.86);border:1px solid rgba(22,34,57,.10);box-shadow:0 20px 54px rgba(30,54,92,.12);backdrop-filter:blur(10px)}
+  #fh-preland-root .fh-hb-hero{min-height:calc(100svh - clamp(220px,34svh,330px));padding:12px 0 18px;gap:12px;align-content:start}
+  #fh-preland-root .fh-hb-copy{width:100%;max-width:100%;min-width:0;padding:14px;border-radius:22px;background:rgba(255,255,255,.90);border:1px solid rgba(22,34,57,.10);box-shadow:0 20px 54px rgba(30,54,92,.12);backdrop-filter:blur(10px)}
+  #fh-preland-root .fh-hb-kicker{padding:8px 12px;font-size:10px}
+  #fh-preland-root .fh-hb-title{margin:14px 0 10px}
   #fh-preland-root .fh-hb-title{max-width:100%;font-size:clamp(28px,7.8vw,42px);line-height:1.02;letter-spacing:-.025em;overflow-wrap:anywhere;word-break:normal;text-wrap:wrap}
   #fh-preland-root .fh-hb-lead{max-width:100%;font-size:15px;overflow-wrap:anywhere}
-  #fh-preland-root .fh-hb-method{width:100%;font-size:14px;border-radius:16px}
-  #fh-preland-root .fh-hb-proof{display:grid;grid-template-columns:1fr;gap:7px}
-  #fh-preland-root .fh-hb-proof li{width:100%;font-size:11px;padding:8px 10px}
+  #fh-preland-root .fh-hb-method,#fh-preland-root .fh-hb-proof{display:none}
+  #fh-preland-root .fh-hb-actions{width:100%;margin-top:14px;gap:8px}
+  #fh-preland-root .fh-hb-action-note{font-size:10px;padding:7px 10px}
   #fh-preland-root .fh-hb-story-row,
   #fh-preland-root .fh-hb-value-grid,
   #fh-preland-root .fh-hb-buttons{grid-template-columns:1fr}
@@ -3396,13 +3400,14 @@ function renderHeroSceneBlocksPrelanding({
   #fh-preland-root .fh-hb-btn{min-height:66px}
 }
 @media(max-width:520px){
-  #fh-preland-root .fh-hb-stage{padding-top:clamp(250px,76vw,340px)}
-  #fh-preland-root .fh-hb-scene{height:clamp(270px,84vw,360px)}
+  #fh-preland-root .fh-hb-stage{padding-top:clamp(190px,30svh,260px)}
+  #fh-preland-root .fh-hb-scene{height:clamp(200px,31svh,270px)}
   #fh-preland-root .fh-hb-scene img{object-position:center 18%}
-  #fh-preland-root .fh-hb-copy{padding:14px}
+  #fh-preland-root .fh-hb-hero{min-height:calc(100svh - clamp(190px,30svh,260px));padding-top:10px}
+  #fh-preland-root .fh-hb-copy{padding:12px}
   #fh-preland-root .fh-hb-title{font-size:clamp(25px,7.2vw,34px);line-height:1.04}
-  #fh-preland-root .fh-hb-method{margin-top:14px}
-  #fh-preland-root .fh-hb-proof{margin-top:14px}
+  #fh-preland-root .fh-hb-lead{font-size:14px;line-height:1.32}
+  #fh-preland-root .fh-hb-btn{min-height:58px;border-radius:16px}
 }
 </style>
 <div id="fh-preland-root" class="${rootClass}" style="${esc(rootStyle)}">
@@ -3411,22 +3416,22 @@ function renderHeroSceneBlocksPrelanding({
       ${heroImageHtml}
     </div>
     <div class="fh-hb-wrap">
-      <section class="fh-hb-hero" aria-label="Главный экран">
+      <section class="fh-hb-hero" aria-label="Главный экран" data-atmospace-first-fold>
         <div class="fh-hb-copy">
           <div class="fh-hb-kicker">${esc(badge)}</div>
           <h1 class="fh-hb-title">${titleHtml}</h1>
           <p class="fh-hb-lead">${esc(leadText)}</p>
-          ${methodHtml}
-          ${proofListHtml}
-        </div>
-        <div class="fh-hb-bottom">
-          <div class="fh-hb-story-row">${cardsHtml}</div>
-          <div class="fh-hb-actions">
+          <div class="fh-hb-actions" data-atmospace-first-fold-cta>
             ${actionNoteHtml}
             <div class="fh-hb-buttons" aria-label="Открыть форму регистрации">
               ${renderAtmospaceRegistrationButton('fh-hb-btn fh-hb-btn-tg')}
             </div>
           </div>
+          ${methodHtml}
+          ${proofListHtml}
+        </div>
+        <div class="fh-hb-bottom">
+          <div class="fh-hb-story-row">${cardsHtml}</div>
         </div>
       </section>
     </div>
@@ -3578,7 +3583,7 @@ function renderNatureEditorialPrelanding({ content, projectData, landingMeta, sc
 #fh-preland-root .fh-nd-btn-max{background:rgba(255,255,255,.62);backdrop-filter:blur(10px);color:var(--nd-ink)!important}
 #fh-preland-root .fh-nd-note{display:flex;gap:10px;align-items:flex-start;color:var(--nd-muted);font-size:13px;line-height:1.45;max-width:520px}
 #fh-preland-root .fh-nd-note i{font-style:normal;width:24px;height:24px;border-radius:50%;border:1px solid var(--nd-line);display:grid;place-items:center;flex:0 0 auto;background:rgba(255,255,255,.45)}
-#fh-preland-root .fh-nd-art{min-height:650px;position:relative;border-radius:38px;background:var(--nd-paper);border:1px solid rgba(255,255,255,.72);box-shadow:var(--nd-shadow);overflow:hidden;padding:24px}
+#fh-preland-root .fh-nd-art{height:min(68svh,650px);min-height:480px;position:relative;border-radius:38px;background:var(--nd-paper);border:1px solid rgba(255,255,255,.72);box-shadow:var(--nd-shadow);overflow:hidden;padding:24px}
 #fh-preland-root .fh-nd-big{position:absolute;right:24px;top:24px;width:62%;height:72%;border-radius:32px;overflow:hidden;background-size:cover;background-position:center;box-shadow:0 24px 60px rgba(70,58,40,.16);z-index:2}
 #fh-preland-root .fh-nd-small{position:absolute;left:24px;bottom:28px;width:48%;height:42%;border-radius:30px;overflow:hidden;background-size:cover;background-position:center;box-shadow:0 22px 50px rgba(70,58,40,.15);z-index:3}
 #fh-preland-root .fh-nd-paper{position:absolute;left:48px;top:70px;width:245px;padding:24px;border-radius:24px;background:rgba(255,255,255,.74);border:1px solid rgba(255,255,255,.76);backdrop-filter:blur(12px);box-shadow:0 18px 50px rgba(70,58,40,.12);z-index:4}
@@ -3622,38 +3627,39 @@ function renderNatureEditorialPrelanding({ content, projectData, landingMeta, sc
 .wh-landing-buttons,.wh-widget{display:none!important}
 @media(max-width:940px){
   #fh-preland-root .fh-nd-grid,#fh-preland-root .fh-nd-cards,#fh-preland-root .fh-nd-panel{grid-template-columns:1fr}
-  #fh-preland-root .fh-nd-hero{padding-top:44px}
-  #fh-preland-root .fh-nd-art{min-height:560px}
-  #fh-preland-root .fh-nd-big{width:68%}
+  #fh-preland-root .fh-nd-hero{min-height:100svh;padding:14px 0 22px}
+  #fh-preland-root .fh-nd-grid{min-height:calc(100svh - 36px);grid-template-rows:minmax(190px,30svh) auto;gap:16px;align-content:center}
+  #fh-preland-root .fh-nd-art{order:-1;width:100%;height:clamp(190px,30svh,280px);min-height:0;padding:0;border-radius:28px}
+  #fh-preland-root .fh-nd-big{inset:0;width:100%;height:100%;border-radius:inherit;box-shadow:none;background-position:center 28%}
+  #fh-preland-root .fh-nd-small,#fh-preland-root .fh-nd-paper,#fh-preland-root .fh-nd-quote,#fh-preland-root .fh-nd-leaf{display:none}
+  #fh-preland-root .fh-nd-kicker{margin-bottom:12px}
+  #fh-preland-root .fh-nd-title{font-size:clamp(38px,7.5vw,58px);line-height:.94;margin-bottom:14px}
+  #fh-preland-root .fh-nd-lead{font-size:16px;line-height:1.45;margin-bottom:18px}
+  #fh-preland-root .fh-nd-buttons{margin-bottom:12px}
 }
 @media(max-width:560px){
   #fh-preland-root .fh-nd-wrap{width:calc(100% - 24px)}
-  #fh-preland-root .fh-nd-hero{min-height:auto;padding:32px 0 44px}
-  #fh-preland-root .fh-nd-title{font-size:46px;line-height:.94}
-  #fh-preland-root .fh-nd-lead{font-size:16px}
+  #fh-preland-root .fh-nd-hero{min-height:100svh;padding:10px 0 16px}
+  #fh-preland-root .fh-nd-grid{min-height:calc(100svh - 26px);grid-template-rows:minmax(180px,29svh) auto;gap:12px}
+  #fh-preland-root .fh-nd-title{font-size:38px;line-height:.96;margin-bottom:12px}
+  #fh-preland-root .fh-nd-lead{font-size:15px;line-height:1.4;margin-bottom:14px}
   #fh-preland-root .fh-nd-buttons{display:grid}
-  #fh-preland-root .fh-nd-btn{width:100%;min-height:60px}
-  #fh-preland-root .fh-nd-art{min-height:460px;border-radius:28px}
-  #fh-preland-root .fh-nd-big{right:16px;top:16px;width:70%;height:62%;border-radius:24px}
-  #fh-preland-root .fh-nd-small{left:16px;bottom:18px;width:58%;height:36%;border-radius:24px}
-  #fh-preland-root .fh-nd-paper{left:18px;top:44px;width:190px;padding:18px}
-  #fh-preland-root .fh-nd-paper b{font-size:27px}
-  #fh-preland-root .fh-nd-quote{right:16px;bottom:38px;width:220px;padding:17px}
-  #fh-preland-root .fh-nd-quote p{font-size:22px}
-  #fh-preland-root .fh-nd-leaf{display:none}
+  #fh-preland-root .fh-nd-btn{width:100%;min-height:56px}
+  #fh-preland-root .fh-nd-art{height:clamp(180px,29svh,240px);border-radius:24px}
+  #fh-preland-root .fh-nd-note{font-size:11px;line-height:1.35}
   #fh-preland-root .fh-nd-section{padding:58px 0}
   #fh-preland-root .fh-nd-panel{padding:28px}
   #fh-preland-root .fh-nd-final{padding-bottom:52px}
 }
 </style>
 <div id="fh-preland-root" class="${rootClass}" style="${esc(rootStyle)}">
-  <section class="fh-nd-hero" aria-label="Главный экран">
+  <section class="fh-nd-hero" aria-label="Главный экран" data-atmospace-first-fold>
     <div class="fh-nd-wrap fh-nd-grid">
       <div class="fh-nd-copy">
         <div class="fh-nd-kicker">${esc(badge)}</div>
         <h1 class="fh-nd-title">${titleHtml}</h1>
         <p class="fh-nd-lead">${esc(leadText)}</p>
-        <div class="fh-nd-buttons" aria-label="Открыть форму регистрации">
+        <div class="fh-nd-buttons" aria-label="Открыть форму регистрации" data-atmospace-first-fold-cta>
           ${renderAtmospaceRegistrationButton('fh-nd-btn fh-nd-btn-tg')}
         </div>
         <div class="fh-nd-note"><i>✓</i><span>${esc(ctaLead)}</span></div>
@@ -3782,15 +3788,15 @@ function renderMinimalComparePrelanding({ content, projectData, landingMeta, sty
 #fh-preland-root.fh-mc-tone-blue{--mc-bg:#06101f;--mc-bg2:#08182c;--mc-muted:#91a2bd;--mc-line:rgba(148,163,184,.22);--mc-soft:rgba(15,31,55,.72);--mc-accent:#73b8ff}
 #fh-preland-root.fh-mc-tone-graphite{--mc-bg:#101114;--mc-bg2:#15171c;--mc-muted:#a3a7b0;--mc-line:rgba(255,255,255,.16);--mc-soft:rgba(255,255,255,.045);--mc-accent:#f3f4f6}
 #fh-preland-root.fh-mc26 a{color:inherit;text-decoration:none}
-#fh-preland-root .fh-mc-page{min-height:100vh;display:flex;align-items:center;padding:64px 0}
+#fh-preland-root .fh-mc-page{min-height:100svh;display:flex;align-items:center;padding:52px 0}
 #fh-preland-root .fh-mc-container{width:min(680px,calc(100% - 44px));margin:0 auto}
 #fh-preland-root .fh-mc-kicker{font-size:10px;letter-spacing:.30em;text-transform:uppercase;color:#5a5a5a;margin-bottom:24px;font-weight:800}
 #fh-preland-root.fh-mc-tone-blue .fh-mc-kicker{color:#86a7d8}
 #fh-preland-root .fh-mc-title{font-size:clamp(38px,7vw,64px);font-weight:850;line-height:1.04;margin:0 0 30px;letter-spacing:-.055em;text-wrap:balance}
 #fh-preland-root .fh-mc-title span{color:var(--mc-accent)}
-#fh-preland-root .fh-mc-description{font-size:16px;color:var(--mc-muted);line-height:1.68;margin:0 0 42px;max-width:590px}
+#fh-preland-root .fh-mc-description{font-size:16px;color:var(--mc-muted);line-height:1.68;margin:0 0 28px;max-width:590px}
 #fh-preland-root .fh-mc-description strong{color:#fff;font-weight:750}
-#fh-preland-root .fh-mc-divider{width:100%;height:1px;background:linear-gradient(90deg,var(--mc-line),transparent);margin:0 0 28px}
+#fh-preland-root .fh-mc-divider{width:100%;height:1px;background:linear-gradient(90deg,var(--mc-line),transparent);margin:42px 0 28px}
 #fh-preland-root .fh-mc-mini{display:grid;gap:10px;margin:0 0 34px}
 #fh-preland-root .fh-mc-mini-item{display:flex;gap:12px;align-items:flex-start;color:#777;font-size:13px;line-height:1.45}
 #fh-preland-root.fh-mc-tone-blue .fh-mc-mini-item,#fh-preland-root.fh-mc-tone-graphite .fh-mc-mini-item{color:var(--mc-muted)}
@@ -3827,28 +3833,30 @@ function renderMinimalComparePrelanding({ content, projectData, landingMeta, sty
 @keyframes fhMcIn{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
 .wh-landing-buttons,.wh-widget{display:none!important}
 @media(max-width:720px){
-  #fh-preland-root .fh-mc-page{align-items:flex-start;padding:54px 0 42px}
+  #fh-preland-root .fh-mc-page{align-items:flex-start;padding:28px 0 42px}
   #fh-preland-root .fh-mc-container{width:calc(100% - 34px)}
-  #fh-preland-root .fh-mc-title{font-size:clamp(32px,11vw,48px);letter-spacing:-.038em}
-  #fh-preland-root .fh-mc-description{font-size:15px;margin-bottom:34px}
+  #fh-preland-root .fh-mc-kicker{margin-bottom:16px}
+  #fh-preland-root .fh-mc-title{font-size:clamp(34px,10.2vw,46px);line-height:1.02;letter-spacing:-.038em;margin-bottom:18px}
+  #fh-preland-root .fh-mc-description{font-size:15px;line-height:1.5;margin-bottom:22px}
+  #fh-preland-root .fh-mc-divider{margin-top:42px}
   #fh-preland-root .fh-mc-proof{grid-template-columns:1fr}
   #fh-preland-root .fh-mc-proof-card{min-height:auto}
-  #fh-preland-root .fh-mc-btn{padding:17px 18px}
+  #fh-preland-root .fh-mc-btn{min-height:58px;padding:16px 18px}
 }
 </style>
 <div id="fh-preland-root" class="${rootClass}">
-  <main class="fh-mc-page" aria-label="Тихий предлендинг">
+  <main class="fh-mc-page" aria-label="Тихий предлендинг" data-atmospace-first-fold>
     <div class="fh-mc-container">
       <div class="fh-mc-kicker">${esc(badge)}</div>
       <h1 class="fh-mc-title">${titleHtml}</h1>
       <p class="fh-mc-description">${esc(leadText)}</p>
-      <div class="fh-mc-divider"></div>
-      <div class="fh-mc-mini">${miniHtml}</div>
-      <div class="fh-mc-proof" aria-label="Короткие смыслы">${cardsHtml}</div>
-      <div class="fh-mc-btn-group" aria-label="Открыть форму регистрации">
+      <div class="fh-mc-btn-group" aria-label="Открыть форму регистрации" data-atmospace-first-fold-cta>
         ${renderAtmospaceRegistrationButton('fh-mc-btn fh-mc-btn-primary')}
       </div>
       <p class="fh-mc-next">${esc(buttonLead)}</p>
+      <div class="fh-mc-divider"></div>
+      <div class="fh-mc-mini">${miniHtml}</div>
+      <div class="fh-mc-proof" aria-label="Короткие смыслы">${cardsHtml}</div>
       <p class="fh-mc-legal">Регистрация и согласие выполняются на защищённой странице Atmospace. <a href="https://modernisto.ru/politics" target="_blank" rel="noopener noreferrer">Политика конфиденциальности</a>.</p>
     </div>
   </main>
@@ -4421,6 +4429,11 @@ function renderCoreMethodCompactOffer({ content, valueImage, ctaImage }) {
 function renderCoreMethodInlinePrelanding({ templateId, content, projectData, landingMeta, sceneImage, valueImage, ctaImage }) {
   const safeTemplateId = [1, 2, 3].includes(Number(templateId)) ? Number(templateId) : 1;
   const titleText = stripHtml(content?.titleHtml || content?.title || 'Как реализовать себя, когда тебе 30+ и куча провалов');
+  const heroTitleClass = titleText.length > 72
+    ? 'atm-v1-title-long'
+    : titleText.length > 48
+      ? 'atm-v1-title-medium'
+      : '';
   const designClass = safeTemplateId === 2 ? 'atm-v1-blue' : safeTemplateId === 3 ? 'atm-v1-green' : 'atm-v1-ember';
   const heroImage = bothelpImageSrc(sceneImage || PRELANDING_FALLBACK_IMAGES[0]);
   const offerImage = bothelpImageSrc(valueImage || PRELANDING_FALLBACK_IMAGES[1]);
@@ -4440,15 +4453,22 @@ function renderCoreMethodInlinePrelanding({ templateId, content, projectData, la
 #fh-preland-root *{box-sizing:border-box}
 #fh-preland-root [hidden]{display:none!important}
 .atm-v1-shell{width:min(1180px,calc(100% - 40px));margin:0 auto}
-.atm-v1-hero{position:relative;min-height:min(900px,100svh);display:grid;align-items:center;padding:56px 0;background:linear-gradient(110deg,rgba(248,251,255,.98) 0%,rgba(248,251,255,.91) 48%,rgba(248,251,255,.18) 72%),url('${esc(heroImage)}') center right/cover no-repeat}
+.atm-v1-hero{position:relative;min-height:min(900px,100svh);display:grid;align-items:center;overflow:hidden;isolation:isolate;padding:56px 0;background:#f8fbff}
+.atm-v1-hero>.atm-v1-shell{position:relative;z-index:2}
+.atm-v1-hero-visual{position:absolute;z-index:0;inset:0 0 0 52%;overflow:hidden;background:#dce6ef}
+.atm-v1-hero-visual img{display:block;width:100%;height:100%;object-fit:cover;object-position:center}
+.atm-v1-hero-visual:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,#f8fbff 0%,rgba(248,251,255,.78) 8%,rgba(248,251,255,.08) 26%,transparent 44%);pointer-events:none}
 .atm-v1-hero-copy{max-width:700px}
 .atm-v1-kicker{margin:0 0 18px;color:var(--atm-accent);font-size:13px;line-height:1.2;font-weight:900;text-transform:uppercase}
-.atm-v1-hero h1{max-width:760px;margin:0 0 24px;font-size:clamp(48px,7vw,94px);line-height:.96;font-weight:900;letter-spacing:0;text-wrap:balance}
+.atm-v1-hero h1{max-width:700px;margin:0 0 20px;font-size:clamp(46px,5vw,72px);line-height:.96;font-weight:900;letter-spacing:0;text-wrap:balance}
+.atm-v1-hero h1.atm-v1-title-medium{font-size:clamp(42px,4.5vw,64px)}
+.atm-v1-hero h1.atm-v1-title-long{font-size:clamp(38px,4vw,56px)}
 .atm-v1-lead{max-width:690px;margin:0 0 22px;color:#263449;font-size:clamp(18px,2vw,25px);line-height:1.48;font-weight:700}
-.atm-v1-hero-chips{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 24px;padding:0;list-style:none}
+.atm-v1-hero-chips{display:none;flex-wrap:wrap;gap:10px;margin:0 0 24px;padding:0;list-style:none}
 .atm-v1-hero-chips li{display:inline-flex;align-items:center;min-height:40px;padding:9px 13px;border:1px solid var(--atm-line);border-radius:999px;background:rgba(255,255,255,.84);color:#263449;font-size:13px;line-height:1.3;font-weight:900}
-.atm-v1-question-lead{max-width:670px;margin:26px 0 0;padding:20px 0 0;border-top:1px solid var(--atm-line);color:var(--atm-ink);font-size:20px;line-height:1.45;font-weight:900}
+.atm-v1-question-lead{display:none;max-width:670px;margin:26px 0 0;padding:20px 0 0;border-top:1px solid var(--atm-line);color:var(--atm-ink);font-size:20px;line-height:1.45;font-weight:900}
 .atm-v1-primary{display:inline-flex;align-items:center;justify-content:center;min-height:64px;margin-top:26px;padding:17px 28px;border:0;border-radius:8px;background:linear-gradient(135deg,var(--atm-accent),var(--atm-accent2));box-shadow:0 18px 42px color-mix(in srgb,var(--atm-accent) 24%,transparent);color:#fff!important;text-decoration:none!important;font-size:17px;line-height:1.2;font-weight:900;cursor:pointer}
+.atm-v1-hero .atm-v1-primary{margin-top:4px}
 .atm-v1-primary-wide{width:100%;margin-top:30px}
 .atm-v1-quiz-band{padding:clamp(64px,9vw,120px) 0;background:var(--atm-deep);color:#f8fafc}
 .atm-v1-quiz{max-width:900px;margin:0 auto}
@@ -4515,20 +4535,43 @@ function renderCoreMethodInlinePrelanding({ templateId, content, projectData, la
 .atm-v1-footer-inner{display:flex;align-items:center;justify-content:space-between;gap:18px;font-size:12px;line-height:1.5}
 .atm-v1-footer-links{display:flex;flex-wrap:wrap;gap:18px}
 .atm-v1-footer a{color:#c8d3e2;text-decoration:underline;text-underline-offset:3px}
-@media(max-width:800px){.atm-v1-shell{width:min(100% - 28px,1180px)}.atm-v1-hero{min-height:auto;padding:360px 0 46px;background:linear-gradient(180deg,rgba(248,251,255,.05) 0%,rgba(248,251,255,.88) 42%,#f8fbff 58%),url('${esc(heroImage)}') 64% top/auto 430px no-repeat,#f8fbff}.atm-v1-hero h1{font-size:clamp(40px,12vw,58px)}.atm-v1-lead{font-size:17px}.atm-v1-copy-grid,.atm-v1-final-grid,.atm-v1-compact-head,.atm-v1-registration-grid{grid-template-columns:1fr}.atm-v1-sticky-title{position:static}.atm-v1-options,.atm-v1-roadmap-grid,.atm-v1-compact-cards{grid-template-columns:1fr}.atm-v1-roadmap article,.atm-v1-compact-card{min-height:auto}.atm-v1-final-grid img,.atm-v1-compact-head img,.atm-v1-registration-grid img{aspect-ratio:16/10}.atm-v1-footer-inner{align-items:flex-start;flex-direction:column}.atm-v1-question h3{font-size:27px}}
-@media(max-width:420px){.atm-v1-shell{width:calc(100% - 22px)}.atm-v1-hero{padding-top:320px;background-size:auto 380px}.atm-v1-hero h1{font-size:39px}.atm-v1-primary{width:100%;padding-inline:16px}.atm-v1-options button{min-height:66px;padding:15px}.atm-v1-editorial,.atm-v1-roadmap,.atm-v1-final-story,.atm-v1-registration{padding:58px 0}}
+@media(max-height:920px) and (min-width:801px){.atm-v1-hero{padding:32px 0}.atm-v1-hero h1{font-size:clamp(42px,4.6vw,66px);margin-bottom:16px}.atm-v1-hero h1.atm-v1-title-medium{font-size:clamp(38px,4.1vw,58px)}.atm-v1-hero h1.atm-v1-title-long{font-size:clamp(34px,3.7vw,50px)}.atm-v1-lead{font-size:18px;line-height:1.4;margin-bottom:16px}.atm-v1-primary{min-height:58px}}
+@media(max-width:800px){
+  .atm-v1-shell{width:min(100% - 28px,1180px)}
+  .atm-v1-hero{min-height:100svh;align-items:start;padding:clamp(250px,34svh,330px) 0 18px;background:#f8fbff}
+  .atm-v1-hero-visual{inset:0 0 auto;height:clamp(230px,32svh,310px)}
+  .atm-v1-hero-visual img{object-position:center 18%}
+  .atm-v1-hero-visual:after{background:linear-gradient(180deg,transparent 48%,rgba(248,251,255,.5) 72%,#f8fbff 100%)}
+  .atm-v1-hero-copy{max-width:100%}
+  .atm-v1-kicker{margin-bottom:10px;font-size:11px}
+  .atm-v1-hero h1{font-size:clamp(31px,8vw,42px);line-height:.98;margin-bottom:12px}
+  .atm-v1-hero h1.atm-v1-title-medium{font-size:clamp(29px,7.4vw,38px)}
+  .atm-v1-hero h1.atm-v1-title-long{font-size:clamp(26px,6.7vw,34px)}
+  .atm-v1-lead{font-size:15px;line-height:1.38;margin-bottom:14px}
+  .atm-v1-hero-chips,.atm-v1-question-lead{display:none}
+  .atm-v1-primary{width:100%;min-height:58px;margin-top:6px;padding:15px 18px}
+  .atm-v1-copy-grid,.atm-v1-final-grid,.atm-v1-compact-head,.atm-v1-registration-grid{grid-template-columns:1fr}
+  .atm-v1-sticky-title{position:static}
+  .atm-v1-options,.atm-v1-roadmap-grid,.atm-v1-compact-cards{grid-template-columns:1fr}
+  .atm-v1-roadmap article,.atm-v1-compact-card{min-height:auto}
+  .atm-v1-final-grid img,.atm-v1-compact-head img,.atm-v1-registration-grid img{aspect-ratio:16/10}
+  .atm-v1-footer-inner{align-items:flex-start;flex-direction:column}
+  .atm-v1-question h3{font-size:27px}
+}
+@media(max-width:420px){.atm-v1-shell{width:calc(100% - 22px)}.atm-v1-hero{padding-top:clamp(230px,31svh,280px)}.atm-v1-hero-visual{height:clamp(210px,29svh,265px)}.atm-v1-hero h1{font-size:31px}.atm-v1-hero h1.atm-v1-title-medium{font-size:29px}.atm-v1-hero h1.atm-v1-title-long{font-size:26px}.atm-v1-primary{width:100%;padding-inline:16px}.atm-v1-options button{min-height:66px;padding:15px}.atm-v1-editorial,.atm-v1-roadmap,.atm-v1-final-story,.atm-v1-registration{padding:58px 0}}
 </style>
 <div id="fh-preland-root" class="${designClass}">
   <main>
-    <section class="atm-v1-hero" aria-labelledby="atm-v1-title">
+    <section class="atm-v1-hero" aria-labelledby="atm-v1-title" data-atmospace-first-fold>
+      <div class="atm-v1-hero-visual" aria-hidden="true"><img src="${esc(heroImage)}" alt="" loading="eager" decoding="async" fetchpriority="high"></div>
       <div class="atm-v1-shell">
         <div class="atm-v1-hero-copy">
           <p class="atm-v1-kicker">Короткий мини-тест</p>
-          <h1 id="atm-v1-title">${esc(titleText)}</h1>
+          <h1 id="atm-v1-title" class="${heroTitleClass}">${esc(titleText)}</h1>
           <p class="atm-v1-lead">${esc(heroLead)}</p>
           <ul class="atm-v1-hero-chips">${heroPoints.map((item) => `<li>${esc(item)}</li>`).join('')}</ul>
           <div class="atm-v1-question-lead">Ответь честно на четыре вопроса. Результат увидишь сразу, ответы не сохраняются.</div>
-          ${renderAtmospaceQuizButton('atm-v1-primary')}
+          <div data-atmospace-first-fold-cta>${renderAtmospaceQuizButton('atm-v1-primary', 'Пройти тест')}</div>
         </div>
       </div>
     </section>
@@ -5430,7 +5473,7 @@ function renderStaticInsightPrelanding({
 #fh-preland-root .fh-si-lead{max-width:680px;margin:0 0 28px;color:var(--si-muted);font-size:19px;line-height:1.55;font-weight:650}
 #fh-preland-root .fh-si-cta{display:flex;align-items:center;justify-content:center;width:min(420px,100%);min-height:66px;padding:16px 22px;border-radius:8px;background:var(--si-accent);color:#071019!important;font-size:17px;font-weight:900;box-shadow:0 18px 44px rgba(0,0,0,.24)}
 #fh-preland-root .fh-si-cta[aria-disabled=true]{pointer-events:none;opacity:.58}
-#fh-preland-root .fh-si-media{position:relative;min-height:590px;overflow:hidden;border:1px solid var(--si-line);border-radius:8px;background:var(--si-panel);box-shadow:0 28px 74px rgba(0,0,0,.34)}
+#fh-preland-root .fh-si-media{position:relative;height:min(72svh,590px);min-height:480px;overflow:hidden;border:1px solid var(--si-line);border-radius:8px;background:var(--si-panel);box-shadow:0 28px 74px rgba(0,0,0,.34)}
 #fh-preland-root .fh-si-media img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
 #fh-preland-root .fh-si-media:after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent 52%,rgba(0,0,0,.42));pointer-events:none}
 #fh-preland-root .fh-si-section{padding:82px 0;background:var(--si-panel);border-top:1px solid var(--si-line);border-bottom:1px solid var(--si-line)}
@@ -5447,14 +5490,19 @@ function renderStaticInsightPrelanding({
 #fh-preland-root .fh-si-legal{margin:18px auto 0;color:var(--si-muted);font-size:11px;line-height:1.5;text-align:center}
 @media(max-width:900px){
   #fh-preland-root .fh-si-hero,#fh-preland-root .fh-si-final-inner{grid-template-columns:1fr}
-  #fh-preland-root .fh-si-hero{min-height:auto;padding:34px 0}
-  #fh-preland-root .fh-si-media{min-height:0;aspect-ratio:16/10}
+  #fh-preland-root .fh-si-hero{min-height:100svh;grid-template-rows:minmax(190px,30svh) auto;gap:18px;align-content:center;padding:14px 0 22px}
+  #fh-preland-root .fh-si-media{order:-1;width:100%;height:clamp(190px,30svh,280px);min-height:0;aspect-ratio:auto;box-shadow:0 18px 46px rgba(0,0,0,.25)}
+  #fh-preland-root .fh-si-kicker{margin-bottom:12px}
+  #fh-preland-root .fh-si-title{font-size:clamp(38px,7.5vw,58px);line-height:1;margin-bottom:14px}
+  #fh-preland-root .fh-si-lead{font-size:16px;line-height:1.45;margin-bottom:18px}
 }
 @media(max-width:640px){
   #fh-preland-root .fh-si-shell{width:calc(100% - 24px)}
-  #fh-preland-root .fh-si-title{font-size:clamp(36px,11vw,50px);line-height:1.05}
-  #fh-preland-root .fh-si-lead{font-size:16px}
-  #fh-preland-root .fh-si-media{aspect-ratio:4/3}
+  #fh-preland-root .fh-si-hero{grid-template-rows:minmax(180px,29svh) auto;gap:12px;padding:10px 0 16px}
+  #fh-preland-root .fh-si-title{font-size:36px;line-height:1.02;margin-bottom:12px}
+  #fh-preland-root .fh-si-lead{font-size:15px;line-height:1.4;margin-bottom:14px}
+  #fh-preland-root .fh-si-media{height:clamp(180px,29svh,240px);border-radius:7px}
+  #fh-preland-root .fh-si-cta{min-height:56px}
   #fh-preland-root .fh-si-section,#fh-preland-root .fh-si-final{padding:54px 0}
   #fh-preland-root .fh-si-cards{grid-template-columns:1fr}
   #fh-preland-root .fh-si-card{min-height:auto}
@@ -5462,12 +5510,12 @@ function renderStaticInsightPrelanding({
 }
 </style>
 <div id="fh-preland-root" class="fh-si26 ${isBarrier ? 'fh-si-barrier' : isPersonal ? 'fh-si-personal' : 'fh-si-direction'}">
-  <main class="fh-si-shell fh-si-hero" aria-label="Главный экран">
+  <main class="fh-si-shell fh-si-hero" aria-label="Главный экран" data-atmospace-first-fold>
     <div>
       <div class="fh-si-kicker">${esc(kicker)}</div>
       <h1 class="fh-si-title">${esc(title)}</h1>
       <p class="fh-si-lead">${esc(lead)}</p>
-      <div data-atmospace-registration-section>${renderAtmospaceRegistrationButton('fh-si-cta')}</div>
+      <div data-atmospace-registration-section data-atmospace-first-fold-cta>${renderAtmospaceRegistrationButton('fh-si-cta')}</div>
     </div>
     <div class="fh-si-media" aria-hidden="true"><img src="${esc(scene)}" alt="" loading="eager" decoding="async" fetchpriority="high"></div>
   </main>
