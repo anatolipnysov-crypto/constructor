@@ -7,6 +7,7 @@ import QuizPublishPanel from './features/atmospace/QuizPublishPanel.jsx'
 import { installProtectedProjectStorageGuard } from './security/protectedProjectStorage.js'
 
 const QUIZ_TOOL_VALUE = 'atmosphere-quiz'
+const ATTRIBUTION_RELEASE_MARKER = 'atmospace-quiz-attribution-2026-07-25-v2'
 
 installProtectedProjectStorageGuard()
 
@@ -57,6 +58,7 @@ export default function ConstructorRouter() {
   if (tool === QUIZ_TOOL_VALUE) {
     return (
       <>
+        <span hidden aria-hidden="true" data-atmospace-attribution-release={ATTRIBUTION_RELEASE_MARKER} />
         <LongQuizEditor onBack={openConstructor} />
         <QuizPublishPanel />
       </>
@@ -65,6 +67,7 @@ export default function ConstructorRouter() {
 
   return (
     <>
+      <span hidden aria-hidden="true" data-atmospace-attribution-release={ATTRIBUTION_RELEASE_MARKER} />
       <Constructor />
       <button
         type="button"
