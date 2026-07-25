@@ -49,8 +49,9 @@ const runtime = extractFunctionBody(appSource, 'function buildAtmospacePrelandin
 [
   'window.ATMOSPACE_LANDING_CONFIG',
   'ATMOSPACE_GENERATED_RUNTIME_VERSION',
-  'ATMOSPACE_INIT_ENDPOINT',
-  'ATMOSPACE_CLICK_ENDPOINT',
+  'ATMOSPACE_PUBLIC_API_BASE_URL',
+  '/api/landing-runtime/init',
+  '/api/landing-runtime/click',
   'data-atmospace-quiz-link',
   'data-atmospace-registration-link',
   'links.registration',
@@ -114,8 +115,8 @@ assert.ok(
 const clickEvents = CLICK_HELPER_NAMES.flatMap((helperName) => literalCalls(runtime, helperName));
 assert.deepEqual(
   [...new Set(clickEvents)].sort(),
-  ['landing_opened', 'quiz_start_click'],
-  '/click may receive only landing_opened and quiz_start_click.'
+  ['landing_opened', 'question_answered', 'quiz_completed', 'quiz_start_click', 'registration_started'].sort(),
+  '/click must receive the full Atmospace quiz funnel event set.'
 );
 
 assert.equal(

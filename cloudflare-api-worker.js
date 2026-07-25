@@ -677,6 +677,7 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
 (function(){
   "use strict";
   var cfg=${safeScriptJson(runtimeConfig)};
+  var clickEndpoint=cfg.baseUrl+cfg.clickPath;
   var pageInstanceId=makePageInstanceId();
   var registrationUrl="";
   var atmospaceReady=false;
@@ -693,6 +694,9 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
   var previewMessage="Сейчас продолжение недоступно. Откройте опубликованную страницу и повторите попытку.";
   var registrationSelector="[data-atmospace-registration-link],[data-atmospace-cta]";
   var quizSelector="[data-atmospace-quiz-link]";
+  var pendingClickEvents=[];
+  var AD_PARAM_KEYS=["yd_campaign_id","yd_ad_id","yd_group_id","yd_creative_id","yd_source","yd_source_type","yd_device","yd_region_id"];
+  var ALLOWED_CLICK_EVENTS={landing_opened:true,quiz_start_click:true,question_answered:true,quiz_completed:true,registration_started:true};
 
   function makePageInstanceId(){
     try{
@@ -777,13 +781,19 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
       var value=getParam(key);
       if(value)clickIds[key]=value;
     });
+    var adParams={};
+    AD_PARAM_KEYS.forEach(function(key){
+      var value=getParam(key);
+      if(value)adParams[key]=value;
+    });
     return{
       utm_source:getParam("utm_source")||null,
       utm_medium:getParam("utm_medium")||null,
       utm_campaign:getParam("utm_campaign")||null,
       utm_content:getParam("utm_content")||null,
       utm_term:getParam("utm_term")||null,
-      advertising_click_ids:clickIds
+      advertising_click_ids:clickIds,
+      advertising_params:adParams
     };
   }
 
@@ -796,11 +806,14 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
       landing_variant_name:cfg.landingName||"",
       page_instance_id:pageInstanceId,
       page_url:window.location.href,
+      source_url:window.location.href,
+      page_path:window.location.pathname,
       referrer:document.referrer||null,
       runtime_version:cfg.runtimeVersion,
       browser_language:navigator.language||null,
       browser_client_time:new Date().toISOString(),
       advertising_click_ids:attribution.advertising_click_ids,
+      advertising_params:attribution.advertising_params,
       utm_source:attribution.utm_source,
       utm_medium:attribution.utm_medium,
       utm_campaign:attribution.utm_campaign,
@@ -821,20 +834,32 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
     }).catch(function(){return null;});
   }
 
-  function sendEvent(eventType){
-    if(eventType!=="landing_opened"&&eventType!=="quiz_start_click")return;
-    var payload=basePayload();
+  function addSafeEventParams(payload,params){
+    if(!params||typeof params!=="object")return payload;
+    Object.keys(params).forEach(function(key){
+      if(/answer|text|label|option/i.test(key))return;
+      payload[key]=params[key];
+    });
+    return payload;
+  }
+
+  function flushPendingClickEvents(){
+    if(!atmospaceReady)return;
+    while(pendingClickEvents.length){
+      postJson(clickEndpoint,pendingClickEvents.shift(),true);
+    }
+  }
+
+  function sendEvent(eventType,params){
+    if(!ALLOWED_CLICK_EVENTS[eventType])return;
+    var payload=addSafeEventParams(basePayload(),params);
     payload.event_type=eventType;
     payload.client_time=new Date().toISOString();
-    var url=cfg.baseUrl+cfg.clickPath;
-    try{
-      var body=JSON.stringify(payload);
-      if(navigator.sendBeacon){
-        var blob=new Blob([body],{type:"application/json"});
-        if(navigator.sendBeacon(url,blob))return;
-      }
-    }catch(error){}
-    postJson(url,payload,true);
+    if(!atmospaceReady){
+      pendingClickEvents.push(payload);
+      return;
+    }
+    postJson(clickEndpoint,payload,true);
   }
 
   function sendLandingOpenedOnce(){
@@ -937,6 +962,7 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
     var questionNumber=Math.floor(Number(event&&event.detail?event.detail.questionNumber:0));
     if(questionNumber<1||questionNumber>100||answeredQuestionNumbers[questionNumber])return;
     answeredQuestionNumbers[questionNumber]=true;
+    sendEvent("question_answered",{questionNumber:questionNumber,question_id:"q"+String(questionNumber)});
     reachGoal("question_answered",{questionNumber:questionNumber});
   }
 
@@ -944,6 +970,7 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
     if(quizCompletedSent)return;
     quizCompletedSent=true;
     quizCompleted=true;
+    sendEvent("quiz_completed");
     reachGoal("quiz_completed");
     syncRegistrationState();
     if(initFailed)setRuntimeMessage(runtimeErrorMessage,true);
@@ -973,6 +1000,7 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
     }
 
     registrationNavigationStarted=true;
+    sendEvent("registration_started");
     reachGoal("registration_started");
     window.location.assign(registrationUrl);
   },true);
@@ -1008,7 +1036,6 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
       return;
     }
 
-    sendLandingOpenedOnce();
     postJson(cfg.baseUrl+cfg.initPath,basePayload(),false).then(function(result){
       initInFlight=false;
       var responseBody=result&&result.body?result.body:null;
@@ -1016,7 +1043,10 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
       var links=data&&data.links?data.links:null;
       if(!result||!result.ok||!data||data.status!=="ready"||!applyRegistrationLink(links)){
         failInit(true);
+        return;
       }
+      sendLandingOpenedOnce();
+      flushPendingClickEvents();
     });
   }
 
@@ -1048,7 +1078,7 @@ function stripAtmospaceRuntimeScripts(source) {
 
 function ensureAtmospaceRuntimeEmbed(embedCode, publicLandingKey, counterId, landingName, landingCode) {
   const source = String(embedCode || '');
-  if (!source || hasAtmospaceRuntime(source)) return source;
+  if (!source) return source;
 
   const htmlSource = stripAtmospaceRuntimeScripts(source);
   const runtimeScript = buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName, landingCode });
@@ -1078,6 +1108,9 @@ function validateAtmospaceEmbedCode({ embedCode, publicLandingKey, counterId, la
     'browser_language',
     'browser_client_time',
     'advertising_click_ids',
+    'advertising_params',
+    'source_url',
+    'page_path',
     'yclid',
     'gclid',
     'fbclid',
@@ -1088,6 +1121,17 @@ function validateAtmospaceEmbedCode({ embedCode, publicLandingKey, counterId, la
     'utm_campaign',
     'utm_content',
     'utm_term',
+    'yd_campaign_id',
+    'yd_ad_id',
+    'yd_group_id',
+    'yd_creative_id',
+    'yd_source',
+    'yd_source_type',
+    'yd_device',
+    'yd_region_id',
+    'pendingClickEvents',
+    'flushPendingClickEvents',
+    'ALLOWED_CLICK_EVENTS',
     'landing_opened',
     'quiz_start_click',
     'landing_view',
@@ -1145,15 +1189,13 @@ function validateAtmospaceEmbedCode({ embedCode, publicLandingKey, counterId, la
     errors.push('metrika_init_contract_invalid');
   }
 
-  const clickEvents = Array.from(runtime.matchAll(/sendEvent\("([^"]+)"\)/g), (match) => match[1]);
-  ['landing_opened', 'quiz_start_click'].forEach((eventName) => {
+  const clickEvents = Array.from(runtime.matchAll(/sendEvent\("([^"]+)"(?:\s*,|\s*\))/g), (match) => match[1]);
+  ['landing_opened', 'quiz_start_click', 'question_answered', 'quiz_completed', 'registration_started'].forEach((eventName) => {
     if (!clickEvents.includes(eventName)) errors.push(`runtime_click_event_missing:${eventName}`);
   });
-  clickEvents.forEach((eventName) => {
-    if (eventName !== 'landing_opened' && eventName !== 'quiz_start_click') {
-      errors.push(`runtime_click_event_forbidden:${eventName}`);
-    }
-  });
+  if (!runtime.includes('ALLOWED_CLICK_EVENTS')) errors.push('click_event_allowlist_missing');
+  if (!runtime.includes('pendingClickEvents') || !runtime.includes('flushPendingClickEvents')) errors.push('click_event_queue_missing');
+  if (!runtime.includes('advertising_params')) errors.push('advertising_params_missing');
 
   const requiredGoals = ['landing_view', 'quiz_start_click', 'question_answered', 'quiz_completed', 'registration_started'];
   requiredGoals.forEach((goalName) => {

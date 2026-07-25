@@ -142,7 +142,7 @@ assert(
 
 [
   'window.ATMOSPACE_LANDING_CONFIG',
-  'sergey-constructor-atmospace-v1',
+  'sergey-constructor-quiz-v1',
   'https://api.atmospace.pro',
   '/api/landing-runtime/init',
   '/api/landing-runtime/click',

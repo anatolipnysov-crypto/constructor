@@ -84,9 +84,14 @@ function assertFinalRuntimeContract(name, runtime) {
   );
 
   const clickEvents = [...new Set(CLICK_HELPER_NAMES.flatMap((helperName) => literalCalls(runtime, helperName)))].sort();
+  const requiredClickEvents = ['landing_opened', 'question_answered', 'quiz_completed', 'quiz_start_click', 'registration_started'].sort();
   expect(
-    JSON.stringify(clickEvents) === JSON.stringify(['landing_opened', 'quiz_start_click']),
-    `${name}: /click may receive only landing_opened and quiz_start_click (found ${clickEvents.join(', ') || 'none'})`,
+    JSON.stringify(clickEvents) === JSON.stringify(requiredClickEvents),
+    `${name}: /click must receive the full Atmospace quiz funnel event set (found ${clickEvents.join(', ') || 'none'})`,
+  );
+  expect(
+    (runtime.match(/cfg\.baseUrl\+cfg\.clickPath/g) || []).length === 1,
+    `${name}: runtime must derive the Atmospace click endpoint exactly once`,
   );
   expect(
     /(?:reachGoal|sendMetrikaGoal)\(\s*["']question_answered["']\s*,\s*\{[\s\S]{0,180}questionNumber/.test(runtime),
@@ -146,6 +151,11 @@ for (const [name, source] of [['worker', worker], ['local api', localApi]]) {
   expect(
     runtimeInjector.includes('hasLegacyAtmospaceEmbed') && runtimeInjector.includes('return runtimeScript'),
     `${name}: legacy upstream embed must be replaced by the clean constructor runtime`,
+  );
+  expect(
+    runtimeInjector.includes('stripAtmospaceRuntimeScripts(source)')
+      && !runtimeInjector.includes('hasAtmospaceRuntime(source)) return source'),
+    `${name}: upstream runtime must always be replaced by the canonical constructor runtime`,
   );
   expect(source.includes("const ATMOSPACE_API_BASE_URL = 'https://api.atmospace.pro'"), `${name}: missing Atmospace API base`);
   expect(source.includes("const ATMOSPACE_GENERATE_PATH = '/api/landing-runtime/generate'"), `${name}: missing Atmospace generate path`);

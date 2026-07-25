@@ -103,7 +103,7 @@ const ATMOSPACE_API_BASE_URL = 'https://api.atmospace.pro';
 const ATMOSPACE_GENERATE_PATH = '/api/landing-runtime/generate';
 const ATMOSPACE_INIT_PATH = '/api/landing-runtime/init';
 const ATMOSPACE_CLICK_PATH = '/api/landing-runtime/click';
-const ATMOSPACE_RUNTIME_VERSION = 'sergey-constructor-runtime-v1';
+const ATMOSPACE_RUNTIME_VERSION = 'sergey-constructor-quiz-v1';
 const PURCHASE_URL_MISSING_MESSAGE = 'База не вернула purchase_url_990. Генерация остановлена. Проверьте серверную логику автосоздания ссылки покупки 990.';
 const DEFAULT_CLIENT_GOALS = {
   goal_bot_start: 'bot_start',
@@ -257,268 +257,27 @@ function hasLegacyAtmospaceRuntime(source) {
     && /!links\.telegram\s*\|\|\s*!links\.max/.test(htmlSource);
 }
 
-function buildLegacyAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName, landingCode }) {
-  const runtimeConfig = {
-    publicLandingKey,
-    counterId,
-    landingName,
-    landingCode,
-    baseUrl: ATMOSPACE_API_BASE_URL,
-    initPath: ATMOSPACE_INIT_PATH,
-    clickPath: ATMOSPACE_CLICK_PATH,
-    runtimeVersion: ATMOSPACE_RUNTIME_VERSION
-  };
++function extractAtmospaceRuntimeBlocks(source) {
+  const blocks = [];
+  const pattern = /<script\b[^>]*\bdata-atmospace-runtime=(["'])[^"']+\1[^>]*>[\s\S]*?<\/script\s*>/gi;
+  let match;
+  while ((match = pattern.exec(String(source || ''))) !== null) blocks.push(match[0]);
+  return blocks;
+}
 
-  return `<script data-atmospace-runtime="${ATMOSPACE_RUNTIME_VERSION}">
-(function(){
-  "use strict";
-  var cfg=${safeScriptJson(runtimeConfig)};
-  var pageInstanceId = makePageInstanceId();
-  var readyLinks={telegram:"",max:""};
-  var landingOpenedSent=false;
-  var runtimeErrorMessage="Сейчас переход временно недоступен. Попробуйте ещё раз чуть позже.";
-  var buttonSelector=[
-    "[data-atmospace-cta]",
-    "[data-atmospace-messenger]"
-  ].join(",");
-
-  function makePageInstanceId(){
-    try{
-      var bytes=new Uint8Array(10);
-      crypto.getRandomValues(bytes);
-      return "pi_"+Array.from(bytes,function(byte){return byte.toString(16).padStart(2,"0");}).join("");
-    }catch(error){
-      return "pi_"+Date.now()+"_"+Math.random().toString(36).slice(2,10);
-    }
-  }
-
-  function getParam(name){
-    try{return new URLSearchParams(window.location.search).get(name)||"";}catch(error){return "";}
-  }
-
-  function collectAttribution(){
-    var clickIds={};
-    ["yclid","gclid","fbclid","msclkid","dclid"].forEach(function(key){
-      var value=getParam(key);
-      if(value)clickIds[key]=value;
-    });
-    return{
-      utm_source:getParam("utm_source")||null,
-      utm_medium:getParam("utm_medium")||null,
-      utm_campaign:getParam("utm_campaign")||null,
-      utm_content:getParam("utm_content")||null,
-      utm_term:getParam("utm_term")||null,
-      advertising_click_ids:clickIds
-    };
-  }
-
-  function basePayload(){
-    var attribution=collectAttribution();
-    return Object.assign({
-      public_landing_key:cfg.publicLandingKey,
-      counter_id:cfg.counterId,
-      landing_variant_code:cfg.landingCode||"",
-      landing_variant_name:cfg.landingName||"",
-      page_instance_id:pageInstanceId,
-      page_url:window.location.href,
-      referrer:document.referrer||null,
-      runtime_version:cfg.runtimeVersion,
-      browser_language:navigator.language||null,
-      browser_client_time:new Date().toISOString(),
-      advertising_click_ids:attribution.advertising_click_ids
-    },{
-      utm_source:attribution.utm_source,
-      utm_medium:attribution.utm_medium,
-      utm_campaign:attribution.utm_campaign,
-      utm_content:attribution.utm_content,
-      utm_term:attribution.utm_term
-    });
-  }
-
-  function detectMessenger(button){
-    var raw=(button.getAttribute("data-atmospace-messenger")||"").toLowerCase();
-    if(raw==="max")return "max";
-    return "telegram";
-  }
-
-  function setButtonsWaiting(){
-    document.querySelectorAll(buttonSelector).forEach(function(button){
-      button.setAttribute("href","#");
-      button.setAttribute("aria-disabled","true");
-      button.setAttribute("data-atmospace-state","waiting");
-    });
-  }
-
-  function applyReadyLinks(links){
-    readyLinks.telegram=links&&links.telegram?String(links.telegram):"";
-    readyLinks.max=links&&links.max?String(links.max):"";
-    document.querySelectorAll(buttonSelector).forEach(function(button){
-      var messenger=detectMessenger(button);
-      var href=readyLinks[messenger]||"#";
-      button.setAttribute("href",href);
-      button.setAttribute("target","_blank");
-      button.setAttribute("rel","noopener noreferrer");
-      button.setAttribute("aria-disabled",href==="#"?"true":"false");
-      button.setAttribute("data-atmospace-state",href==="#"?"waiting":"ready");
-    });
-    setRuntimeMessage("");
-  }
-
-  function getRuntimeMessageNode(){
-    var existing=document.querySelector("[data-atmospace-runtime-message]");
-    if(existing)return existing;
-    var firstButton=document.querySelector(buttonSelector);
-    if(!firstButton)return null;
-    var node=document.createElement("p");
-    node.setAttribute("data-atmospace-runtime-message","");
-    node.hidden=true;
-    node.style.cssText="display:none;margin:12px 0 0;color:#b91c1c;font-size:14px;line-height:1.45;font-weight:800;text-align:center;";
-    var container=firstButton.parentElement||firstButton;
-    container.insertAdjacentElement("afterend",node);
-    return node;
-  }
-
-  function setRuntimeMessage(message){
-    var node=getRuntimeMessageNode();
-    if(!node)return;
-    node.textContent=message||"";
-    node.hidden=!message;
-    node.style.display=message?"block":"none";
-  }
-
-  function showRuntimeError(){
-    document.querySelectorAll(buttonSelector).forEach(function(button){
-      button.setAttribute("href","#");
-      button.setAttribute("aria-disabled","true");
-      button.setAttribute("data-atmospace-state","error");
-    });
-    setRuntimeMessage(runtimeErrorMessage);
-  }
-
-  function getPolicyCheckbox(){
-    return document.getElementById("atmospace-policy-consent");
-  }
-
-  function setPolicyError(isVisible){
-    var error=document.getElementById("atmospace-policy-error");
-    if(!error)return;
-    error.hidden=!isVisible;
-    error.style.display=isVisible?"block":"none";
-  }
-
-  function hasPolicyConsent(){
-    var checkbox=getPolicyCheckbox();
-    if(!checkbox){
-      setPolicyError(false);
-      return true;
-    }
-    if(checkbox.checked){
-      setPolicyError(false);
-      return true;
-    }
-    setPolicyError(true);
-    if(typeof checkbox.focus==="function")checkbox.focus();
-    return false;
-  }
-
-  function postJson(url,payload,keepalive){
-    if(!url||typeof fetch!=="function")return Promise.resolve(null);
-    return fetch(url,{
-      method:"POST",
-      headers:{"content-type":"application/json"},
-      body:JSON.stringify(payload),
-      keepalive:Boolean(keepalive)
-    }).then(function(response){
-      return response.json().catch(function(){return null;}).then(function(body){
-        return{ok:response.ok,body:body};
-      });
-    }).catch(function(){return null;});
-  }
-
-  function sendEvent(eventType,messenger){
-    var payload={
-      public_landing_key:cfg.publicLandingKey,
-      counter_id:cfg.counterId,
-      page_instance_id:pageInstanceId,
-      event_type:eventType,
-      messenger:messenger||null,
-      page_url:window.location.href,
-      referrer:document.referrer||null,
-      runtime_version:cfg.runtimeVersion,
-      client_time:new Date().toISOString()
-    };
-    var url=cfg.baseUrl+cfg.clickPath;
-    try{
-      var body=JSON.stringify(payload);
-      if(navigator.sendBeacon){
-        var blob=new Blob([body],{type:"application/json"});
-        if(navigator.sendBeacon(url,blob))return;
-      }
-      postJson(url,payload,true);
-    }catch(error){}
-  }
-
-  function sendLandingOpenedOnce(){
-    if(landingOpenedSent)return;
-    landingOpenedSent=true;
-    sendEvent("landing_opened",null);
-  }
-
-  document.addEventListener("click",function(event){
-    var button=event.target&&event.target.closest?event.target.closest(buttonSelector):null;
-    if(!button)return;
-    var messenger=detectMessenger(button);
-    var href=readyLinks[messenger]||button.getAttribute("href")||"";
-    if(!href||href==="#"){
-      event.preventDefault();
-      return;
-    }
-    if(!hasPolicyConsent()){
-      event.preventDefault();
-      return;
-    }
-    sendEvent("messenger_button_clicked",messenger);
-  },true);
-
-  function initRuntime(){
-    setButtonsWaiting();
-    if(!cfg.publicLandingKey||!cfg.counterId){
-      showRuntimeError();
-      return;
-    }
-    postJson(cfg.baseUrl+cfg.initPath,basePayload(),false).then(function(result){
-      var responseBody=result&&result.body?result.body:null;
-      var data=responseBody&&responseBody.ok&&responseBody.data?responseBody.data:null;
-      var links=data&&data.links?data.links:null;
-      if(!result||!result.ok||!links||!links.telegram||!links.max)throw new Error("landing_not_ready");
-      applyReadyLinks(links);
-      sendLandingOpenedOnce();
-    }).catch(function(){
-      showRuntimeError();
-    });
-  }
-
-  var consent=getPolicyCheckbox();
-  if(consent){
-    consent.addEventListener("change",function(){
-      if(consent.checked)setPolicyError(false);
-    });
-  }
-
-  if(document.readyState==="loading"){
-    document.addEventListener("DOMContentLoaded",initRuntime);
-  }else{
-    initRuntime();
-  }
-})();
-</script>`;
+function hasLegacyAtmospaceEmbed(source) {
+  return /data-atmospace-messenger|data-fh-messenger|fh-(?:tg|max)-btn|window\.(?:FH_CONFIG|FUNNEL_CONFIG)|telegramDomain|maxDomain|buildBotLink|goToMessenger|messenger_button_clicked|links\.telegram|links\.max|r\.bothelp\.io|atmospace-policy-consent|registration_click/i.test(String(source || ''));
 }
 
 function hasAtmospaceRuntime(source) {
-  const htmlSource = String(source || '');
+  const blocks = extractAtmospaceRuntimeBlocks(source);
+  if (blocks.length !== 1) return false;
+  const runtime = blocks[0];
   const requiredMarkers = [
+    ATMOSPACE_RUNTIME_VERSION,
     ATMOSPACE_INIT_PATH,
     ATMOSPACE_CLICK_PATH,
+    'https://mc.yandex.ru/metrika/tag.js',
     'public_landing_key',
     'counter_id',
     'landing_variant_code',
@@ -544,15 +303,17 @@ function hasAtmospaceRuntime(source) {
     'links.registration',
     'data-atmospace-registration-link',
     'data-atmospace-runtime-retry',
-    'https://mc.yandex.ru/metrika/tag.js'
+    'atmospace:quiz-start',
+    'atmospace:quiz-answer',
+    'atmospace:quiz-complete'
   ];
-  return requiredMarkers.every((marker) => htmlSource.includes(marker))
-    && htmlSource.includes('window.location.assign(registrationUrl)')
-    && !hasLegacyAtmospaceEmbed(htmlSource);
-}
-
-function hasLegacyAtmospaceEmbed(source) {
-  return /data-atmospace-messenger|data-fh-messenger|fh-(?:tg|max)-btn|window\.(?:FH_CONFIG|FUNNEL_CONFIG)|telegramDomain|maxDomain|buildBotLink|goToMessenger|messenger_button_clicked|links\.telegram|links\.max|r\.bothelp\.io|atmospace-policy-consent|registration_click/i.test(String(source || ''));
+  const quizRewritePattern = /buildQuizUrl|pathname\s*=\s*["']\/quiz|replaceState\([^)]*["']\/quiz/i;
+  return requiredMarkers.every((marker) => runtime.includes(marker))
+    && runtime.includes('registrationUrl=candidate;')
+    && runtime.includes('button.setAttribute("href",registrationUrl)')
+    && runtime.includes('window.location.assign(registrationUrl)')
+    && !hasLegacyAtmospaceEmbed(runtime)
+    && !quizRewritePattern.test(runtime);
 }
 
 function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName, landingCode }) {
@@ -571,26 +332,32 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
 (function(){
   "use strict";
   var cfg=${safeScriptJson(runtimeConfig)};
+  var clickEndpoint=cfg.baseUrl+cfg.clickPath;
   var pageInstanceId=makePageInstanceId();
   var registrationUrl="";
+  var atmospaceReady=false;
+  var quizCompleted=false;
   var registrationNavigationStarted=false;
   var quizStartSent=false;
-  var answeredGoalIndexes={};
-  var initInFlight=false;
-  var initCompleted=false;
+  var quizCompletedSent=false;
   var landingOpenedSent=false;
   var landingViewSent=false;
-  var metrikaReadyPromise=null;
-  var pendingMetrikaGoals=[];
-  var metrikaScriptUrl="https://mc.yandex.ru/metrika/tag.js";
+  var initInFlight=false;
+  var initFailed=false;
+  var answeredQuestionNumbers={};
   var runtimeErrorMessage="Сейчас переход временно недоступен. Попробуйте ещё раз чуть позже.";
+  var previewMessage="Сейчас продолжение недоступно. Откройте опубликованную страницу и повторите попытку.";
   var registrationSelector="[data-atmospace-registration-link],[data-atmospace-cta]";
   var quizSelector="[data-atmospace-quiz-link]";
+  var pendingClickEvents=[];
+  var AD_PARAM_KEYS=["yd_campaign_id","yd_ad_id","yd_group_id","yd_creative_id","yd_source","yd_source_type","yd_device","yd_region_id"];
+  var ALLOWED_CLICK_EVENTS={landing_opened:true,quiz_start_click:true,question_answered:true,quiz_completed:true,registration_started:true};
 
   function makePageInstanceId(){
     try{
+      if(window.crypto&&typeof window.crypto.randomUUID==="function")return window.crypto.randomUUID();
       var bytes=new Uint8Array(10);
-      crypto.getRandomValues(bytes);
+      window.crypto.getRandomValues(bytes);
       return "pi_"+Array.from(bytes,function(byte){return byte.toString(16).padStart(2,"0");}).join("");
     }catch(error){
       return "pi_"+Date.now()+"_"+Math.random().toString(36).slice(2,10);
@@ -599,6 +366,64 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
 
   function isLocalPreview(){
     return window.location.protocol==="file:"||window.location.hostname==="localhost"||window.location.hostname==="127.0.0.1";
+  }
+
+  function getCounterId(){
+    var value=Number.parseInt(String(cfg.counterId||""),10);
+    return Number.isInteger(value)&&value>0?value:0;
+  }
+
+  function ensureMetrika(){
+    if(isLocalPreview())return Promise.resolve(false);
+    var counterId=getCounterId();
+    if(!counterId)return Promise.resolve(false);
+
+    window.__atmospaceMetrikaCounters=window.__atmospaceMetrikaCounters||{};
+    if(typeof window.ym!=="function"){
+      window.ym=function(){(window.ym.a=window.ym.a||[]).push(arguments);};
+      window.ym.l=1*new Date();
+    }
+
+    if(!window.__atmospaceMetrikaLoaderStarted){
+      window.__atmospaceMetrikaLoaderStarted=true;
+      var existing=document.querySelector('script[src="https://mc.yandex.ru/metrika/tag.js"]');
+      if(!existing){
+        var script=document.createElement("script");
+        script.async=true;
+        script.src="https://mc.yandex.ru/metrika/tag.js";
+        script.setAttribute("data-atmospace-metrika-loader","");
+        (document.head||document.documentElement).appendChild(script);
+      }
+    }
+
+    if(!window.__atmospaceMetrikaCounters[counterId]){
+      window.__atmospaceMetrikaCounters[counterId]=true;
+      window.ym(counterId,"init",{
+        clickmap:true,
+        trackLinks:true,
+        accurateTrackBounce:true,
+        webvisor:true
+      });
+    }
+    return Promise.resolve(true);
+  }
+
+  function reachGoal(goalName,params){
+    if(isLocalPreview())return;
+    var counterId=getCounterId();
+    if(!counterId)return;
+    ensureMetrika();
+    try{
+      if(typeof window.ym==="function"){
+        window.ym(counterId,"reachGoal",goalName,params||{});
+      }
+    }catch(error){}
+  }
+
+  function sendLandingViewOnce(){
+    if(landingViewSent)return;
+    landingViewSent=true;
+    reachGoal("landing_view");
   }
 
   function getParam(name){
@@ -611,13 +436,19 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
       var value=getParam(key);
       if(value)clickIds[key]=value;
     });
+    var adParams={};
+    AD_PARAM_KEYS.forEach(function(key){
+      var value=getParam(key);
+      if(value)adParams[key]=value;
+    });
     return{
       utm_source:getParam("utm_source")||null,
       utm_medium:getParam("utm_medium")||null,
       utm_campaign:getParam("utm_campaign")||null,
       utm_content:getParam("utm_content")||null,
       utm_term:getParam("utm_term")||null,
-      advertising_click_ids:clickIds
+      advertising_click_ids:clickIds,
+      advertising_params:adParams
     };
   }
 
@@ -630,11 +461,14 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
       landing_variant_name:cfg.landingName||"",
       page_instance_id:pageInstanceId,
       page_url:window.location.href,
+      source_url:window.location.href,
+      page_path:window.location.pathname,
       referrer:document.referrer||null,
       runtime_version:cfg.runtimeVersion,
       browser_language:navigator.language||null,
       browser_client_time:new Date().toISOString(),
       advertising_click_ids:attribution.advertising_click_ids,
+      advertising_params:attribution.advertising_params,
       utm_source:attribution.utm_source,
       utm_medium:attribution.utm_medium,
       utm_campaign:attribution.utm_campaign,
@@ -655,70 +489,38 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
     }).catch(function(){return null;});
   }
 
-  function sendEvent(eventType){
-    if(eventType!=="landing_opened"&&eventType!=="quiz_start_click")return;
-    var payload=basePayload();
+  function addSafeEventParams(payload,params){
+    if(!params||typeof params!=="object")return payload;
+    Object.keys(params).forEach(function(key){
+      if(/answer|text|label|option/i.test(key))return;
+      payload[key]=params[key];
+    });
+    return payload;
+  }
+
+  function flushPendingClickEvents(){
+    if(!atmospaceReady)return;
+    while(pendingClickEvents.length){
+      postJson(clickEndpoint,pendingClickEvents.shift(),true);
+    }
+  }
+
+  function sendEvent(eventType,params){
+    if(!ALLOWED_CLICK_EVENTS[eventType])return;
+    var payload=addSafeEventParams(basePayload(),params);
     payload.event_type=eventType;
     payload.client_time=new Date().toISOString();
-    var url=cfg.baseUrl+cfg.clickPath;
-    try{
-      var body=JSON.stringify(payload);
-      if(navigator.sendBeacon){
-        var blob=new Blob([body],{type:"application/json"});
-        if(navigator.sendBeacon(url,blob))return;
-      }
-    }catch(error){}
-    postJson(url,payload,true);
-  }
-
-  function flushMetrikaGoals(){
-    var counterId=Number.parseInt(String(cfg.counterId||""),10);
-    if(!Number.isInteger(counterId)||counterId<=0||typeof window.ym!=="function")return false;
-    while(pendingMetrikaGoals.length){
-      var item=pendingMetrikaGoals.shift();
-      try{window.ym(counterId,"reachGoal",item.goalName,item.params||{},item.done);}catch(error){item.done();}
+    if(!atmospaceReady){
+      pendingClickEvents.push(payload);
+      return;
     }
-    return true;
+    postJson(clickEndpoint,payload,true);
   }
 
-  function ensureMetrikaReady(){
-    var counterId=Number.parseInt(String(cfg.counterId||""),10);
-    if(!Number.isInteger(counterId)||counterId<=0||isLocalPreview())return Promise.resolve(false);
-    if(metrikaReadyPromise)return metrikaReadyPromise;
-    metrikaReadyPromise=new Promise(function(resolve){
-      window.ym=window.ym||function(){(window.ym.a=window.ym.a||[]).push(arguments);};
-      window.ym.l=window.ym.l||1*new Date();
-      window.__atmospaceMetrikaInited=window.__atmospaceMetrikaInited||{};
-      if(!window.__atmospaceMetrikaInited[counterId]){
-        window.__atmospaceMetrikaInited[counterId]=true;
-        window.ym(counterId,"init",{clickmap:true,trackLinks:true,accurateTrackBounce:true,webvisor:true});
-      }
-      var existing=document.querySelector('script[src="'+metrikaScriptUrl+'"]');
-      if(existing){
-        existing.addEventListener("load",function(){resolve(true);},{once:true});
-        existing.addEventListener("error",function(){resolve(false);},{once:true});
-        window.setTimeout(function(){resolve(typeof window.ym==="function");},2500);
-        return;
-      }
-      var script=document.createElement("script");
-      script.async=true;
-      script.src=metrikaScriptUrl;
-      script.setAttribute("data-atmospace-metrika","");
-      script.addEventListener("load",function(){resolve(true);},{once:true});
-      script.addEventListener("error",function(){resolve(false);},{once:true});
-      document.head.appendChild(script);
-    }).then(function(ready){flushMetrikaGoals();return ready;});
-    return metrikaReadyPromise;
-  }
-
-  function reachGoal(goalName,params,callback){
-    if(typeof params==="function"){callback=params;params={};}
-    var finished=false;
-    function done(){if(finished)return;finished=true;if(typeof callback==="function")callback();}
-    if(isLocalPreview()){done();return;}
-    pendingMetrikaGoals.push({goalName:goalName,params:params||{},done:done});
-    ensureMetrikaReady();
-    window.setTimeout(done,1200);
+  function sendLandingOpenedOnce(){
+    if(landingOpenedSent)return;
+    landingOpenedSent=true;
+    sendEvent("landing_opened");
   }
 
   function getRuntimeMessageNode(){
@@ -729,17 +531,9 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
     var node=document.createElement("p");
     node.setAttribute("data-atmospace-runtime-message","");
     node.hidden=true;
-    node.style.cssText="display:none;margin:12px 0 0;color:#b91c1c;font-size:14px;line-height:1.45;font-weight:800;text-align:center;";
+    node.style.cssText="display:none;margin:12px 0 0;color:#991b1b;font-size:14px;line-height:1.45;font-weight:700;text-align:center;";
     firstButton.insertAdjacentElement("afterend",node);
     return node;
-  }
-
-  function setRuntimeMessage(message){
-    var node=getRuntimeMessageNode();
-    if(!node)return;
-    node.textContent=message||"";
-    node.hidden=!message;
-    node.style.display=message?"block":"none";
   }
 
   function getRetryButton(){
@@ -750,25 +544,33 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
     var button=document.createElement("button");
     button.type="button";
     button.setAttribute("data-atmospace-runtime-retry","");
+    button.textContent="Повторить";
     button.hidden=true;
-    button.textContent="Попробовать ещё раз";
-    button.style.cssText="display:none;min-height:46px;margin:12px auto 0;padding:10px 18px;border:0;border-radius:8px;background:#2563eb;color:#fff;font:inherit;font-weight:900;cursor:pointer;";
+    button.style.cssText="display:none;margin:10px auto 0;padding:11px 18px;border:0;border-radius:12px;background:#2563eb;color:#fff;font:inherit;font-weight:800;cursor:pointer;";
     message.insertAdjacentElement("afterend",button);
-    button.addEventListener("click",function(){requestRegistration();});
     return button;
   }
 
-  function setRetryVisible(isVisible){
-    var button=getRetryButton();
-    if(!button)return;
-    button.hidden=!isVisible;
-    button.style.display=isVisible?"block":"none";
+  function setRuntimeMessage(message,canRetry){
+    var node=getRuntimeMessageNode();
+    if(node){
+      node.textContent=message||"";
+      node.hidden=!message;
+      node.style.display=message?"block":"none";
+    }
+    var retry=getRetryButton();
+    if(retry){
+      retry.hidden=!canRetry;
+      retry.style.display=canRetry?"block":"none";
+      retry.disabled=initInFlight;
+    }
   }
 
   function setRegistrationState(state){
+    var canContinue=state==="ready"&&atmospaceReady&&quizCompleted&&registrationUrl;
     document.querySelectorAll(registrationSelector).forEach(function(button){
-      button.setAttribute("data-atmospace-state",state);
-      if(state==="ready"&&registrationUrl){
+      button.setAttribute("data-atmospace-state",canContinue?"ready":state);
+      if(canContinue){
         button.setAttribute("href",registrationUrl);
         button.removeAttribute("aria-disabled");
       }else{
@@ -776,6 +578,13 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
         button.setAttribute("aria-disabled","true");
       }
     });
+  }
+
+  function syncRegistrationState(){
+    if(atmospaceReady&&quizCompleted&&registrationUrl)setRegistrationState("ready");
+    else if(initFailed)setRegistrationState("error");
+    else if(atmospaceReady)setRegistrationState("waiting-quiz");
+    else setRegistrationState("loading");
   }
 
   function isTrustedRegistrationUrl(value){
@@ -790,108 +599,145 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
     if(typeof candidate!=="string")return false;
     if(!isTrustedRegistrationUrl(candidate))return false;
     registrationUrl=candidate;
-    setRegistrationState("ready");
-    setRuntimeMessage("");
+    atmospaceReady=true;
+    initFailed=false;
+    syncRegistrationState();
+    setRuntimeMessage("",false);
     return true;
   }
 
+  function markQuizStarted(){
+    if(quizStartSent)return;
+    quizStartSent=true;
+    sendEvent("quiz_start_click");
+    reachGoal("quiz_start_click");
+  }
+
+  function markQuestionAnswered(event){
+    var questionNumber=Math.floor(Number(event&&event.detail?event.detail.questionNumber:0));
+    if(questionNumber<1||questionNumber>100||answeredQuestionNumbers[questionNumber])return;
+    answeredQuestionNumbers[questionNumber]=true;
+    sendEvent("question_answered",{questionNumber:questionNumber,question_id:"q"+String(questionNumber)});
+    reachGoal("question_answered",{questionNumber:questionNumber});
+  }
+
+  function markQuizCompleted(){
+    if(quizCompletedSent)return;
+    quizCompletedSent=true;
+    quizCompleted=true;
+    sendEvent("quiz_completed");
+    reachGoal("quiz_completed");
+    syncRegistrationState();
+    if(initFailed)setRuntimeMessage(runtimeErrorMessage,true);
+  }
+
+  document.addEventListener("atmospace:quiz-start",markQuizStarted);
+  document.addEventListener("atmospace:quiz-answer",markQuestionAnswered);
+  document.addEventListener("atmospace:quiz-complete",markQuizCompleted);
+
   document.addEventListener("click",function(event){
+    var retry=event.target&&event.target.closest?event.target.closest("[data-atmospace-runtime-retry]"):null;
+    if(retry){
+      event.preventDefault();
+      initRuntime();
+      return;
+    }
+
     var quizLink=event.target&&event.target.closest?event.target.closest(quizSelector):null;
-    if(quizLink&&!quizStartSent){
-      quizStartSent=true;
-      sendEvent("quiz_start_click");
-      reachGoal("quiz_start_click");
-    }
-    var option=event.target&&event.target.closest?event.target.closest("[data-atmospace-option]"):null;
-    if(option){
-      var panel=option.closest("[data-atmospace-question]");
-      var panels=Array.from(document.querySelectorAll("[data-atmospace-question]"));
-      var questionIndex=panels.indexOf(panel);
-      if(questionIndex>=0&&!answeredGoalIndexes[questionIndex]){
-        answeredGoalIndexes[questionIndex]=true;
-        reachGoal("question_answered",{questionNumber:questionIndex+1});
-        if(questionIndex===panels.length-1)reachGoal("quiz_completed");
-      }
-    }
+    if(quizLink)markQuizStarted();
+
     var registrationLink=event.target&&event.target.closest?event.target.closest(registrationSelector):null;
     if(!registrationLink)return;
     event.preventDefault();
-    if(!registrationUrl||registrationNavigationStarted){
-      if(!registrationUrl)setRuntimeMessage(runtimeErrorMessage);
+    if(!registrationUrl||!atmospaceReady||!quizCompleted||registrationNavigationStarted){
+      if(initFailed)setRuntimeMessage(runtimeErrorMessage,true);
       return;
     }
+
     registrationNavigationStarted=true;
+    sendEvent("registration_started");
     reachGoal("registration_started");
-    window.setTimeout(function(){window.location.assign(registrationUrl);},180);
+    window.location.assign(registrationUrl);
   },true);
 
-  function sendLandingOpenedOnce(){
-    if(landingOpenedSent)return;
-    landingOpenedSent=true;
-    sendEvent("landing_opened");
-  }
-
-  function requestRegistration(){
-    if(initInFlight||initCompleted)return Promise.resolve();
-    if(isLocalPreview()){
-      setRetryVisible(false);
-      setRuntimeMessage("После публикации страница автоматически подготовит безопасный переход к регистрации.");
-      return Promise.resolve();
-    }
-    if(!cfg.publicLandingKey||!cfg.counterId){
-      setRegistrationState("error");
-      setRetryVisible(false);
-      setRuntimeMessage(runtimeErrorMessage);
-      return Promise.resolve();
-    }
-    initInFlight=true;
-    setRegistrationState("loading");
-    setRuntimeMessage("");
-    setRetryVisible(false);
-    sendLandingOpenedOnce();
-    return postJson(cfg.baseUrl+cfg.initPath,basePayload(),false).then(function(result){
-      var responseBody=result&&result.body?result.body:null;
-      var data=responseBody&&responseBody.ok&&responseBody.data?responseBody.data:null;
-      var links=data&&data.links?data.links:null;
-      if(!result||!result.ok||!applyRegistrationLink(links))throw new Error("landing_not_ready");
-      initCompleted=true;
-      initInFlight=false;
-      setRetryVisible(false);
-    }).catch(function(){
-      initInFlight=false;
-      setRegistrationState("error");
-      setRuntimeMessage(runtimeErrorMessage);
-      setRetryVisible(true);
-    });
+  function failInit(canRetry){
+    initInFlight=false;
+    initFailed=true;
+    atmospaceReady=false;
+    registrationUrl="";
+    syncRegistrationState();
+    setRuntimeMessage(runtimeErrorMessage,Boolean(canRetry));
   }
 
   function initRuntime(){
+    if(initInFlight)return;
+    initInFlight=true;
+    initFailed=false;
+    atmospaceReady=false;
+    registrationUrl="";
+    syncRegistrationState();
+    setRuntimeMessage("",false);
+
+    if(isLocalPreview()){
+      initInFlight=false;
+      initFailed=true;
+      syncRegistrationState();
+      setRuntimeMessage(previewMessage,false);
+      return;
+    }
+
+    if(!cfg.publicLandingKey||!getCounterId()){
+      failInit(false);
+      return;
+    }
+
+    postJson(cfg.baseUrl+cfg.initPath,basePayload(),false).then(function(result){
+      initInFlight=false;
+      var responseBody=result&&result.body?result.body:null;
+      var data=responseBody&&responseBody.ok===true&&responseBody.data?responseBody.data:null;
+      var links=data&&data.links?data.links:null;
+      if(!result||!result.ok||!data||data.status!=="ready"||!applyRegistrationLink(links)){
+        failInit(true);
+        return;
+      }
+      sendLandingOpenedOnce();
+      flushPendingClickEvents();
+    });
+  }
+
+  function startRuntime(){
     document.querySelectorAll(quizSelector).forEach(function(link){
       if(!link.getAttribute("href"))link.setAttribute("href","#atmospace-mini-quiz");
       link.setAttribute("data-atmospace-state","ready");
       link.removeAttribute("aria-disabled");
     });
-    setRegistrationState("loading");
-    ensureMetrikaReady();
-    if(!landingViewSent){landingViewSent=true;reachGoal("landing_view");}
-    requestRegistration();
+    syncRegistrationState();
+    ensureMetrika();
+    sendLandingViewOnce();
+    initRuntime();
   }
 
-  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",initRuntime);
-  else initRuntime();
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",startRuntime);
+  else startRuntime();
 })();
 </script>`;
 }
 
-function ensureAtmospaceRuntimeEmbed(embedCode, publicLandingKey, counterId, landingName, landingCode) {
-  let htmlSource = String(embedCode || '');
-  if (!htmlSource || hasAtmospaceRuntime(htmlSource)) return htmlSource;
+function stripAtmospaceRuntimeScripts(source) {
+  return String(source || '').replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, (block) => {
+    const isAtmospaceRuntime = /data-atmospace-runtime=/i.test(block)
+      || (block.includes(ATMOSPACE_INIT_PATH) && block.includes(ATMOSPACE_CLICK_PATH));
+    return isAtmospaceRuntime ? '' : block;
+  });
+}
 
+function ensureAtmospaceRuntimeEmbed(embedCode, publicLandingKey, counterId, landingName, landingCode) {
+  const source = String(embedCode || '');
+  if (!source) return source;
+
+  const htmlSource = stripAtmospaceRuntimeScripts(source);
   const runtimeScript = buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName, landingCode });
-  if (hasLegacyAtmospaceEmbed(htmlSource)
-    || htmlSource.includes(ATMOSPACE_INIT_PATH)
-    || htmlSource.includes(ATMOSPACE_CLICK_PATH)
-    || htmlSource.includes('data-atmospace-runtime=')) {
+  if (hasLegacyAtmospaceEmbed(htmlSource)) {
     return runtimeScript;
   }
   if (/<\/body\s*>/i.test(htmlSource)) {
@@ -900,54 +746,6 @@ function ensureAtmospaceRuntimeEmbed(embedCode, publicLandingKey, counterId, lan
   return `${htmlSource}\n${runtimeScript}`;
 }
 
-function validateLegacyAtmospaceEmbedCode({ embedCode, publicLandingKey, counterId, landingName, landingCode, protectedValue }) {
-  const source = String(embedCode || '');
-  const errors = [];
-  const requiredMarkers = [
-    'landing_variant_code',
-    'landing_variant_name',
-    'browser_language',
-    'browser_client_time',
-    'advertising_click_ids',
-    'yclid',
-    'gclid',
-    'fbclid',
-    'msclkid',
-    'dclid',
-    'utm_source',
-    'utm_medium',
-    'utm_campaign',
-    'utm_content',
-    'utm_term',
-    'landing_opened',
-    'messenger_button_clicked',
-    'links.telegram',
-    'links.max',
-    'atmospace-policy-consent'
-  ];
-  if (!source.trim()) errors.push('embed_code_empty');
-  if (!publicLandingKey || !source.includes(publicLandingKey)) errors.push('public_landing_key_missing');
-  if (!counterId || !source.includes(counterId)) errors.push('counter_id_missing');
-  if (!landingName || !source.includes(landingName)) errors.push('landing_name_missing');
-  if (!landingCode || !source.includes(landingCode)) errors.push('landing_code_missing');
-  if (!source.includes(`${ATMOSPACE_API_BASE_URL}${ATMOSPACE_INIT_PATH}`) && !source.includes(ATMOSPACE_INIT_PATH)) errors.push('runtime_init_missing');
-  if (!source.includes(`${ATMOSPACE_API_BASE_URL}${ATMOSPACE_CLICK_PATH}`) && !source.includes(ATMOSPACE_CLICK_PATH)) errors.push('runtime_click_missing');
-  requiredMarkers.forEach((marker) => {
-    if (!source.includes(marker)) errors.push(`runtime_marker_missing:${marker}`);
-  });
-  if ((source.match(/var pageInstanceId\s*=\s*makePageInstanceId\(\);/g) || []).length !== 1) errors.push('page_instance_id_contract_invalid');
-  if (source.includes('sessionStorage')) errors.push('page_instance_id_session_storage_forbidden');
-  if (source.includes('readyLinks[messenger]||readyLinks.telegram') || source.includes('readyLinks[messenger]||readyLinks.max')) {
-    errors.push('messenger_link_fallback_forbidden');
-  }
-  if (!/messenger\s*:\s*messenger\s*\|\|\s*null/.test(source)) errors.push('legacy_requires_nullable_transport');
-  if (!/!links\.telegram\s*\|\|\s*!links\.max/.test(source)) errors.push('legacy_requires_two_transport_links');
-  if (source.includes('https://web.telegram.org/k/#')) errors.push('telegram_web_link_forbidden');
-  if (!source.includes('Сейчас переход временно недоступен. Попробуйте ещё раз чуть позже.')) errors.push('runtime_error_message_missing');
-  if (protectedValue && source.includes(protectedValue)) errors.push('protected_value_leaked');
-  if (source.includes('serverOnlyAdGoalCredential')) errors.push('protected_field_name_leaked');
-  return errors;
-}
 
 function validateAtmospaceEmbedCode({ embedCode, publicLandingKey, counterId, landingName, landingCode, protectedValue }) {
   const source = String(embedCode || '');
@@ -1001,7 +799,15 @@ function validateAtmospaceEmbedCode({ embedCode, publicLandingKey, counterId, la
   if (/function\s+buildQuizUrl|pathname\s*=\s*['"]\/quiz['"]/.test(source)) errors.push('registration_link_rewrite_forbidden');
   if (/\/api\/register/.test(source)) errors.push('direct_registration_endpoint_forbidden');
   if (/registration_success|notifications_connected|payment_success|registration_click/.test(source)) errors.push('browser_server_goal_forbidden');
-  if (!source.includes('eventType!=="landing_opened"&&eventType!=="quiz_start_click"') && !source.includes("eventType !== 'landing_opened' && eventType !== 'quiz_start_click'")) errors.push('click_event_allowlist_missing');
+  const requiredClickEvents = ['landing_opened', 'quiz_start_click', 'question_answered', 'quiz_completed', 'registration_started'];
+  requiredClickEvents.forEach((eventName) => {
+    if (!source.includes(`sendEvent("${eventName}"`) && !source.includes(`sendEvent('${eventName}'`)) {
+      errors.push(`runtime_click_event_missing:${eventName}`);
+    }
+  });
+  if (!source.includes('ALLOWED_CLICK_EVENTS')) errors.push('click_event_allowlist_missing');
+  if (!source.includes('pendingClickEvents') || !source.includes('flushPendingClickEvents')) errors.push('click_event_queue_missing');
+  if (!source.includes('advertising_params')) errors.push('advertising_params_missing');
   if ((source.match(/window\.ym\([^\n]+["']init["']/g) || []).length !== 1) errors.push('metrika_init_contract_invalid');
   if (source.includes('https://web.telegram.org/k/#')) errors.push('telegram_web_link_forbidden');
   if (!source.includes('registrationUrl=candidate') && !source.includes('registrationUrl = candidate')) errors.push('canonical_registration_link_missing');

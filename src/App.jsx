@@ -1,4 +1,4 @@
-﻿import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Copy, Check, Wand2, AlertCircle, ChevronDown, RotateCcw, Eye, Sun, Moon, Sparkles, Lightbulb, ShieldCheck } from 'lucide-react';
 import AIBannerStudio from './components/AIBannerStudio';
 import { buildCampaignLandingLogic, resolveCampaignSemanticProfile } from './data/campaignSemantics';
@@ -90,7 +90,7 @@ const ATMOSPACE_GENERATE_ENDPOINT = '/api/atmospace/generate';
 const ATMOSPACE_PUBLIC_API_BASE_URL = 'https://api.atmospace.pro';
 const ATMOSPACE_INIT_ENDPOINT = `${ATMOSPACE_PUBLIC_API_BASE_URL}/api/landing-runtime/init`;
 const ATMOSPACE_CLICK_ENDPOINT = `${ATMOSPACE_PUBLIC_API_BASE_URL}/api/landing-runtime/click`;
-const ATMOSPACE_GENERATED_RUNTIME_VERSION = 'sergey-constructor-atmospace-v1';
+const ATMOSPACE_GENERATED_RUNTIME_VERSION = 'sergey-constructor-quiz-v1';
 const DEFAULT_CLIENT_LIMITS = { banners: 12, prelandings: 4 };
 const TILDA_PRELAND_BUILD_VERSION = '20260601-modernisto-control-v2';
 const CONSTRUCTOR_ACCESS_MODE = 'owner_only';
@@ -904,6 +904,9 @@ function buildAtmospaceLandingConfig({ projectData, ...fallback } = {}) {
   const landingCode = String(fallback.landingCode || projectData?.partnerCode || '').trim();
   return {
     runtimeVersion: ATMOSPACE_GENERATED_RUNTIME_VERSION,
+    baseUrl: ATMOSPACE_PUBLIC_API_BASE_URL,
+    initPath: '/api/landing-runtime/init',
+    clickPath: '/api/landing-runtime/click',
     apiBaseUrl: ATMOSPACE_PUBLIC_API_BASE_URL,
     initEndpoint: ATMOSPACE_INIT_ENDPOINT,
     clickEndpoint: ATMOSPACE_CLICK_ENDPOINT,
@@ -964,448 +967,7 @@ window.ATMOSPACE_LANDING_CONFIG = Object.freeze(${safeInlineJson(config)});
 }
 
 function buildLegacyAtmospacePrelandingTrackingScript() {
-  return `<script>
-(function () {
-  'use strict';
-
-  var cfg = window.ATMOSPACE_LANDING_CONFIG || {};
-  var runtimeVersion = cfg.runtimeVersion || ${JSON.stringify(ATMOSPACE_GENERATED_RUNTIME_VERSION)};
-  var initEndpoint = cfg.initEndpoint || ${JSON.stringify(ATMOSPACE_INIT_ENDPOINT)};
-  var clickEndpoint = cfg.clickEndpoint || ${JSON.stringify(ATMOSPACE_CLICK_ENDPOINT)};
-  var DIRECT_PARAM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
-  var CLICK_ID_KEYS = ['yclid', 'gclid', 'fbclid', 'msclkid', 'dclid'];
-  var questions = ${safeInlineJson(ATMOSPACE_MINI_QUIZ)};
-  var registrationUrl = '';
-  var landingOpenedSent = false;
-  var answeredGoalIndexes = {};
-  var quizCompletedSent = false;
-  var registrationNavigationStarted = false;
-  var RUNTIME_ERROR_MESSAGE = 'Сейчас переход временно недоступен. Попробуйте ещё раз чуть позже.';
-
-  function getParam(name) {
-    try {
-      return new URL(window.location.href).searchParams.get(name) || '';
-    } catch (error) {
-      return '';
-    }
-  }
-
-  function makePageInstanceId() {
-    if (window.crypto && typeof window.crypto.randomUUID === 'function') {
-      return window.crypto.randomUUID();
-    }
-    return 'page_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
-  }
-  var pageInstanceId = makePageInstanceId();
-
-  function collectUtm() {
-    var result = {};
-    DIRECT_PARAM_KEYS.forEach(function (key) {
-      result[key] = getParam(key) || null;
-    });
-    return result;
-  }
-
-  function collectClickIds() {
-    var result = {};
-    CLICK_ID_KEYS.forEach(function (key) {
-      var value = getParam(key);
-      if (value) result[key] = value;
-    });
-    return result;
-  }
-
-  function isLocalPreview() {
-    return window.location.protocol === 'file:'
-      || window.location.hostname === 'localhost'
-      || window.location.hostname === '127.0.0.1';
-  }
-
-  function getQuizButtons() {
-    return Array.prototype.slice.call(document.querySelectorAll('[data-atmospace-quiz-link]'));
-  }
-
-  function getRegistrationButtons() {
-    return Array.prototype.slice.call(document.querySelectorAll('[data-atmospace-registration-link]'));
-  }
-
-  function setQuizButtonsState(state) {
-    getQuizButtons().forEach(function (button) {
-      button.setAttribute('data-atmospace-state', state);
-      button.removeAttribute('aria-disabled');
-      button.setAttribute('href', '#atmospace-mini-quiz');
-    });
-  }
-
-  function setRegistrationButtonsState(state) {
-    getRegistrationButtons().forEach(function (button) {
-      button.setAttribute('data-atmospace-state', state);
-      if (state === 'ready' && registrationUrl) {
-        button.removeAttribute('aria-disabled');
-        button.setAttribute('href', registrationUrl);
-      } else {
-        button.setAttribute('aria-disabled', 'true');
-        button.setAttribute('href', '#');
-      }
-    });
-  }
-
-  function getRuntimeMessageNode() {
-    var existing = document.querySelector('[data-atmospace-runtime-message]');
-    if (existing) return existing;
-    var firstButton = getRegistrationButtons()[0] || getQuizButtons()[0];
-    if (!firstButton) return null;
-    var node = document.createElement('p');
-    node.setAttribute('data-atmospace-runtime-message', '');
-    node.hidden = true;
-    node.style.cssText = 'display:none;margin:12px 0 0;color:#b91c1c;font-size:14px;line-height:1.45;font-weight:800;text-align:center;';
-    var container = firstButton.parentElement || firstButton;
-    container.insertAdjacentElement('afterend', node);
-    return node;
-  }
-
-  function setRuntimeMessage(message) {
-    var node = getRuntimeMessageNode();
-    if (!node) return;
-    node.textContent = message || '';
-    node.hidden = !message;
-    node.style.display = message ? 'block' : 'none';
-  }
-
-  function showRuntimeError() {
-    registrationUrl = '';
-    setRegistrationButtonsState('error');
-    setRuntimeMessage(RUNTIME_ERROR_MESSAGE);
-  }
-
-  function isTrustedRegistrationUrl(value) {
-    try {
-      var url = new URL(String(value || ''));
-      return url.protocol === 'https:' && (url.hostname === 'atmospace.pro' || url.hostname.endsWith('.atmospace.pro'));
-    } catch (error) {
-      return false;
-    }
-  }
-
-  function applyRegistrationLink(links) {
-    var candidate = links && links.registration;
-    if (typeof candidate !== 'string') {
-      showRuntimeError();
-      return false;
-    }
-    if (!isTrustedRegistrationUrl(candidate)) {
-      showRuntimeError();
-      return false;
-    }
-    registrationUrl = candidate;
-    setRuntimeMessage('');
-    setRegistrationButtonsState('ready');
-    document.dispatchEvent(new CustomEvent('atmospace:registration-ready', { detail: { registrationUrl: registrationUrl } }));
-    return true;
-  }
-
-  function buildBasePayload() {
-    var utm = collectUtm();
-    return {
-      public_landing_key: cfg.publicLandingKey || '',
-      counter_id: cfg.counterId || '',
-      landing_variant_code: cfg.landingCode || '',
-      landing_variant_name: cfg.landingName || '',
-      page_instance_id: pageInstanceId,
-      page_url: window.location.href,
-      referrer: document.referrer || null,
-      runtime_version: runtimeVersion,
-      browser_language: navigator.language || null,
-      browser_client_time: new Date().toISOString(),
-      advertising_click_ids: collectClickIds(),
-      utm_source: utm.utm_source,
-      utm_medium: utm.utm_medium,
-      utm_campaign: utm.utm_campaign,
-      utm_content: utm.utm_content,
-      utm_term: utm.utm_term
-    };
-  }
-
-  function postJson(url, payload, keepalive) {
-    if (!url || typeof fetch !== 'function') return Promise.resolve(null);
-    return fetch(url, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(payload),
-      keepalive: Boolean(keepalive)
-    }).then(function (response) {
-      return response.json().catch(function () { return null; }).then(function (body) {
-        return { ok: response.ok, body: body };
-      });
-    }).catch(function () {
-      return null;
-    });
-  }
-
-  function sendEvent(eventType) {
-    var payload = {
-      public_landing_key: cfg.publicLandingKey || '',
-      counter_id: cfg.counterId || '',
-      event_type: eventType,
-      page_instance_id: pageInstanceId,
-      page_url: window.location.href,
-      referrer: document.referrer || null,
-      runtime_version: runtimeVersion,
-      client_time: new Date().toISOString()
-    };
-    var body = JSON.stringify(payload);
-
-    if (navigator.sendBeacon) {
-      try {
-        var blob = new Blob([body], { type: 'application/json' });
-        if (navigator.sendBeacon(clickEndpoint, blob)) return;
-      } catch (error) {
-        // A fetch fallback below keeps analytics from blocking navigation.
-      }
-    }
-    postJson(clickEndpoint, payload, true);
-  }
-
-  function sendLandingOpenedOnce() {
-    if (landingOpenedSent) return;
-    landingOpenedSent = true;
-    sendEvent('landing_opened');
-  }
-
-  var metrikaCounterId = (function () {
-    var value = Number.parseInt(String(cfg.counterId || ''), 10);
-    return Number.isInteger(value) && value > 0 ? value : null;
-  })();
-  var pendingMetrikaGoals = [];
-  var metrikaFlushScheduled = false;
-
-  function finishPendingMetrikaGoals() {
-    while (pendingMetrikaGoals.length) {
-      var item = pendingMetrikaGoals.shift();
-      item.done();
-    }
-  }
-
-  function flushPendingMetrikaGoals() {
-    if (!metrikaCounterId || typeof window.ym !== 'function') return false;
-    while (pendingMetrikaGoals.length) {
-      var item = pendingMetrikaGoals.shift();
-      try {
-        window.ym(metrikaCounterId, 'reachGoal', item.goalName, {}, item.done);
-      } catch (error) {
-        item.done();
-      }
-    }
-    return true;
-  }
-
-  function scheduleMetrikaFlush() {
-    if (metrikaFlushScheduled || !pendingMetrikaGoals.length) return;
-    metrikaFlushScheduled = true;
-    var attempts = 0;
-    function tick() {
-      if (flushPendingMetrikaGoals()) {
-        metrikaFlushScheduled = false;
-        return;
-      }
-      attempts += 1;
-      if (attempts >= 40) {
-        finishPendingMetrikaGoals();
-        metrikaFlushScheduled = false;
-        return;
-      }
-      window.setTimeout(tick, 250);
-    }
-    if (document.readyState === 'complete') tick();
-    else window.addEventListener('load', tick, { once: true });
-  }
-
-  function reachGoal(goalName, callback) {
-    var callbackCalled = false;
-    function done() {
-      if (callbackCalled) return;
-      callbackCalled = true;
-      if (typeof callback === 'function') callback();
-    }
-    if (!metrikaCounterId || isLocalPreview()) {
-      done();
-      return;
-    }
-    pendingMetrikaGoals.push({ goalName: goalName, done: done });
-    scheduleMetrikaFlush();
-  }
-
-  function ensureMiniQuiz() {
-    var existing = document.querySelector('[data-atmospace-mini-quiz]');
-    if (existing) return existing;
-    var style = document.createElement('style');
-    style.textContent = '[data-atmospace-mini-quiz]{position:fixed;inset:0;z-index:2147483000;display:grid;place-items:center;padding:20px;background:rgba(5,10,20,.84);font-family:Manrope,Inter,system-ui,sans-serif;color:#f8fafc}[data-atmospace-mini-quiz][hidden]{display:none!important}.atm-qz-dialog{position:relative;width:min(820px,100%);max-height:calc(100svh - 40px);overflow:auto;border:1px solid rgba(148,163,184,.24);border-radius:8px;background:#0b1424;box-shadow:0 28px 90px rgba(0,0,0,.46)}.atm-qz-body{padding:clamp(24px,5vw,48px)}.atm-qz-close{position:absolute;top:14px;right:14px;width:42px;height:42px;border:1px solid rgba(148,163,184,.25);border-radius:50%;background:#111e32;color:#fff;cursor:pointer;font-size:24px;line-height:1}.atm-qz-kicker{margin:0 52px 14px 0;color:#63b3ff;font-size:12px;font-weight:900;text-transform:uppercase}.atm-qz-title{margin:0 0 18px;font-size:clamp(30px,5vw,48px);line-height:1.08}.atm-qz-note{margin:7px 0;color:#cbd5e1;font-size:16px;line-height:1.5}.atm-qz-note strong{color:#fff}.atm-qz-action,.atm-qz-registration{display:flex;align-items:center;justify-content:center;width:100%;min-height:62px;margin-top:28px;padding:14px 22px;border:0;border-radius:8px;background:#2f80ed;color:#fff!important;text-decoration:none!important;cursor:pointer;font-size:17px;font-weight:900}.atm-qz-progress-row{display:flex;align-items:center;gap:14px;margin-bottom:28px;color:#94a3b8;font-size:13px;font-weight:800}.atm-qz-progress{height:7px;flex:1;overflow:hidden;border-radius:999px;background:#1b2a40}.atm-qz-progress span{display:block;height:100%;background:#38bdf8;transition:width .2s ease}.atm-qz-question{margin:0 0 26px;font-size:clamp(26px,4vw,38px);line-height:1.18}.atm-qz-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.atm-qz-option{min-height:76px;padding:17px;border:1px solid rgba(148,163,184,.24);border-radius:8px;background:#111e32;color:#f8fafc;cursor:pointer;text-align:left;font-size:15px;line-height:1.45;font-weight:750}.atm-qz-option:hover,.atm-qz-option:focus-visible{border-color:#38bdf8;outline:none}.atm-qz-back{margin-top:20px;border:0;background:transparent;color:#94a3b8;cursor:pointer;font-weight:800}.atm-qz-result{text-align:center}.atm-qz-result p{color:#cbd5e1;font-size:18px;line-height:1.55}.atm-qz-status{margin:12px 0 0;color:#fca5a5;font-size:13px;font-weight:800}.atm-qz-registration[aria-disabled=true]{pointer-events:none;opacity:.58}@media(max-width:640px){[data-atmospace-mini-quiz]{padding:0}.atm-qz-dialog{width:100%;max-height:100svh;min-height:100svh;border:0;border-radius:0}.atm-qz-body{padding:64px 16px 24px}.atm-qz-options{grid-template-columns:1fr}.atm-qz-option{min-height:64px}.atm-qz-close{position:fixed}}';
-    document.head.appendChild(style);
-    var modal = document.createElement('div');
-    modal.setAttribute('data-atmospace-mini-quiz', '');
-    modal.setAttribute('role', 'dialog');
-    modal.setAttribute('aria-modal', 'true');
-    modal.setAttribute('aria-label', 'Мини-тест');
-    modal.hidden = true;
-    modal.innerHTML = '<div class="atm-qz-dialog"><button class="atm-qz-close" type="button" data-atm-qz-close aria-label="Закрыть">×</button><div class="atm-qz-body"><section data-atm-qz-intro><p class="atm-qz-kicker">Мини-тест</p><h2 class="atm-qz-title">Здесь нет правильных ответов.</h2><p class="atm-qz-note"><strong>Их никто не сохраняет и не оценивает - кроме тебя.</strong></p><p class="atm-qz-note">Просто будь честен с самим собой.</p><button class="atm-qz-action" type="button" data-atm-qz-start>Начать мини-тест</button></section><section data-atm-qz-questions hidden><div class="atm-qz-progress-row"><span data-atm-qz-counter></span><div class="atm-qz-progress"><span data-atm-qz-progress></span></div></div><h2 class="atm-qz-question" data-atm-qz-question></h2><div class="atm-qz-options" data-atm-qz-options></div><button class="atm-qz-back" type="button" data-atm-qz-back>Назад</button></section><section class="atm-qz-result" data-atm-qz-result hidden><p class="atm-qz-kicker">Мини-тест пройден</p><h2 class="atm-qz-title">Спасибо за честные ответы.</h2><p>Перейдите к форме заявки, чтобы продолжить.</p><a class="atm-qz-registration" href="#" data-atmospace-registration-link data-atmospace-state="loading" aria-disabled="true">Перейти к форме заявки</a><p class="atm-qz-status" data-atm-qz-status></p></section></div></div>';
-    document.body.appendChild(modal);
-    var intro = modal.querySelector('[data-atm-qz-intro]');
-    var questionView = modal.querySelector('[data-atm-qz-questions]');
-    var resultView = modal.querySelector('[data-atm-qz-result]');
-    var counter = modal.querySelector('[data-atm-qz-counter]');
-    var progress = modal.querySelector('[data-atm-qz-progress]');
-    var questionNode = modal.querySelector('[data-atm-qz-question]');
-    var optionsNode = modal.querySelector('[data-atm-qz-options]');
-    var back = modal.querySelector('[data-atm-qz-back]');
-    var index = 0;
-    var answers = [];
-
-    function renderQuestion() {
-      var current = questions[index];
-      if (!current) {
-        questionView.hidden = true;
-        resultView.hidden = false;
-        if (!quizCompletedSent) {
-          quizCompletedSent = true;
-          reachGoal('quiz_completed');
-        }
-        setRegistrationButtonsState(registrationUrl ? 'ready' : 'error');
-        var status = modal.querySelector('[data-atm-qz-status]');
-        if (status) status.textContent = registrationUrl ? '' : (isLocalPreview() ? 'В локальном превью переход к форме отключён.' : RUNTIME_ERROR_MESSAGE);
-        return;
-      }
-      counter.textContent = String(index + 1) + ' / ' + String(questions.length);
-      progress.style.width = String(((index + 1) / questions.length) * 100) + '%';
-      questionNode.textContent = current.title;
-      back.disabled = index === 0;
-      back.style.opacity = index === 0 ? '.45' : '1';
-      optionsNode.replaceChildren();
-      current.options.forEach(function (label, optionIndex) {
-        var button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'atm-qz-option';
-        button.textContent = label;
-        button.addEventListener('click', function () {
-          answers[index] = optionIndex;
-          if (!answeredGoalIndexes[index]) {
-            answeredGoalIndexes[index] = true;
-            reachGoal('quiz_question_' + String(index + 1) + '_answered');
-          }
-          index += 1;
-          renderQuestion();
-        });
-        optionsNode.appendChild(button);
-      });
-    }
-
-    function closeModal() {
-      modal.hidden = true;
-      document.documentElement.style.overflow = '';
-    }
-
-    modal.querySelector('[data-atm-qz-close]').addEventListener('click', closeModal);
-    modal.addEventListener('click', function (event) { if (event.target === modal) closeModal(); });
-    modal.querySelector('[data-atm-qz-start]').addEventListener('click', function () {
-      intro.hidden = true;
-      questionView.hidden = false;
-      index = 0;
-      answers = [];
-      renderQuestion();
-    });
-    back.addEventListener('click', function () {
-      if (index <= 0) return;
-      index -= 1;
-      renderQuestion();
-    });
-    return modal;
-  }
-
-  function openMiniQuiz() {
-    var modal = ensureMiniQuiz();
-    setRegistrationButtonsState(registrationUrl ? 'ready' : 'loading');
-    modal.hidden = false;
-    document.documentElement.style.overflow = 'hidden';
-  }
-
-  function initRuntime() {
-    setQuizButtonsState('ready');
-    ensureMiniQuiz();
-    reachGoal('landing_view');
-    if (!cfg.publicLandingKey || !cfg.counterId) {
-      showRuntimeError();
-      console.error('[Atmospace] publicLandingKey/counterId missing');
-      return;
-    }
-    setRegistrationButtonsState(isLocalPreview() ? 'preview' : 'loading');
-    if (isLocalPreview()) {
-      setRuntimeMessage('');
-      console.info('[Atmospace] Local preview: runtime API calls disabled.');
-      return;
-    }
-    postJson(initEndpoint, buildBasePayload(), false).then(function (result) {
-      var responseBody = result && result.body ? result.body : null;
-      var data = responseBody && responseBody.ok && responseBody.data ? responseBody.data : null;
-      var links = data && data.links ? data.links : null;
-      if (!result || !result.ok || !links || !links.registration) {
-        showRuntimeError();
-        return;
-      }
-      if (!applyRegistrationLink(links)) return;
-      sendLandingOpenedOnce();
-    });
-  }
-
-  document.addEventListener('click', function (event) {
-    var button = event.target && event.target.closest ? event.target.closest('[data-atmospace-quiz-link]') : null;
-    if (!button) return;
-    event.preventDefault();
-    sendEvent('quiz_start_click');
-    reachGoal('quiz_start_click');
-    openMiniQuiz();
-  }, true);
-
-  document.addEventListener('atmospace:quiz-start', function () {
-    sendEvent('quiz_start_click');
-    reachGoal('quiz_start_click');
-  });
-  document.addEventListener('atmospace:quiz-answer', function (event) {
-    var questionNumber = Number(event && event.detail ? event.detail.questionNumber : 0);
-    if (!questionNumber || answeredGoalIndexes[questionNumber - 1]) return;
-    answeredGoalIndexes[questionNumber - 1] = true;
-    reachGoal('quiz_question_' + String(questionNumber) + '_answered');
-  });
-  document.addEventListener('atmospace:quiz-complete', function () {
-    if (quizCompletedSent) return;
-    quizCompletedSent = true;
-    reachGoal('quiz_completed');
-  });
-  document.addEventListener('click', function (event) {
-    var button = event.target && event.target.closest ? event.target.closest('[data-atmospace-registration-link]') : null;
-    if (!button) return;
-    if (!registrationUrl || button.getAttribute('aria-disabled') === 'true') {
-      event.preventDefault();
-      return;
-    }
-    if (registrationNavigationStarted) return;
-    registrationNavigationStarted = true;
-    event.preventDefault();
-    var navigated = false;
-    function navigate() {
-      if (navigated) return;
-      navigated = true;
-      window.location.assign(registrationUrl);
-    }
-    window.setTimeout(navigate, 800);
-    reachGoal('registration_started', navigate);
-  }, true);
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initRuntime);
-  } else {
-    initRuntime();
-  }
-})();
-</script>`;
+  return buildAtmospacePrelandingTrackingScript();
 }
 
 function buildAtmospacePrelandingTrackingScript() {
@@ -1415,11 +977,22 @@ function buildAtmospacePrelandingTrackingScript() {
 
   var cfg = window.ATMOSPACE_LANDING_CONFIG || {};
   var runtimeVersion = cfg.runtimeVersion || ${JSON.stringify(ATMOSPACE_GENERATED_RUNTIME_VERSION)};
-  var initEndpoint = cfg.initEndpoint || ${JSON.stringify(ATMOSPACE_INIT_ENDPOINT)};
-  var clickEndpoint = cfg.clickEndpoint || ${JSON.stringify(ATMOSPACE_CLICK_ENDPOINT)};
+  var baseUrl = cfg.baseUrl || cfg.apiBaseUrl || ${JSON.stringify(ATMOSPACE_PUBLIC_API_BASE_URL)};
+  var initPath = cfg.initPath || '/api/landing-runtime/init';
+  var clickPath = cfg.clickPath || '/api/landing-runtime/click';
+  var initEndpoint = baseUrl + initPath;
+  var clickEndpoint = cfg.baseUrl && cfg.clickPath ? cfg.baseUrl+cfg.clickPath : baseUrl + clickPath;
   var questions = ${safeInlineJson(ATMOSPACE_MINI_QUIZ)};
   var UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
   var CLICK_ID_KEYS = ['yclid', 'gclid', 'fbclid', 'msclkid', 'dclid'];
+  var AD_PARAM_KEYS = ['yd_campaign_id', 'yd_ad_id', 'yd_group_id', 'yd_creative_id', 'yd_source', 'yd_source_type', 'yd_device', 'yd_region_id'];
+  var ALLOWED_CLICK_EVENTS = {
+    landing_opened: true,
+    quiz_start_click: true,
+    question_answered: true,
+    quiz_completed: true,
+    registration_started: true
+  };
   var registrationUrl = '';
   var quizStartSent = false;
   var quizCompleted = false;
@@ -1429,6 +1002,7 @@ function buildAtmospacePrelandingTrackingScript() {
   var initCompleted = false;
   var landingOpenedSent = false;
   var landingViewSent = false;
+  var pendingClickEvents = [];
   var METRIKA_SCRIPT_URL = 'https://mc.yandex.ru/metrika/tag.js';
   var RUNTIME_ERROR_MESSAGE = 'Сейчас переход временно недоступен. Попробуйте ещё раз чуть позже.';
 
@@ -1458,11 +1032,16 @@ function buildAtmospacePrelandingTrackingScript() {
 
   function collectAttribution() {
     var clickIds = {};
+    var adParams = {};
     CLICK_ID_KEYS.forEach(function (key) {
       var value = getParam(key);
       if (value) clickIds[key] = value;
     });
-    var result = { advertising_click_ids: clickIds };
+    AD_PARAM_KEYS.forEach(function (key) {
+      var value = getParam(key);
+      if (value) adParams[key] = value;
+    });
+    var result = { advertising_click_ids: clickIds, advertising_params: adParams };
     UTM_KEYS.forEach(function (key) { result[key] = getParam(key) || null; });
     return result;
   }
@@ -1476,11 +1055,14 @@ function buildAtmospacePrelandingTrackingScript() {
       landing_variant_name: cfg.landingName || '',
       page_instance_id: pageInstanceId,
       page_url: window.location.href,
+      source_url: window.location.href,
+      page_path: window.location.pathname,
       referrer: document.referrer || null,
       runtime_version: runtimeVersion,
       browser_language: navigator.language || null,
       browser_client_time: new Date().toISOString(),
       advertising_click_ids: attribution.advertising_click_ids,
+      advertising_params: attribution.advertising_params,
       utm_source: attribution.utm_source,
       utm_medium: attribution.utm_medium,
       utm_campaign: attribution.utm_campaign,
@@ -1503,19 +1085,30 @@ function buildAtmospacePrelandingTrackingScript() {
     }).catch(function () { return null; });
   }
 
-  function sendEvent(eventType) {
-    if (eventType !== 'landing_opened' && eventType !== 'quiz_start_click') return;
-    var payload = buildBasePayload();
+  function addSafeEventParams(payload, params) {
+    if (!params || typeof params !== 'object') return payload;
+    Object.keys(params).forEach(function (key) {
+      if (/answer|text|label|option/i.test(key)) return;
+      payload[key] = params[key];
+    });
+    return payload;
+  }
+
+  function flushPendingClickEvents() {
+    if (!initCompleted || !clickEndpoint) return;
+    while (pendingClickEvents.length) {
+      postJson(clickEndpoint, pendingClickEvents.shift(), true);
+    }
+  }
+
+  function sendEvent(eventType, params) {
+    if (!ALLOWED_CLICK_EVENTS[eventType]) return;
+    var payload = addSafeEventParams(buildBasePayload(), params);
     payload.event_type = eventType;
     payload.client_time = new Date().toISOString();
-    var body = JSON.stringify(payload);
-    if (navigator.sendBeacon) {
-      try {
-        var blob = new Blob([body], { type: 'application/json' });
-        if (navigator.sendBeacon(clickEndpoint, blob)) return;
-      } catch (error) {
-        // Fetch below is the non-blocking fallback.
-      }
+    if (!initCompleted) {
+      pendingClickEvents.push(payload);
+      return;
     }
     postJson(clickEndpoint, payload, true);
   }
@@ -1705,12 +1298,17 @@ function buildAtmospacePrelandingTrackingScript() {
   function markQuestionAnswered(index) {
     if (answeredGoalIndexes[index]) return;
     answeredGoalIndexes[index] = true;
+    sendEvent('question_answered', {
+      questionNumber: index + 1,
+      question_id: 'q' + String(index + 1)
+    });
     reachGoal('question_answered', { questionNumber: index + 1 });
   }
 
   function markQuizCompleted() {
     if (quizCompleted) return;
     quizCompleted = true;
+    sendEvent('quiz_completed');
     reachGoal('quiz_completed');
   }
 
@@ -1877,6 +1475,7 @@ function buildAtmospacePrelandingTrackingScript() {
       return;
     }
     registrationNavigationStarted = true;
+    sendEvent('registration_started');
     reachGoal('registration_started');
     window.setTimeout(function () {
       window.location.assign(registrationUrl);
@@ -1907,7 +1506,6 @@ function buildAtmospacePrelandingTrackingScript() {
     setRegistrationState('loading');
     setRuntimeMessage('');
     setRetryVisible(false);
-    sendLandingOpenedOnce();
 
     return postJson(initEndpoint, buildBasePayload(), false).then(function (result) {
       var responseBody = result && result.body ? result.body : null;
@@ -1916,6 +1514,8 @@ function buildAtmospacePrelandingTrackingScript() {
       if (!result || !result.ok || !applyRegistrationLink(links)) throw new Error('landing_not_ready');
       initCompleted = true;
       initInFlight = false;
+      sendLandingOpenedOnce();
+      flushPendingClickEvents();
       setRetryVisible(false);
     }).catch(function () {
       initInFlight = false;
@@ -6183,6 +5783,15 @@ function validateAtmospaceTildaHtml(html = '', config = {}, options = {}) {
   const quizRequired = options.quizRequired === true;
   const marker = (...parts) => parts.join('');
   const patternFrom = (...parts) => new RegExp(parts.join(''), 'i');
+  const fieldLabels = {
+    publicLandingKey: 'код рекламного лендинга',
+    counterId: 'номер рекламного счётчика',
+    landingName: 'название лендинга',
+    landingCode: 'код варианта лендинга',
+    apiBaseUrl: 'адрес сервера Atmospace',
+    initEndpoint: 'маршрут подготовки регистрации',
+    clickEndpoint: 'маршрут событий лендинга'
+  };
   const requiredConfig = [
     ['publicLandingKey', 'public_landing_key'],
     ['counterId', 'counter_id'],
@@ -6255,6 +5864,7 @@ function validateAtmospaceTildaHtml(html = '', config = {}, options = {}) {
     'browser_language',
     'browser_client_time',
     'advertising_click_ids',
+    'advertising_params',
     'yclid',
     'gclid',
     'fbclid',
@@ -6265,6 +5875,16 @@ function validateAtmospaceTildaHtml(html = '', config = {}, options = {}) {
     'utm_campaign',
     'utm_content',
     'utm_term',
+    'yd_campaign_id',
+    'yd_ad_id',
+    'yd_group_id',
+    'yd_creative_id',
+    'yd_source',
+    'yd_source_type',
+    'yd_device',
+    'yd_region_id',
+    'pendingClickEvents',
+    'flushPendingClickEvents',
     'result && result.body',
     'var pageInstanceId = makePageInstanceId();',
     'Сейчас переход временно недоступен. Попробуйте ещё раз чуть позже.',
@@ -6272,7 +5892,7 @@ function validateAtmospaceTildaHtml(html = '', config = {}, options = {}) {
     'public_landing_key',
     'counter_id'
   ].forEach((marker) => {
-    if (!source.includes(marker)) errors.push(`В Atmospace HTML не найден обязательный маркер: ${marker}.`);
+    if (!source.includes(marker)) errors.push('В HTML не найден полный runtime Atmospace. Перегенерируйте лендинг после обновления конструктора.');
   });
 
   const quizMarkers = [
@@ -6286,7 +5906,7 @@ function validateAtmospaceTildaHtml(html = '', config = {}, options = {}) {
   ];
   if (quizRequired) {
     quizMarkers.forEach((quizMarker) => {
-      if (!source.includes(quizMarker)) errors.push(`В формате с мини-тестом не найден обязательный маркер: ${quizMarker}.`);
+      if (!source.includes(quizMarker)) errors.push('В формате с мини-тестом не найдена полная разметка квиза. Перегенерируйте HTML.');
     });
   } else if (/<[^>]+\sdata-atmospace-(?:quiz-link|inline-quiz|embedded-quiz|question-count)(?:[\s=>])/i.test(source)) {
     errors.push('В формате без мини-теста найдена видимая квиз-разметка. Используйте прямую регистрацию Atmospace.');
@@ -6321,30 +5941,31 @@ function validateAtmospaceTildaHtml(html = '', config = {}, options = {}) {
   }
 
   requiredConfig.forEach(([key, label]) => {
-    if (!String(config[key] || '').trim()) errors.push(`В конфиге не заполнено ${label}.`);
+    if (!String(config[key] || '').trim()) errors.push(`Не заполнено поле: ${fieldLabels[key] || label}.`);
   });
 
   if (config.runtimeVersion && config.runtimeVersion !== ATMOSPACE_GENERATED_RUNTIME_VERSION) {
-    errors.push(`runtimeVersion должен быть ${ATMOSPACE_GENERATED_RUNTIME_VERSION}.`);
+    errors.push('Версия runtime устарела. Перегенерируйте HTML.');
   }
   if (config.apiBaseUrl && config.apiBaseUrl !== ATMOSPACE_PUBLIC_API_BASE_URL) {
-    errors.push('apiBaseUrl должен вести на https://api.atmospace.pro.');
+    errors.push('Адрес сервера Atmospace указан неверно.');
   }
   if (config.initEndpoint && config.initEndpoint !== ATMOSPACE_INIT_ENDPOINT) {
-    errors.push('initEndpoint должен вести на /api/landing-runtime/init.');
+    errors.push('Маршрут подготовки регистрации указан неверно.');
   }
   if (config.clickEndpoint && config.clickEndpoint !== ATMOSPACE_CLICK_ENDPOINT) {
-    errors.push('clickEndpoint должен вести на /api/landing-runtime/click.');
+    errors.push('Маршрут событий лендинга указан неверно.');
   }
   if (config.publicLandingKey && !source.includes(String(config.publicLandingKey))) {
-    errors.push('В HTML не найден текущий publicLandingKey.');
+    errors.push('В HTML не найден текущий код рекламного лендинга.');
   }
   if (config.counterId && !source.includes(String(config.counterId))) {
-    errors.push('В HTML не найден текущий counterId.');
+    errors.push('В HTML не найден текущий номер счётчика.');
   }
   if (config.landingCode && !source.includes(String(config.landingCode))) {
-    errors.push('В HTML не найден текущий landingCode.');
+    errors.push('В HTML не найден текущий код варианта лендинга.');
   }
+  errors.splice(0, errors.length, ...Array.from(new Set(errors)));
   return {
     ok: errors.length === 0,
     errors,
@@ -6861,6 +6482,9 @@ export default function Constructor() {
 
     return {
       runtimeVersion: ATMOSPACE_GENERATED_RUNTIME_VERSION,
+      baseUrl: ATMOSPACE_PUBLIC_API_BASE_URL,
+      initPath: '/api/landing-runtime/init',
+      clickPath: '/api/landing-runtime/click',
       apiBaseUrl: ATMOSPACE_PUBLIC_API_BASE_URL,
       initEndpoint: ATMOSPACE_INIT_ENDPOINT,
       clickEndpoint: ATMOSPACE_CLICK_ENDPOINT,
@@ -7704,7 +7328,7 @@ export default function Constructor() {
         <div className={`mb-4 sticky top-2 z-20 ${dark ? 'bg-slate-950/80' : 'bg-slate-50/80'} backdrop-blur p-2 -m-2 rounded-2xl`}>
           <div className="flex flex-wrap gap-2">
             <Tab active={tab === 'creative'} onClick={() => openTab('creative')} icon={Lightbulb} dark={dark}>Креативы</Tab>
-            <Tab active={tab === 'pre'} onClick={() => openTab('pre')} icon={Wand2} dark={dark}>Лендинги</Tab>
+            <Tab active={tab === 'pre'} onClick={() => openTab('pre')} icon={Wand2} dark={dark}>Предлендинг</Tab>
           </div>
         </div>
 
@@ -8002,7 +7626,7 @@ export default function Constructor() {
           </div>
         )}
 
-        <div className={`text-center text-xs ${textMuted} mt-8 pb-4`}>Конструктор — Креативы → Лендинги</div>
+        <div className={`text-center text-xs ${textMuted} mt-8 pb-4`}>Конструктор — Креативы → Предлендинг</div>
       </div>
     </div>
   );

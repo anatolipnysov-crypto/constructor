@@ -14,7 +14,7 @@ const tabs = [...source.matchAll(/<Tab active=\{tab === '([^']+)'\}[^\r\n]*>([^<
 
 assert.deepEqual(tabs, [
   { id: 'creative', label: 'Креативы' },
-  { id: 'pre', label: 'Лендинги' },
+  { id: 'pre', label: 'Предлендинг' },
 ]);
 
 assert.ok(source.includes("const CONSTRUCTOR_TOOL_VALUES = new Set(['creative', 'pre'])"), 'Only creative and landing tools may be opened.');
