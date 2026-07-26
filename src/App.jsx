@@ -412,7 +412,7 @@ function makeClientId(number, displayName) {
 /* ================== ТЕКСТЫ ПРЕДЛЕНДИНГА ================== */
 const CLIENT_PRELANDING_CORE_TEXT = `Каркас предлендинга строится вокруг заголовка и текста клиента.
 
-Это не брендовый лендинг и не страница с готовой легендой. Конструктор берёт смысл объявления, выбирает один из шести форматов и собирает короткую посадочную страницу с мини-тестом и защищённой регистрацией Atmospace.
+Это не брендовый лендинг и не страница с готовой легендой. Конструктор берёт смысл объявления, выбирает один из двух форматов и собирает короткую посадочную страницу с мини-тестом или прямой защищённой регистрацией Atmospace.
 
 Узнаете сценарий
 1. Человек видит знакомую боль или желание
@@ -2083,7 +2083,7 @@ function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline,
     : rotateItems(fallbackRouteScenes, fallbackRouteScenes.length ? semanticRotation % fallbackRouteScenes.length : 0).slice(0, 3);
   const routePersonas = rotateItems(semanticPersonas, semanticPersonas.length ? semanticRotation % semanticPersonas.length : 0);
   const designMood = designRoute?.visualMood || 'clean premium light prelanding design';
-  const isCoreMethod = mode === 'coreMethod' || mode === 'core-method';
+  const isCoreMethod = normalizedMode === 'templateStage';
   const modeDescription = isBarrierProfile
     ? 'dark high-contrast premium barrier profile with a framed semantic scene derived from the headline; a person is optional'
     : 'premium masculine mini-test landing with one strong cinematic full-bleed first-screen story';
@@ -5451,17 +5451,12 @@ function renderBarrierProfileQuizPrelanding(props) {
   return renderStaticInsightPrelanding({ ...props, mode: 'barrierProfileQuiz' });
 }
 
-function renderPrelandingHtml({ tpl, style, palette, photo, overrides, projectData, landingMeta, layout = 'split', typo = 'manrope', effects = [] }) {
+function renderPrelandingHtml({ tpl, style, palette, photo, overrides, projectData, landingMeta }) {
   overrides = {
     ...(overrides || {}),
     prelandingMode: normalizeManualPrelandingMode(overrides?.prelandingMode)
   };
-  const isCoreMethod = overrides?.prelandingMode === 'coreMethod' || overrides?.prelandingMode === 'core-method';
-  const isHeroBlocks = false;
-  const isNatureEditorial = false;
-  const isMinimalCompare = false;
-  const isDirectionQuiz = false;
-  const isPersonalRouteQuiz = false;
+  const isCoreMethod = overrides?.prelandingMode === 'templateStage';
   const isBarrierProfileQuiz = overrides?.prelandingMode === 'barrierProfileQuiz' || overrides?.prelandingMode === 'barrier-profile-quiz';
   const overrideTemplateId = Number(overrides?.templateId);
   const baseTemplateId = [1, 2, 3].includes(Number(tpl)) ? Number(tpl) : 1;
@@ -5521,37 +5516,12 @@ function renderPrelandingHtml({ tpl, style, palette, photo, overrides, projectDa
   const sceneFallback = bothelpImageSrc(rawSceneFallback);
   const valueImage = bothelpImageSrc(rawValueImage);
   const ctaImage = bothelpImageSrc(rawCtaImage);
-  const source = `${style || ''} ${paletteKey} ${overrides?.themeStyle || ''} ${title}`.toLowerCase();
-  const designFamily = isCoreMethod ? 'core-method' : overrides?.designFamily || (
-    isDirectionQuiz ? 'direction-quiz'
-      : isPersonalRouteQuiz ? 'personal-route-quiz'
-      : isBarrierProfileQuiz ? 'barrier-profile-quiz'
-        : isMinimalCompare ? 'minimal-compare'
-      :
-    isNatureEditorial ? 'nature-editorial'
-      :
-    isHeroBlocks ? 'hero-bright'
-      : source.includes('red') || source.includes('shock') || source.includes('brutal') ? 'editorial-strike'
-      : source.includes('green') || source.includes('money') || source.includes('terminal') ? 'price-signal'
-        : source.includes('dark') || source.includes('noir') || source.includes('black') ? 'noir-focus'
-          : source.includes('premium') || source.includes('gold') || source.includes('editorial') ? 'split-premium'
-            : 'object-stage'
-  );
-  const variant = isCoreMethod ? (overrides?.landingVariant || CORE_PRELANDING_VARIANTS[templateId] || 'tf-v-spotlight') : overrides?.landingVariant || (
-    isDirectionQuiz ? 'tf-v-direction-quiz'
-      : isPersonalRouteQuiz ? 'tf-v-personal-route-quiz'
-      : isBarrierProfileQuiz ? 'tf-v-barrier-profile-quiz'
-        : isMinimalCompare ? 'tf-v-minimal-compare'
-      :
-    isNatureEditorial ? 'tf-v-nature-editorial'
-      :
-    isHeroBlocks ? 'tf-v-mint'
-      : source.includes('green') || source.includes('terminal') ? 'tf-v-aurora'
-      : source.includes('red') || source.includes('shock') ? 'tf-v-spotlight'
-        : source.includes('gold') || source.includes('premium') ? 'tf-v-editorial'
-          : source.includes('blue') || source.includes('glass') ? 'tf-v-motion'
-            : 'tf-v-cinema'
-  );
+  const designFamily = isCoreMethod
+    ? 'core-method'
+    : (overrides?.designFamily || 'barrier-profile-quiz');
+  const variant = isCoreMethod
+    ? (overrides?.landingVariant || CORE_PRELANDING_VARIANTS[templateId] || 'tf-v-spotlight')
+    : (overrides?.landingVariant || 'tf-v-barrier-profile-quiz');
   const accent = readablePrelandingTitleAccent({
     accent: theme?.accent,
     accent2: theme?.accent2,
@@ -5624,92 +5594,18 @@ function renderPrelandingHtml({ tpl, style, palette, photo, overrides, projectDa
       ctaImage
     });
   }
-  if (isDirectionQuiz) {
-    return renderDirectionQuizPrelanding({
-      content: prelandConfig,
-      projectData,
-      landingMeta,
-      sceneImage,
-      style: themeStyle,
-      palette: paletteKey,
-      designRoute: overrides?.designRoute || {
-        id: overrides?.designRouteId || themeStyle,
-        style: themeStyle,
-        palette: paletteKey
-      }
-    });
-  }
-  if (isPersonalRouteQuiz) {
-    return renderPersonalRouteQuizPrelanding({
-      content: prelandConfig,
-      projectData,
-      landingMeta,
-      sceneImage,
-      style: themeStyle,
-      palette: paletteKey,
-      designRoute: overrides?.designRoute || {
-        id: overrides?.designRouteId || themeStyle,
-        style: themeStyle,
-        palette: paletteKey
-      }
-    });
-  }
-  if (isBarrierProfileQuiz) {
-    return renderBarrierProfileQuizPrelanding({
-      content: prelandConfig,
-      projectData,
-      landingMeta,
-      sceneImage,
-      style: themeStyle,
-      palette: paletteKey,
-      designRoute: overrides?.designRoute || {
-        id: overrides?.designRouteId || themeStyle,
-        style: themeStyle,
-        palette: paletteKey
-      }
-    });
-  }
-  if (isNatureEditorial) {
-    return renderNatureEditorialPrelanding({
-      content: prelandConfig,
-      projectData,
-      landingMeta,
-      sceneImage,
-      valueImage,
-      ctaImage,
-      style: themeStyle,
-      palette: paletteKey,
-      layout: overrides?.layoutMode || layout,
-      effects: overrides?.effects || effects
-    });
-  }
-  if (isMinimalCompare) {
-    return renderMinimalComparePrelanding({
-      content: prelandConfig,
-      projectData,
-      landingMeta,
-      style: themeStyle,
-      palette: paletteKey,
-      layout: overrides?.layoutMode || layout,
-      effects: overrides?.effects || effects
-    });
-  }
-
-  return renderHeroSceneBlocksPrelanding({
+  return renderBarrierProfileQuizPrelanding({
     content: prelandConfig,
     projectData,
     landingMeta,
     sceneImage,
-    valueImage,
-    ctaImage,
     style: themeStyle,
     palette: paletteKey,
-    layout: overrides?.layoutMode || layout,
-    typo: overrides?.typeMode || typo,
-    effects: overrides?.effects || effects,
-    theme,
-    accent,
-    accent2
+    designRoute: overrides?.designRoute || {
+      id: overrides?.designRouteId || themeStyle,
+      style: themeStyle,
+      palette: paletteKey
+    }
   });
 }
 
@@ -6020,7 +5916,7 @@ function AtmospaceLandingConstructor({ dark, value, onChange }) {
           </div>
           <h2 className={`text-2xl font-black ${text}`}>Настройки для HTML</h2>
           <p className={`mt-1 max-w-3xl text-sm ${textMuted}`}>
-            Заполните четыре поля из кабинета Atmospace. Заголовок, текст и один из шести форматов выбираются ниже; готовый Tilda HTML появится в зелёном блоке.
+            Заполните четыре поля из кабинета Atmospace. Заголовок, текст и один из двух форматов выбираются ниже; готовый Tilda HTML появится в зелёном блоке.
           </p>
         </div>
         <div className={`rounded-2xl border px-4 py-3 text-xs ${panel}`}>
@@ -6786,26 +6682,7 @@ export default function Constructor() {
     const enteredText = String(creativeMethod || '').trim();
     if (!(prelandingTemplateReady && style && palette)) return '';
     if (!prelandingAiImagesReady) return '';
-    if (prelandingSync?.fromBanner) {
-      return renderPrelandingHtml({
-          tpl: tpl || 1,
-          style: 'glassmorphism',
-          palette: palette || 'blue-trust',
-          photo,
-          layout,
-          typo,
-          effects,
-          overrides: {
-            ...prelandingSync,
-            sceneImage: currentPrelandingAiImages.sceneImage,
-            valueImage: currentPrelandingAiImages.valueImage,
-            ctaImage: currentPrelandingAiImages.ctaImage
-          },
-          projectData: prelandingRuntimeProjectData,
-          landingMeta: effectivePrelandingVariantMeta
-      });
-    }
-    if (manualPrelandingMode === 'templateStage') {
+    if (normalizedManualPrelandingMode === 'templateStage') {
       const selectedTemplateId = [1, 2, 3].includes(Number(tpl)) ? Number(tpl) : 1;
       const baseContent = PRELANDING_CONTENT[selectedTemplateId] || PRELANDING_CONTENT[1];
       const coreDesign = currentPrelandingDesignRoute || CORE_METHOD_DESIGN_ROUTES[(selectedTemplateId - 1 + CORE_METHOD_DESIGN_ROUTES.length) % CORE_METHOD_DESIGN_ROUTES.length];
@@ -6860,19 +6737,60 @@ export default function Constructor() {
         landingMeta: effectivePrelandingVariantMeta
       });
     }
+    const insightPreset = BARRIER_PROFILE_QUIZ_PRESETS.find((preset) => preset.id === activePresetId)
+      || BARRIER_PROFILE_QUIZ_PRESETS[0];
+    const insightDesign = currentPrelandingDesignRoute || insightPreset;
+    const insightStyle = insightDesign.style || insightPreset.style;
+    const insightPalette = insightDesign.palette || insightPreset.palette;
+    const insightEffects = insightDesign.effects || insightPreset.effects || [];
+    const title = enteredHeadline || 'Почему в самый важный момент всё снова срывается?';
+    const landingLogic = resolveClientPrelandingLogic(title, enteredText, 'barrierProfileQuiz');
+    const textLead = enteredText || landingLogic.lead;
+    const imageSeed = `manual-barrierProfileQuiz-${insightDesign.id || insightPreset.id}-${insightStyle}-${insightPalette}-${title}-${textLead}`;
+
     return renderPrelandingHtml({
-      tpl: tpl || 1,
-      style,
-      palette,
+      tpl: 1,
+      style: insightStyle,
+      palette: insightPalette,
       photo,
-      layout,
-      typo,
-      effects,
-      overrides: prelandingSync,
+      overrides: {
+        prelandingMode: 'barrierProfileQuiz',
+        renderMode: 'barrierProfile',
+        templateId: 1,
+        themeStyle: insightStyle,
+        designFamily: 'barrier-profile',
+        landingVariant: `bp-${insightDesign.id || insightPreset.id}`,
+        layoutMode: 'insight',
+        typeMode: 'manrope',
+        effects: insightEffects,
+        variantKey: imageSeed,
+        visualSource: 'scene',
+        badge: landingLogic.badge,
+        title,
+        titleHtml: esc(title),
+        painTitle: landingLogic.label,
+        painAlert: landingLogic.defaultText,
+        trustTitle: textLead,
+        trustSmall: landingLogic.trustSmall,
+        methodName: landingLogic.methodName,
+        valueTitle: landingLogic.valueTitle,
+        valueItems: landingLogic.valueItems,
+        cards: landingLogic.cards,
+        proofItems: [],
+        liveNote: landingLogic.botTransition,
+        ctaLead: landingLogic.ctaLead,
+        actionSubtitle: landingLogic.ctaLead,
+        actionTitle: landingLogic.actionTitle,
+        sceneImage: currentPrelandingAiImages.sceneImage,
+        valueImage: '',
+        ctaImage: '',
+        designRoute: insightDesign,
+        designRouteId: insightDesign.id || insightPreset.id
+      },
       projectData: prelandingRuntimeProjectData,
       landingMeta: effectivePrelandingVariantMeta
     });
-  }, [tpl, style, palette, layout, typo, effects, photo, prelandingSync, prelandingRuntimeProjectData, hasPrelandingKeys, activeLandingRuntimeArtifact?.publicLandingKey, prelandingOutputLocked, manualPrelandingMode, activePresetId, creativeHeadline, creativeMethod, prelandingAiImagesReady, currentPrelandingAiImages, currentPrelandingDesignRoute, effectivePrelandingVariantMeta, prelandingTemplateReady]);
+  }, [tpl, style, palette, layout, typo, effects, photo, prelandingRuntimeProjectData, hasPrelandingKeys, activeLandingRuntimeArtifact?.publicLandingKey, prelandingOutputLocked, normalizedManualPrelandingMode, activePresetId, creativeHeadline, creativeMethod, prelandingAiImagesReady, currentPrelandingAiImages, currentPrelandingDesignRoute, effectivePrelandingVariantMeta, prelandingTemplateReady]);
   const prelandingHtmlConfig = useMemo(
     () => buildAtmospaceLandingConfig({
       projectData: prelandingRuntimeProjectData,
@@ -6882,9 +6800,9 @@ export default function Constructor() {
   );
   const prelandingHtmlValidation = useMemo(
     () => validateAtmospaceTildaHtml(prelandingHtml, prelandingHtmlConfig, {
-      quizRequired: manualPrelandingMode === 'templateStage'
+      quizRequired: normalizedManualPrelandingMode === 'templateStage'
     }),
-    [prelandingHtml, prelandingHtmlConfig, manualPrelandingMode]
+    [prelandingHtml, prelandingHtmlConfig, normalizedManualPrelandingMode]
   );
   const prelandingValidationErrors = prelandingHtmlValidation.errors.join('\n');
   const prelandingValidationWarnings = prelandingHtmlValidation.warnings.join('\n');
@@ -7044,7 +6962,7 @@ export default function Constructor() {
                 <div>
                   <h2 className={`text-xl font-black ${text}`}>Режим генерации предлендинга</h2>
                   <p className={`text-sm ${dark ? 'text-red-100' : 'text-red-900'}`}>
-                    Доступны шесть форматов предлендинга. Каждый берёт заголовок и описание клиента как основу, собирает смысловые блоки без брендов и готовит HTML для вставки в Tilda.
+                    Доступны два формата предлендинга: 1 и 6. Каждый берёт заголовок и описание клиента как основу, собирает смысловые блоки без брендов и готовит HTML для вставки в Tilda.
                   </p>
                 </div>
               </div>
@@ -7128,37 +7046,17 @@ export default function Constructor() {
               </div>
             )}
 
-            {manualPrelandingMode !== 'templateStage' && (
+            {normalizedManualPrelandingMode === 'barrierProfileQuiz' && (
             <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
               <div className="flex items-center justify-between mb-3">
                 <h2 className={`text-xl font-black ${text} flex items-center gap-2`}>
                   <Sparkles className="w-5 h-5 text-yellow-500" />
-                  {manualPrelandingMode === 'minimalCompare'
-                    ? 'Формат 4: тихое сравнение'
-                    : manualPrelandingMode === 'natureEditorial'
-                      ? 'Формат 3: nature editorial'
-                      : manualPrelandingMode === 'directionQuiz'
-                        ? 'Формат 5: маршрут действия'
-                        : manualPrelandingMode === 'personalRouteQuiz'
-                          ? 'Сохранённый формат: личный маршрут'
-                          : manualPrelandingMode === 'barrierProfileQuiz'
-                            ? 'Формат 6: профиль барьера'
-                            : 'Формат 2: hero-картинка + блоки'}
+                  Формат 6: профиль барьера
                 </h2>
                 <button onClick={resetAll} className={`text-xs font-bold ${textMuted} hover:underline flex items-center gap-1`}><RotateCcw className="w-3 h-3" /> Сброс</button>
               </div>
               <p className={`text-xs ${textMuted} mb-3`}>
-                {manualPrelandingMode === 'minimalCompare'
-                  ? 'Для этого режима оставлены 3 минималистичных варианта. HTML собирается без фото и без ожидания OpenAI-картинок: только текст, микро-смыслы и CTA.'
-                  : manualPrelandingMode === 'natureEditorial'
-                    ? 'Для этого режима оставлены 3 editorial-варианта. Каждый задаёт журнальную палитру, типографику, структуру и отдельный визуальный маршрут для AI-фото.'
-                    : manualPrelandingMode === 'directionQuiz'
-                      ? 'По заголовку и тексту собирается динамичный смысловой одностраничник, три опоры и прямая регистрация. Одна AI-сцена поддерживает первый экран.'
-                      : manualPrelandingMode === 'personalRouteQuiz'
-                        ? 'Сохранённый личный маршрут работает как смысловой одностраничник с прямой регистрацией и одной AI-сценой.'
-                        : manualPrelandingMode === 'barrierProfileQuiz'
-                          ? 'Повторяющийся сценарий раскрывается через три смысловых признака и один реалистичный первый шаг. Далее — прямая регистрация Atmospace.'
-                          : 'Для этого режима оставлены только 3 рабочих варианта. Каждый сразу выставляет стиль, палитру, типографику, структуру и промпт для живых AI-фото.'}
+                Повторяющийся сценарий раскрывается через три смысловых признака и один реалистичный первый шаг. Далее — прямая регистрация Atmospace.
               </p>
               <div className="grid md:grid-cols-3 gap-2">
                 {visiblePrelandingPresets.map((p) => {
@@ -7189,12 +7087,10 @@ export default function Constructor() {
               {isAiPrelandingBuilding ? (
                 <div className="bg-white/15 rounded-xl p-4 text-center">
                   <Sparkles className="w-8 h-8 mx-auto mb-2 text-yellow-200 animate-pulse" />
-                  <p className="text-sm font-bold">{prelandingAiStatus || (manualPrelandingMode === 'minimalCompare'
-                    ? 'Собираю минималистичный HTML. Старый код скрыт, чтобы его не вставить повторно.'
-                    : isSingleImagePrelandingMode
-                      ? 'OpenAI генерирует одну смысловую hero-картинку. Старый код скрыт, чтобы его не вставить повторно.'
-                      : 'OpenAI генерирует 3 разные картинки. Старый код скрыт, чтобы его не вставить повторно.')}</p>
-                  <p className="mt-2 text-xs text-white/80">{manualPrelandingMode === 'minimalCompare' ? 'HTML появится автоматически после подготовки варианта.' : 'После публикации изображений HTML появится автоматически.'}</p>
+                  <p className="text-sm font-bold">{prelandingAiStatus || (isSingleImagePrelandingMode
+                    ? 'OpenAI генерирует одну смысловую hero-картинку. Старый код скрыт, чтобы его не вставить повторно.'
+                    : 'OpenAI генерирует 3 разные картинки. Старый код скрыт, чтобы его не вставить повторно.')}</p>
+                  <p className="mt-2 text-xs text-white/80">{isSingleImagePrelandingMode ? 'После публикации hero-картинки HTML появится автоматически.' : 'После публикации трёх изображений HTML появится автоматически.'}</p>
                 </div>
               ) : isAiPrelandingInvalidated ? (
                 <div className="bg-white/15 rounded-xl p-4 text-center">
@@ -7214,22 +7110,18 @@ export default function Constructor() {
               ) : !prelandingAiImagesReady ? (
                 <div className="bg-white/15 rounded-xl p-4 text-center">
                   <Sparkles className="w-8 h-8 mx-auto mb-2 text-yellow-200" />
-                  <p className="text-sm font-bold">{manualPrelandingMode === 'minimalCompare'
-                    ? 'HTML появится после подготовки минималистичного формата. Картинки для этого режима не нужны.'
-                    : isSingleImagePrelandingMode
-                      ? 'HTML появится после публикации одной смысловой hero-картинки. Если OpenAI зависнет, конструктор сам перезапустит попытку.'
-                      : 'HTML появится после публикации трёх AI-картинок: hero, блок ценности и CTA. Если OpenAI зависнет, конструктор сам перезапустит попытку.'}</p>
+                  <p className="text-sm font-bold">{isSingleImagePrelandingMode
+                    ? 'HTML появится после публикации одной смысловой hero-картинки. Если OpenAI зависнет, конструктор сам перезапустит попытку.'
+                    : 'HTML появится после публикации трёх AI-картинок: hero, блок ценности и CTA. Если OpenAI зависнет, конструктор сам перезапустит попытку.'}</p>
                   <button
                     type="button"
                     onClick={handleGeneratePrelandingAiImages}
                     disabled={!canGeneratePrelandingAi}
                     className="mt-4 rounded-2xl bg-yellow-300 px-5 py-3 text-sm font-black text-slate-950 shadow-lg hover:bg-yellow-200 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {manualPrelandingMode === 'minimalCompare'
-                      ? 'Собрать HTML'
-                      : isSingleImagePrelandingMode
-                        ? 'Сгенерировать hero-картинку и HTML'
-                        : 'Сгенерировать AI-картинки и HTML'}
+                    {isSingleImagePrelandingMode
+                      ? 'Сгенерировать hero-картинку и HTML'
+                      : 'Сгенерировать AI-картинки и HTML'}
                   </button>
                   {quota.prelandingBlocked && (
                     <p className="mt-3 text-xs font-bold text-yellow-100">Лимит AI-предлендингов исчерпан: {quota.prelandingsUsed || 0}/{quota.prelandingLimit || 0}.</p>

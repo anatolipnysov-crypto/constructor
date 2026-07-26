@@ -1,13 +1,10 @@
+const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
 const source = fs.readFileSync(path.join(root, 'src', 'App.jsx'), 'utf8');
 const bannerStudio = fs.readFileSync(path.join(root, 'src', 'components', 'AIBannerStudio.jsx'), 'utf8');
-
-function assert(condition, message) {
-  if (!condition) throw new Error(message);
-}
 
 function sliceBetween(text, startSnippet, endSnippet) {
   const start = text.indexOf(startSnippet);
@@ -24,7 +21,7 @@ assert(
     'templateStage',
     'barrierProfileQuiz'
   ]),
-  'The selector must expose exactly the six approved landing formats.'
+  'The selector must expose exactly Formats 1 and 6.'
 );
 
 [
@@ -34,10 +31,16 @@ assert(
   assert(modeSelector.includes(snippet), `Mode selector must include ${snippet}`);
 });
 
-assert(!modeSelector.includes("id: 'personalRouteQuiz'"), 'Saved legacy modes must not appear as a seventh format.');
-assert(source.includes('один из шести форматов'), 'Constructor copy must describe all six formats.');
-assert(source.includes('Доступны шесть форматов предлендинга'), 'Mode selector must describe all six formats.');
-assert(!source.includes('один из четырёх форматов'), 'Stale four-format copy must not remain.');
+assert(!modeSelector.includes("id: 'personalRouteQuiz'"), 'Removed legacy modes must not appear in the selector.');
+assert(source.includes('один из двух форматов'), 'Constructor copy must describe the two-format surface.');
+assert(source.includes('Доступны два формата предлендинга: 1 и 6.'), 'Mode selector must describe Formats 1 and 6.');
+[
+  'один из шести форматов',
+  'Доступны шесть форматов предлендинга',
+  'один из четырёх форматов'
+].forEach((snippet) => {
+  assert(!source.includes(snippet), `Stale format copy must not remain: ${snippet}`);
+});
 
 const fixedQuiz = sliceBetween(source, 'const ATMOSPACE_MINI_QUIZ = Object.freeze([', ']);');
 assert((fixedQuiz.match(/title:/g) || []).length === 4, 'Format 1 must contain exactly four fixed questions.');
@@ -132,16 +135,48 @@ const dispatch = sliceBetween(source, 'function renderPrelandingHtml', 'function
 ].forEach((snippet) => {
   assert(dispatch.includes(snippet), `Main renderer must dispatch to ${snippet}`);
 });
+[
+  'renderHeroSceneBlocksPrelanding({',
+  'renderNatureEditorialPrelanding({',
+  'renderMinimalComparePrelanding({',
+  'renderDirectionQuizPrelanding({',
+  'renderPersonalRouteQuizPrelanding({'
+].forEach((snippet) => {
+  assert(!dispatch.includes(snippet), `Main renderer must not dispatch to removed mode: ${snippet}`);
+});
+assert(
+  dispatch.includes("const isCoreMethod = overrides?.prelandingMode === 'templateStage';"),
+  'Normalized Format 1 must remain reachable as the core mini-quiz renderer.'
+);
 
-const validationCall = [
-  'validateAtmospaceTildaHtml(prelandingHtml, prelandingHtmlConfig, {',
-  "      quizRequired: manualPrelandingMode === 'templateStage'",
-  '    })'
-].join('\n');
-assert(source.includes(validationCall), 'HTML validation must require quiz markers only for Format 1.');
+const generatedPrelandingFlow = sliceBetween(
+  source,
+  'const prelandingHtml = useMemo',
+  'const prelandingHtmlConfig = useMemo'
+);
+assert.equal(
+  (generatedPrelandingFlow.match(/return renderPrelandingHtml\(\{/g) || []).length,
+  2,
+  'Generated HTML must have exactly two explicit format routes.'
+);
+assert(generatedPrelandingFlow.includes("prelandingMode: 'coreMethod'"), 'Format 1 must call the core mini-quiz renderer.');
+assert(generatedPrelandingFlow.includes("prelandingMode: 'barrierProfileQuiz'"), 'Format 6 must call the barrier renderer.');
+assert(!generatedPrelandingFlow.includes('if (prelandingSync?.fromBanner)'), 'Banner handoff must not bypass the selected format.');
+assert(!generatedPrelandingFlow.includes('overrides: prelandingSync'), 'Generated HTML must not fall through to a legacy renderer override.');
+
 assert(
   source.includes("В формате без мини-теста найдена видимая квиз-разметка. Используйте прямую регистрацию Atmospace."),
-  'The validator must block visible quiz markup in Formats 2-6.'
+  'The validator must block visible quiz markup in Format 6.'
+);
+assert.match(
+  source,
+  /quizRequired:\s*normalizedManualPrelandingMode\s*===\s*['"]templateStage['"]/,
+  'Final HTML validation must require the full quiz contract for Format 1.'
+);
+assert.doesNotMatch(
+  source,
+  /const htmlDeclaresEmbeddedQuiz\s*=/,
+  'Validation must not infer the expected format from already-generated HTML.'
 );
 assert(
   !source.includes('Не удалось подготовить продолжение. Проверьте подключение и попробуйте ещё раз.'),
@@ -203,6 +238,10 @@ assert(!source.includes('for (let index = 0; index < specs.length; index += 1)')
 ].forEach((snippet) => {
   assert(source.includes(snippet), `Semantic landing flow must include ${snippet}`);
 });
+assert(
+  source.includes("const isCoreMethod = normalizedMode === 'templateStage';"),
+  'Format 1 image generation must use the normalized mode and its masculine high-contrast prompt.'
+);
 
 [
   "from '../data/campaignSemantics'",
@@ -211,6 +250,8 @@ assert(!source.includes('for (let index = 0; index < specs.length; index += 1)')
 ].forEach((snippet) => {
   assert(bannerStudio.includes(snippet), `Banner semantic flow must include ${snippet}`);
 });
+assert(bannerStudio.includes("mode: 'templateStage'"), 'Banner handoff must use Format 1 semantics.');
+assert(!bannerStudio.includes("mode: 'heroBlocks'"), 'Banner handoff must not reactivate the removed heroBlocks mode.');
 assert(!bannerStudio.includes('lockTemplateCopy: true'), 'Banner handoff must not lock stale template copy.');
 
 const distAssetsDir = path.join(root, 'dist', 'assets');
@@ -238,7 +279,9 @@ const built = fs.readFileSync(path.join(distAssetsDir, bundle), 'utf8');
 });
 
 [
-  /Формат 5 \/ Квиз-направление/,
+  /Формат [2-5]\s*(?:\/|:)/,
+  /один из шести форматов/,
+  /Доступны шесть форматов предлендинга/,
   /data-atmospace-messenger/,
   /messenger_button_clicked/,
   /r\.bothelp\.io/,

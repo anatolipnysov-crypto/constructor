@@ -2459,7 +2459,7 @@ function buildPrelandingSync(idea, prelandingConcept = null) {
   const campaignLanding = buildCampaignLandingLogic({
     title: idea.headline,
     text: methodName,
-    mode: 'heroBlocks'
+    mode: 'templateStage'
   });
   const semanticContent = buildPrelandingSemanticContent({
     headline: idea.headline,
