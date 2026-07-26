@@ -22,10 +22,6 @@ const modeIds = [...modeSelector.matchAll(/\bid:\s*'([^']+)'/g)].map((match) => 
 assert(
   JSON.stringify(modeIds) === JSON.stringify([
     'templateStage',
-    'heroBlocks',
-    'natureEditorial',
-    'minimalCompare',
-    'directionQuiz',
     'barrierProfileQuiz'
   ]),
   'The selector must expose exactly the six approved landing formats.'
@@ -33,11 +29,7 @@ assert(
 
 [
   "title: 'Формат 1 / Мини-тест + разбор'",
-  "title: 'Формат 2 / Hero-картинка + блоки'",
-  "title: 'Формат 3 / Nature editorial'",
-  "title: 'Формат 4 / Тихое сравнение'",
-  "title: 'Формат 5 / Маршрут действия'",
-  "title: 'Формат 6 / Профиль барьера'"
+  "title: 'Формат 6 / Смысловой профиль барьера'"
 ].forEach((snippet) => {
   assert(modeSelector.includes(snippet), `Mode selector must include ${snippet}`);
 });
@@ -116,28 +108,10 @@ assert(
   'Format 1 quiz renderer must declare exactly four questions.'
 );
 
-const ordinaryRenderers = sliceBetween(
-  source,
-  'function renderHeroSceneBlocksPrelanding',
-  'function renderCoreMethodMiniQuiz'
-);
-[
-  'function renderHeroSceneBlocksPrelanding',
-  'function renderNatureEditorialPrelanding',
-  'function renderMinimalComparePrelanding',
-  'renderAtmospaceRegistrationButton',
-  'data-atmospace-first-fold',
-  'data-atmospace-first-fold-cta'
-].forEach((snippet) => {
-  assert(ordinaryRenderers.includes(snippet), `Formats 2-4 must include ${snippet}`);
-});
-assert(!ordinaryRenderers.includes('renderAtmospaceSharedInlineQuiz({'), 'Formats 2-4 must not embed the shared quiz.');
-assert(!ordinaryRenderers.includes('data-atmospace-embedded-quiz="true"'), 'Formats 2-4 must not emit visible quiz markup.');
-
 const insightRenderer = sliceBetween(
   source,
   'function renderStaticInsightPrelanding',
-  'function renderDirectionQuizPrelanding'
+  'function renderBarrierProfileQuizPrelanding'
 );
 [
   'data-atmospace-registration-section',
@@ -146,18 +120,14 @@ const insightRenderer = sliceBetween(
   "renderAtmospaceRegistrationButton('fh-si-cta')",
   'buildAtmospacePrelandingTrackingScript'
 ].forEach((snippet) => {
-  assert(insightRenderer.includes(snippet), `Formats 5-6 must include ${snippet}`);
+  assert(insightRenderer.includes(snippet), `Format 6 must include ${snippet}`);
 });
-assert(!insightRenderer.includes('data-atmospace-inline-quiz'), 'Formats 5-6 must not emit inline quiz markup.');
-assert(!insightRenderer.includes('data-atmospace-embedded-quiz'), 'Formats 5-6 must not emit embedded quiz markup.');
+assert(!insightRenderer.includes('data-atmospace-inline-quiz'), 'Format 6 must not emit inline quiz markup.');
+assert(!insightRenderer.includes('data-atmospace-embedded-quiz'), 'Format 6 must not emit embedded quiz markup.');
 
 const dispatch = sliceBetween(source, 'function renderPrelandingHtml', 'function countMatches');
 [
   'renderCoreMethodInlinePrelanding({',
-  'renderHeroSceneBlocksPrelanding({',
-  'renderNatureEditorialPrelanding({',
-  'renderMinimalComparePrelanding({',
-  'renderDirectionQuizPrelanding({',
   'renderBarrierProfileQuizPrelanding({'
 ].forEach((snippet) => {
   assert(dispatch.includes(snippet), `Main renderer must dispatch to ${snippet}`);
@@ -228,10 +198,8 @@ assert(!source.includes('for (let index = 0; index < specs.length; index += 1)')
 [
   "from './data/campaignSemantics'",
   'buildCampaignLandingLogic({ title, text: method, mode })',
-  "resolveClientPrelandingLogic(title, enteredText, 'heroBlocks')",
-  "resolveClientPrelandingLogic(title, enteredText, 'natureEditorial')",
-  "resolveClientPrelandingLogic(title, enteredText, 'minimalCompare')",
-  'resolveClientPrelandingLogic(title, enteredText, manualPrelandingMode)'
+  'normalizeManualPrelandingMode(manualPrelandingMode)',
+  'const normalizedManualPrelandingMode = normalizeManualPrelandingMode(manualPrelandingMode)',
 ].forEach((snippet) => {
   assert(source.includes(snippet), `Semantic landing flow must include ${snippet}`);
 });
@@ -256,11 +224,7 @@ assert(bundle, 'Built JS bundle not found. Run npm run build first.');
 const built = fs.readFileSync(path.join(distAssetsDir, bundle), 'utf8');
 [
   'Формат 1 / Мини-тест + разбор',
-  'Формат 2 / Hero-картинка + блоки',
-  'Формат 3 / Nature editorial',
-  'Формат 4 / Тихое сравнение',
-  'Формат 5 / Маршрут действия',
-  'Формат 6 / Профиль барьера',
+  'Формат 6 / Смысловой профиль барьера',
   'Готовый HTML для Tilda',
   'window.ATMOSPACE_LANDING_CONFIG',
   'https://api.atmospace.pro',
@@ -286,4 +250,4 @@ const built = fs.readFileSync(path.join(distAssetsDir, bundle), 'utf8');
   assert(!pattern.test(built), `Built bundle must not match ${pattern}`);
 });
 
-console.log('Atmospace prelanding six-format contract passed');
+console.log('Atmospace prelanding two-format contract passed');

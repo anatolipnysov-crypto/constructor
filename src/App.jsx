@@ -801,40 +801,10 @@ const PRESETS = [
   { id: 'adtechRoute', name: 'Чистый запуск', emoji: '🎯', desc: 'Рекламный кабинет, метки, предлендинг, оффер', tpl: 2, style: 'clean-ads', palette: 'trust-coral', typo: 'inter', layout: 'cards', effects: ['fadein', 'micro'] }
 ];
 
-const HERO_BLOCKS_PRESETS = [
-  { id: 'heroSceneLive', name: 'Светлый первый шаг', emoji: '✨', desc: 'Большой hero, сильный заголовок, смысл заголовка и CTA сразу', tpl: 1, style: 'premium-light', palette: 'blue-trust', typo: 'manrope', layout: 'split', effects: ['fadein', 'micro'] },
-  { id: 'heroThreeBlocks', name: 'Цель → маршрут → действие', emoji: '🧩', desc: 'Первый экран, три офферные карточки и спокойный переход к действию', tpl: 1, style: 'clean-ads', palette: 'trust-coral', typo: 'inter', layout: 'classic', effects: ['fadein', 'micro'] },
-  { id: 'heroPremiumStory', name: 'Премиальный первый экран', emoji: '🥇', desc: 'Дорогой светлый вид: крупный оффер, фото и чистые блоки', tpl: 1, style: 'banner-white-gold', palette: 'white-gold-ad', typo: 'manrope', layout: 'cards', effects: ['fadein'] }
-];
-
-const NATURE_EDITORIAL_PRESETS = [
-  { id: 'natureSagePaper', name: 'Sage paper', emoji: '🌿', desc: 'Тёплый editorial: бумага, олива, спокойная премиальность', tpl: 1, style: 'nature-sage-paper', palette: 'white-gold-ad', typo: 'playfair', layout: 'split', effects: ['fadein', 'micro'] },
-  { id: 'natureTerraFocus', name: 'Terra focus', emoji: '🍂', desc: 'Бежево-терракотовый заход: личная история и первый шаг', tpl: 1, style: 'nature-terra-focus', palette: 'trust-coral', typo: 'playfair', layout: 'classic', effects: ['fadein'] },
-  { id: 'natureForestTrust', name: 'Forest trust', emoji: '🪴', desc: 'Доверительный зелёный маршрут: меньше шума, больше смысла', tpl: 1, style: 'nature-forest-trust', palette: 'green-money', typo: 'playfair', layout: 'cards', effects: ['fadein', 'micro'] }
-];
-
-const MINIMAL_COMPARE_PRESETS = [
-  { id: 'minimalNoir', name: 'Тихий noir', emoji: '⚫', desc: 'Тёмный минимализм: внутренний конфликт, воздух и две CTA-кнопки', tpl: 1, style: 'minimal-noir', palette: 'black-yellow-ad', typo: 'inter', layout: 'minimal', effects: ['fadein'] },
-  { id: 'minimalGraphite', name: 'Графит и белый', emoji: '◼️', desc: 'Строгий графитовый экран: честный текст без визуального шума', tpl: 1, style: 'minimal-graphite', palette: 'clean-product', typo: 'inter', layout: 'minimal', effects: ['fadein'] },
-  { id: 'minimalBlue', name: 'Синий полутон', emoji: '🔹', desc: 'Холодный доверительный вариант: спокойный контраст и короткий CTA', tpl: 1, style: 'minimal-blue', palette: 'deep-blue-ad', typo: 'inter', layout: 'minimal', effects: ['fadein'] }
-];
-
 const CORE_METHOD_PRESETS = [
   { id: 'coreHardBreak', name: 'Откат назад', emoji: '🔥', desc: 'Яркий дизайн под боль: начинал, но снова возвращался назад', tpl: 1, style: 'heroBright', palette: 'red-energy', typo: 'manrope', layout: 'classic', effects: ['fadein', 'micro'] },
   { id: 'coreBlueTrust', name: 'Цель без движения', emoji: '🔷', desc: 'Светлый синий дизайн: цель есть, но нужна система регулярности', tpl: 2, style: 'blueTrust', palette: 'blue-trust', typo: 'manrope', layout: 'classic', effects: ['fadein', 'micro'] },
   { id: 'coreGreenClarity', name: 'Доверие и ясность', emoji: '🟢', desc: 'Зелёная системность: спокойный маршрут и понятный первый шаг', tpl: 3, style: 'greenSystem', palette: 'green-money', typo: 'manrope', layout: 'classic', effects: ['fadein'] }
-];
-
-const DIRECTION_QUIZ_PRESETS = [
-  { id: 'directionQuizNavy', name: 'Ночной синий маршрут', emoji: '🧭', desc: 'Честная диагностика и понятный первый шаг', tpl: 1, style: 'direction-quiz-navy', palette: 'deep-blue-ad', typo: 'manrope', layout: 'quiz', effects: ['fadein', 'micro'] },
-  { id: 'directionQuizGold', name: 'Тёмное золото', emoji: '✦', desc: 'Контрастный маршрут с тёплым акцентом', tpl: 1, style: 'direction-quiz-gold', palette: 'black-yellow-ad', typo: 'manrope', layout: 'quiz', effects: ['fadein'] },
-  { id: 'directionQuizForest', name: 'Лесная ясность', emoji: '🌿', desc: 'Спокойная зелёная точка опоры', tpl: 1, style: 'direction-quiz-forest', palette: 'green-money', typo: 'manrope', layout: 'quiz', effects: ['fadein', 'micro'] }
-];
-
-const PERSONAL_ROUTE_QUIZ_PRESETS = [
-  { id: 'personalRouteCoral', name: 'Коралл и ночь', emoji: '◉', desc: 'Живой личный маршрут без лишнего давления', tpl: 1, style: 'personal-route-coral', palette: 'trust-coral', typo: 'manrope', layout: 'quiz', effects: ['fadein', 'micro'] },
-  { id: 'personalRouteAmber', name: 'Янтарная точка', emoji: '◇', desc: 'Тёплая премиальная диагностика', tpl: 1, style: 'personal-route-amber', palette: 'white-gold-ad', typo: 'manrope', layout: 'quiz', effects: ['fadein'] },
-  { id: 'personalRouteViolet', name: 'Фиолетовый фокус', emoji: '◈', desc: 'Глубокий контраст и ясный следующий шаг', tpl: 1, style: 'personal-route-violet', palette: 'deep-blue-ad', typo: 'manrope', layout: 'quiz', effects: ['fadein', 'micro'] }
 ];
 
 const BARRIER_PROFILE_QUIZ_PRESETS = [
@@ -1585,13 +1555,14 @@ function cleanVariantToken(value = '') {
     .slice(0, 64) || 'variant';
 }
 
+function normalizeManualPrelandingMode(mode = '') {
+  return mode === 'barrierProfileQuiz' ? 'barrierProfileQuiz' : 'templateStage';
+}
+
 function prelandingModeTitle(mode = '') {
-  if (mode === 'heroBlocks') return 'Формат 2 / Hero-картинка + блоки';
-  if (mode === 'natureEditorial') return 'Формат 3 / Nature editorial';
-  if (mode === 'minimalCompare') return 'Формат 4 / Тихое сравнение';
-  if (mode === 'directionQuiz') return 'Формат 5 / Маршрут действия';
-  if (mode === 'barrierProfileQuiz') return 'Формат 6 / Профиль барьера';
-  if (mode === 'personalRouteQuiz') return 'Сохранённый формат / Личный маршрут без квиза';
+  if (normalizeManualPrelandingMode(mode) === 'barrierProfileQuiz') {
+    return 'Формат 6 / Смысловой профиль барьера';
+  }
   return 'Формат 1 / Мини-тест + разбор';
 }
 
@@ -1932,41 +1903,10 @@ const PRELANDING_DESIGN_ROTATION_KEY = 'constructorPrelandingDesignRotationIndex
 const PRELANDING_VISUAL_ROTATION_KEY = 'constructorPrelandingVisualRotationIndexV2';
 const PRELANDING_VISUAL_MEMORY_KEY = 'constructorPrelandingVisualMemoryV2';
 
-const HERO_BLOCKS_DESIGN_ROUTES = [
-  { id: 'hero-air-blue', label: 'Светлый синий hero', style: 'premium-light', palette: 'blue-trust', layout: 'split', typo: 'manrope', effects: ['fadein', 'micro'], imageStylePreset: 'blueTrust', visualMood: 'clean bright blue trust, white cards, clear CTA, not dark' },
-  { id: 'hero-white-gold', label: 'Бело-золотой премиум', style: 'banner-white-gold', palette: 'white-gold-ad', layout: 'cards', typo: 'manrope', effects: ['fadein', 'micro'], imageStylePreset: 'whiteGoldPremium', visualMood: 'warm premium white and gold, editorial lifestyle, expensive but not luxury cliche' },
-  { id: 'hero-mint-system', label: 'Мятная система', style: 'client-story', palette: 'mint-fresh', layout: 'classic', typo: 'inter', effects: ['fadein'], imageStylePreset: 'greenSystem', visualMood: 'fresh mint-green clarity, system and route feeling, calm confident first screen' },
-  { id: 'hero-coral-action', label: 'Синий и коралл', style: 'clean-ads', palette: 'trust-coral', layout: 'split', typo: 'manrope', effects: ['fadein', 'micro'], imageStylePreset: 'redWhite', visualMood: 'white background with coral energy accents, short punchy offer blocks, strong ad-like CTA' }
-];
-
-const NATURE_EDITORIAL_DESIGN_ROUTES = [
-  { id: 'nature-sage-paper', label: 'Nature sage paper', style: 'nature-sage-paper', palette: 'white-gold-ad', layout: 'split', typo: 'playfair', effects: ['fadein', 'micro'], imageStylePreset: 'whiteGoldPremium', visualMood: 'warm paper editorial, sage olive accents, soft premium nature-inspired composition, airy magazine landing' },
-  { id: 'nature-terra-focus', label: 'Nature terra focus', style: 'nature-terra-focus', palette: 'trust-coral', layout: 'classic', typo: 'playfair', effects: ['fadein'], imageStylePreset: 'editorialGold', visualMood: 'beige and terracotta editorial story, human warmth, calm focused premium prelanding' },
-  { id: 'nature-forest-trust', label: 'Nature forest trust', style: 'nature-forest-trust', palette: 'green-money', layout: 'cards', typo: 'playfair', effects: ['fadein', 'micro'], imageStylePreset: 'greenSystem', visualMood: 'olive forest trust, natural daylight, paper cards, practical route and first step, no dark colors' }
-];
-
-const MINIMAL_COMPARE_DESIGN_ROUTES = [
-  { id: 'minimal-noir-signal', label: 'Noir signal', style: 'minimal-noir', palette: 'black-yellow-ad', layout: 'minimal', typo: 'inter', effects: ['fadein'], visualMood: 'dark premium text-first quiet comparison landing, no photo, minimal lines and high contrast' },
-  { id: 'minimal-graphite-white', label: 'Graphite white', style: 'minimal-graphite', palette: 'clean-product', layout: 'minimal', typo: 'inter', effects: ['fadein'], visualMood: 'graphite and white strict minimal landing, calm comparison, lots of negative space, no photo' },
-  { id: 'minimal-blue-quiet', label: 'Blue quiet', style: 'minimal-blue', palette: 'deep-blue-ad', layout: 'minimal', typo: 'inter', effects: ['fadein'], visualMood: 'dark blue quiet premium landing, internal comparison and first step, no photo' }
-];
-
 const CORE_METHOD_DESIGN_ROUTES = [
   { id: 'core-orange-break', label: 'Жёсткий разрыв', coreDesignClass: 'fh-theme-ember', themeStyle: 'heroBright', palette: 'red-energy', typo: 'manrope', effects: ['fadein', 'micro'], imageStylePreset: 'redWhite', visualMood: 'bright warm orange-red accent, clean white cards, feeling of breaking old course habits' },
   { id: 'core-blue-proof', label: 'Снятие возражений', coreDesignClass: 'fh-theme-sky', themeStyle: 'blueTrust', palette: 'blue-trust', typo: 'manrope', effects: ['fadein', 'micro'], imageStylePreset: 'blueTrust', visualMood: 'trusted blue, clean premium, calm proof and clear route' },
   { id: 'core-green-route', label: 'Доверие и ясность', coreDesignClass: 'fh-theme-lime', themeStyle: 'greenSystem', palette: 'green-money', typo: 'manrope', effects: ['fadein'], imageStylePreset: 'greenSystem', visualMood: 'green route/system clarity, safe entry, less pressure, more step-by-step logic' }
-];
-
-const DIRECTION_QUIZ_DESIGN_ROUTES = [
-  { id: 'direction-quiz-navy', label: 'Ночной синий маршрут', style: 'direction-quiz-navy', palette: 'deep-blue-ad', layout: 'quiz', typo: 'manrope', effects: ['fadein', 'micro'], imageStylePreset: 'blueTrust', visualMood: 'deep navy editorial quiz, restrained blue signal, premium honest diagnostic' },
-  { id: 'direction-quiz-gold', label: 'Тёмное золото', style: 'direction-quiz-gold', palette: 'black-yellow-ad', layout: 'quiz', typo: 'manrope', effects: ['fadein'], imageStylePreset: 'whiteGoldPremium', visualMood: 'dark premium route with warm gold signal, honest direction and calm confidence' },
-  { id: 'direction-quiz-forest', label: 'Лесная ясность', style: 'direction-quiz-forest', palette: 'green-money', layout: 'quiz', typo: 'manrope', effects: ['fadein', 'micro'], imageStylePreset: 'greenSystem', visualMood: 'deep green editorial quiz, natural clarity and a realistic first step' }
-];
-
-const PERSONAL_ROUTE_QUIZ_DESIGN_ROUTES = [
-  { id: 'personal-route-coral', label: 'Коралл и ночь', style: 'personal-route-coral', palette: 'trust-coral', layout: 'quiz', typo: 'manrope', effects: ['fadein', 'micro'], imageStylePreset: 'redWhite', visualMood: 'deep plum and coral personal route quiz, human warmth, restrained cinematic contrast' },
-  { id: 'personal-route-amber', label: 'Янтарная точка', style: 'personal-route-amber', palette: 'white-gold-ad', layout: 'quiz', typo: 'manrope', effects: ['fadein'], imageStylePreset: 'whiteGoldPremium', visualMood: 'dark amber premium personal route quiz, warm light and honest self-reflection' },
-  { id: 'personal-route-violet', label: 'Фиолетовый фокус', style: 'personal-route-violet', palette: 'deep-blue-ad', layout: 'quiz', typo: 'manrope', effects: ['fadein', 'micro'], imageStylePreset: 'blueTrust', visualMood: 'dark violet and blue diagnostic quiz, clear focus and modern premium mood' }
 ];
 
 const BARRIER_PROFILE_QUIZ_DESIGN_ROUTES = [
@@ -2068,19 +2008,9 @@ function nextFromRotation(key, items) {
 }
 
 function nextPrelandingDesignRoute(mode) {
-  const routes = mode === 'heroBlocks'
-    ? HERO_BLOCKS_DESIGN_ROUTES
-    : mode === 'natureEditorial'
-      ? NATURE_EDITORIAL_DESIGN_ROUTES
-      : mode === 'minimalCompare'
-        ? MINIMAL_COMPARE_DESIGN_ROUTES
-        : mode === 'directionQuiz'
-          ? DIRECTION_QUIZ_DESIGN_ROUTES
-          : mode === 'personalRouteQuiz'
-            ? PERSONAL_ROUTE_QUIZ_DESIGN_ROUTES
-            : mode === 'barrierProfileQuiz'
-              ? BARRIER_PROFILE_QUIZ_DESIGN_ROUTES
-            : CORE_METHOD_DESIGN_ROUTES;
+  const routes = normalizeManualPrelandingMode(mode) === 'barrierProfileQuiz'
+    ? BARRIER_PROFILE_QUIZ_DESIGN_ROUTES
+    : CORE_METHOD_DESIGN_ROUTES;
   return nextFromRotation(PRELANDING_DESIGN_ROTATION_KEY, routes) || routes[0];
 }
 
@@ -2122,6 +2052,8 @@ function buildPrelandingMemoryLine(memory = []) {
 }
 
 function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline, text, projectData, designRoute, visualRoute, visualMemory }) {
+  const normalizedMode = normalizeManualPrelandingMode(mode);
+  const isBarrierProfile = normalizedMode === 'barrierProfileQuiz';
   const content = PRELANDING_CONTENT[templateId] || PRELANDING_CONTENT[1];
   const title = stripHtml(headline || content.titleHtml || 'Откройте короткий разбор и первый понятный шаг');
   const subtitle = stripHtml(text || content.trustTitle || content.valueTitle || 'Короткий разбор показывает механику и следующий шаг без долгой подготовки');
@@ -2129,9 +2061,11 @@ function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline,
   const clientName = projectData?.clientDisplayName || projectData?.clientName || '';
   const route = visualRoute || PRELANDING_VISUAL_ROUTES[0];
   const memoryLine = buildPrelandingMemoryLine(visualMemory || readPrelandingVisualMemory());
-  const semanticPersonas = landingLogic.bannerPersonas?.length
-    ? landingLogic.bannerPersonas
-    : route.personas || ['woman', 'man', 'mixed'];
+  const semanticPersonas = isBarrierProfile
+    ? ['man', 'none', 'man']
+    : landingLogic.bannerPersonas?.length
+      ? landingLogic.bannerPersonas
+      : route.personas || ['man', 'none', 'man'];
   const semanticRotation = Math.abs(hashText(`${route.id || ''}|${designRoute?.id || ''}|${title}|${Date.now()}|${Math.random()}`));
   const rotateItems = (items, offset) => items.map((_, index) => items[(index + offset) % items.length]);
   const semanticSceneSets = Array.isArray(landingLogic.prelandingVisualSceneSets)
@@ -2150,13 +2084,9 @@ function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline,
   const routePersonas = rotateItems(semanticPersonas, semanticPersonas.length ? semanticRotation % semanticPersonas.length : 0);
   const designMood = designRoute?.visualMood || 'clean premium light prelanding design';
   const isCoreMethod = mode === 'coreMethod' || mode === 'core-method';
-  const modeDescription = isCoreMethod
-    ? 'premium masculine mini-test landing with one strong cinematic first-screen story'
-    : mode === 'heroBlocks'
-    ? 'client prelanding from headline and subtitle, bright hero scene with white blocks'
-    : mode === 'natureEditorial'
-      ? 'Nature editorial prelanding, warm paper/sage/olive visual language, magazine-like premium layout with collage and calm first step'
-      : 'client prelanding, light premium product page';
+  const modeDescription = isBarrierProfile
+    ? 'dark high-contrast premium barrier profile with a framed semantic scene derived from the headline; a person is optional'
+    : 'premium masculine mini-test landing with one strong cinematic full-bleed first-screen story';
   const baseContext = [
     `Landing headline: ${title}`,
     `Landing subtitle / meaning: ${subtitle}`,
@@ -2189,13 +2119,9 @@ function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline,
     route.negative ? `Negative visual repetition: ${route.negative}.` : ''
   ].join('\n');
   const imageStylePreset = designRoute?.imageStylePreset || prelandingImageStylePreset(style, palette);
-  const variantSeed = `${mode}|${templateId}|${style}|${palette}|${title}|${subtitle}|${Date.now()}|${Math.random().toString(36).slice(2, 8)}`;
-  if (mode === 'directionQuiz' || mode === 'personalRouteQuiz' || mode === 'barrierProfileQuiz') {
-    const routeLabel = mode === 'directionQuiz'
-      ? 'static direction and first-step landing'
-      : mode === 'personalRouteQuiz'
-        ? 'static personal route landing'
-        : 'static barrier profile landing about a repeating failure pattern and a realistic first step';
+  const variantSeed = `${normalizedMode}|${templateId}|${style}|${palette}|${title}|${subtitle}|${Date.now()}|${Math.random().toString(36).slice(2, 8)}`;
+  if (isBarrierProfile) {
+  const routeLabel = 'static semantic barrier-profile landing about a repeating pattern and one realistic first step';
     const semanticScene = routeScenes[0]
       || 'one meaningful editorial scene or visual metaphor that directly expresses the headline, with a real person only when the story needs one';
     const routeContext = [
@@ -2211,8 +2137,8 @@ function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline,
       'Masculine visual language comes from decisive composition, restrained graphite/navy color, tactile wood, metal, concrete, leather, water or road textures and purposeful action. It does not require a male portrait.',
       'Choose the strongest literal scene, action, object, place or visual metaphor from the headline and subtitle. A person is optional and must never be the automatic default.',
       'Do not create a generic thoughtful or successful man, a passive office portrait, a person beside a laptop, or a model merely looking away. Every visible element must carry the exact headline meaning.',
-      'If a person is genuinely necessary, use a medium-close or waist-up three-quarter composition with authentic tension, decision or action. The person must occupy about 34-44 percent of the frame, with face and torso centered around 68-74 percent of frame width, at least 8-12 percent clear space at the right edge, and must never be tiny, distant, cropped or glued to the edge.',
-      'If a person is not necessary, build one dominant masculine focal scene from an object, threshold, route, unfinished action, damaged system, locked mechanism, empty place, storm, workshop, road or another concrete metaphor that directly explains the headline.',
+    'If a person is genuinely necessary, show exactly one adult man age 30-55 and never a woman, female character, couple or group. Use a medium-close or waist-up three-quarter composition with authentic tension, decision or action. The man must occupy about 34-44 percent of the frame, with face and torso centered around 68-74 percent of frame width, at least 8-12 percent clear space at the right edge, and must never be tiny, distant, cropped or glued to the edge.',
+    'If a person is not necessary, build one dominant semantic focal scene from an object, threshold, route, unfinished action, damaged system, locked mechanism, empty place, storm, workshop, road or another concrete metaphor that directly explains the headline.',
       'Use a closer 35mm or 50mm editorial camera and a clear foreground-to-background hierarchy. Avoid distant full-body framing unless distance itself is the headline metaphor.',
       'Keep the left 44-50 percent darker, calm and low-detail for readable HTML text, while the semantic focal point stays strong in the middle-right rather than at the extreme edge.',
       'No text, no letters, no numbers, no logos, no UI, no split poster, no blank white studio, no generic stock success pose.',
@@ -2229,27 +2155,9 @@ function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline,
       visualPrompt: routeContext
     }];
   }
-  const heroSubject = isCoreMethod
-    ? 'hero image: one cinematic adult man actively living the exact conflict, decision or metaphor from the headline; strong posture and authentic emotion; a specific premium environment with texture and depth; no generic office desk, no plain shirt portrait, no laptop pose, no blank white interior; subject on the right third with protected darker space on the left for white HTML headline'
-    : mode === 'natureEditorial'
-    ? `hero collage image: ${routeScenes[0] || 'one thoughtful adult person in a warm bright home studio, books/notebook/plant details, natural premium editorial mood'}, enough negative space for a serif headline, soft paper colors, no stock cliche`
-    : mode === 'heroBlocks'
-    ? `hero image: ${routeScenes[0] || 'one confident adult person in a bright modern apartment, cafe terrace or city workspace'}, face clearly visible, expressive but calm, subject on the right third, clean open space on the left for headline, premium ad photography, feeling of a person ready to return to action`
-    : `hero image: ${routeScenes[0] || 'ordinary confident adult person 35-55 in a bright modern home office or city cafe'}, calm but energetic, open white/blue/pastel atmosphere, subtle sense of route and first step`;
-  const valueSubject = isCoreMethod
-    ? `middle section image: ${routeScenes[1] || 'a different adult man in a different location confronting the real consequence of the problem or making a concrete new choice'}, cinematic documentary detail, distinct action, clothes, setting and camera angle, no repeated hero object`
-    : mode === 'natureEditorial'
-    ? `story section image: ${routeScenes[1] || 'different editorial scene with books, notebook, tea/coffee and a person making a simple plan'}, warm beige/sage palette, tactile paper feeling, no readable text`
-    : mode === 'heroBlocks'
-    ? `middle section image: ${routeScenes[1] || 'different live scene with a person and simple planning objects'}, laptop/phone/notebook as details only, warm daylight, visible depth, no blank white wall, no readable screens, atmosphere of testing and movement map`
-    : `middle section image: ${routeScenes[1] || 'different scene, practical route/system metaphor, desk with notebook and phone, person reviewing a simple path'}, high-key editorial light, first-step mood without text`;
-  const ctaSubject = isCoreMethod
-    ? `final CTA image: ${routeScenes[2] || 'a different adult man moving toward a clear next step in a new outdoor, architectural or workshop setting'}, restrained confidence and relief, cinematic contrast, no repeated location or prop`
-    : mode === 'natureEditorial'
-    ? `final CTA image: ${routeScenes[2] || 'different adult person with phone near plants or a bright cafe window, ready to open messenger'}, warm natural light, premium calm trust, no logos`
-    : mode === 'heroBlocks'
-    ? `CTA image: ${routeScenes[2] || 'different scene, person choosing next step on phone in a bright cafe/city/home environment'}, friendly messenger-like feeling without logos, clear face or hands, energetic but trustworthy`
-    : `CTA image: ${routeScenes[2] || 'different scene, confident person after decision, phone in hand, airy premium room'}, energetic but trustworthy, no luxury cliches`;
+  const heroSubject = 'hero image: one cinematic adult man actively living the exact conflict, decision or metaphor from the headline; strong posture and authentic emotion; a specific premium environment with texture and depth; no generic office desk, no plain shirt portrait, no laptop pose, no blank white interior; subject on the right third with protected darker space on the left for white HTML headline';
+  const valueSubject = `middle section image: ${routeScenes[1] || 'a different adult man in a different location confronting the real consequence of the problem or making a concrete new choice'}, cinematic documentary detail, distinct action, clothes, setting and camera angle, no repeated hero object`;
+  const ctaSubject = `final CTA image: ${routeScenes[2] || 'a different adult man moving toward a clear next step in a new outdoor, architectural or workshop setting'}, restrained confidence and relief, cinematic contrast, no repeated location or prop`;
 
   return [
     {
@@ -2756,33 +2664,13 @@ const MANUAL_PRELANDING_MODES = [
   {
     id: 'templateStage',
     title: 'Формат 1 / Мини-тест + разбор',
-    desc: 'Компактный Tilda-блок: сильный первый экран, три смысловых блока, мини-тест и регистрация.'
-  },
-  {
-    id: 'heroBlocks',
-    title: 'Формат 2 / Hero-картинка + блоки',
-    desc: 'Большая hero-сцена по заголовку и тексту, офферные карточки и заметные CTA.'
-  },
-  {
-    id: 'natureEditorial',
-    title: 'Формат 3 / Nature editorial',
-    desc: 'Мягкий editorial-лендинг: тёплая бумажная палитра, коллаж фото, сценарий, механика и финальный CTA.'
-  },
-  {
-    id: 'minimalCompare',
-    title: 'Формат 4 / Тихое сравнение',
-    desc: 'Тёмный минималистичный Tilda-блок без фото: внутренний конфликт, 3 микро-смысла и регистрация.'
-  },
-  {
-    id: 'directionQuiz',
-    title: 'Формат 5 / Маршрут действия',
-    desc: 'Динамичный одностраничник: конфликт, маршрут, три смысловые опоры и прямая форма регистрации.'
+    desc: 'Полноэкранная смысловая hero-сцена, четыре вопроса мини-теста и защищённая регистрация Atmospace.',
   },
   {
     id: 'barrierProfileQuiz',
-    title: 'Формат 6 / Профиль барьера',
-    desc: 'Контрастный профиль проблемы: повторяющийся сценарий, три признака и прямая форма регистрации.'
-  }
+    title: 'Формат 6 / Смысловой профиль барьера',
+    desc: 'Контрастный лендинг: смысловой барьер, три признака, сильная сцена по заголовку и прямая регистрация Atmospace.',
+  },
 ];
 
 function prelandingClassToken(value = '') {
@@ -5559,25 +5447,21 @@ function renderStaticInsightPrelanding({
 ${buildAtmospacePrelandingTrackingScript()}`;
 }
 
-function renderDirectionQuizPrelanding(props) {
-  return renderStaticInsightPrelanding({ ...props, mode: 'directionQuiz' });
-}
-
-function renderPersonalRouteQuizPrelanding(props) {
-  return renderStaticInsightPrelanding({ ...props, mode: 'personalRouteQuiz' });
-}
-
 function renderBarrierProfileQuizPrelanding(props) {
   return renderStaticInsightPrelanding({ ...props, mode: 'barrierProfileQuiz' });
 }
 
 function renderPrelandingHtml({ tpl, style, palette, photo, overrides, projectData, landingMeta, layout = 'split', typo = 'manrope', effects = [] }) {
+  overrides = {
+    ...(overrides || {}),
+    prelandingMode: normalizeManualPrelandingMode(overrides?.prelandingMode)
+  };
   const isCoreMethod = overrides?.prelandingMode === 'coreMethod' || overrides?.prelandingMode === 'core-method';
-  const isHeroBlocks = overrides?.prelandingMode === 'heroBlocks' || overrides?.prelandingMode === 'hero-blocks';
-  const isNatureEditorial = overrides?.prelandingMode === 'natureEditorial' || overrides?.prelandingMode === 'nature-editorial';
-  const isMinimalCompare = overrides?.prelandingMode === 'minimalCompare' || overrides?.prelandingMode === 'minimal-compare';
-  const isDirectionQuiz = overrides?.prelandingMode === 'directionQuiz' || overrides?.prelandingMode === 'direction-quiz';
-  const isPersonalRouteQuiz = overrides?.prelandingMode === 'personalRouteQuiz' || overrides?.prelandingMode === 'personal-route-quiz';
+  const isHeroBlocks = false;
+  const isNatureEditorial = false;
+  const isMinimalCompare = false;
+  const isDirectionQuiz = false;
+  const isPersonalRouteQuiz = false;
   const isBarrierProfileQuiz = overrides?.prelandingMode === 'barrierProfileQuiz' || overrides?.prelandingMode === 'barrier-profile-quiz';
   const overrideTemplateId = Number(overrides?.templateId);
   const baseTemplateId = [1, 2, 3].includes(Number(tpl)) ? Number(tpl) : 1;
@@ -5600,30 +5484,10 @@ function renderPrelandingHtml({ tpl, style, palette, photo, overrides, projectDa
   const resolvedCoreStyle = CORE_PRELANDING_THEME_STYLES[templateId] || 'darkYellow';
   const themeStyle = isCoreMethod
     ? (overrides?.themeStyle || resolvedCoreStyle)
-    : (overrides?.themeStyle || style || (
-      isHeroBlocks ? 'premium-light'
-        : isNatureEditorial ? 'nature-sage-paper'
-          : isMinimalCompare ? 'minimal-noir'
-            : isDirectionQuiz ? 'direction-quiz-navy'
-              : isPersonalRouteQuiz ? 'personal-route-coral'
-                : isBarrierProfileQuiz ? 'barrier-profile-ember'
-                  : 'glassmorphism'
-    ));
+    : (overrides?.themeStyle || style || (isBarrierProfileQuiz ? 'barrier-profile-ember' : 'glassmorphism'));
   const theme = prelandingThemeForStyle(themeStyle, paletteKey);
   const title = stripHtml(content.titleHtml || '');
-  const activeMode = isHeroBlocks
-    ? 'heroBlocks'
-    : isNatureEditorial
-      ? 'natureEditorial'
-      : isMinimalCompare
-        ? 'minimalCompare'
-        : isDirectionQuiz
-          ? 'directionQuiz'
-          : isPersonalRouteQuiz
-            ? 'personalRouteQuiz'
-            : isBarrierProfileQuiz
-              ? 'barrierProfileQuiz'
-              : 'templateStage';
+  const activeMode = isBarrierProfileQuiz ? 'barrierProfileQuiz' : 'templateStage';
   const landingLogic = resolveClientPrelandingLogic(title, content.trustTitle || content.methodName || content.actionSubtitle || '', activeMode);
   const fallbackSeed = `${templateId}|${style || ''}|${paletteKey}|${overrides?.variantKey || overrides?.conceptId || ''}|${title}`;
   const usedPrelandingImages = new Set();
@@ -5706,15 +5570,9 @@ function renderPrelandingHtml({ tpl, style, palette, photo, overrides, projectDa
   ].join(';');
   const prelandConfig = {
     templateId,
-    renderMode: isCoreMethod ? 'classicText' : (overrides?.renderMode || (
-      isDirectionQuiz ? 'directionQuiz'
-        : isPersonalRouteQuiz ? 'personalRouteQuiz'
-          : isBarrierProfileQuiz ? 'barrierProfileQuiz'
-            : isMinimalCompare ? 'minimalCompare'
-            : isHeroBlocks ? 'bannerMatched'
-              : isNatureEditorial ? 'natureEditorial'
-                : 'immersiveStage'
-    )),
+    renderMode: isCoreMethod
+      ? 'classicText'
+      : (overrides?.renderMode || (isBarrierProfileQuiz ? 'barrierProfileQuiz' : 'templateStage')),
     variant,
     designFamily,
     layoutMode: overrides?.layoutMode || '',
@@ -6489,6 +6347,7 @@ export default function Constructor() {
   const [prelandingAiImages, setPrelandingAiImages] = useState(null);
   const [prelandingAiStatus, setPrelandingAiStatus] = useState('');
   const [prelandingAiError, setPrelandingAiError] = useState('');
+  const normalizedManualPrelandingMode = normalizeManualPrelandingMode(manualPrelandingMode);
 
   const applyAuthorizedClientProject = (account) => {
     const nextProject = loadSavedProject(account);
@@ -6502,6 +6361,12 @@ export default function Constructor() {
     }
     setAuthorizedClient(account);
   };
+
+  useEffect(() => {
+    if (manualPrelandingMode !== normalizedManualPrelandingMode) {
+      setManualPrelandingMode(normalizedManualPrelandingMode);
+    }
+  }, [manualPrelandingMode, normalizedManualPrelandingMode]);
 
   useEffect(() => {
     if (isOwnerOnlyMode()) return;
@@ -6661,19 +6526,15 @@ export default function Constructor() {
     designVariant: currentPrelandingVariantMeta?.landingVariant || '',
     generatorBuild: currentPrelandingVariantMeta?.generatorBuild || ''
   }), [currentPrelandingVariantMeta, landingRuntimeMeta]);
-  const isSingleImagePrelandingMode = manualPrelandingMode === 'directionQuiz'
-    || manualPrelandingMode === 'personalRouteQuiz'
-    || manualPrelandingMode === 'barrierProfileQuiz';
-  const prelandingAiImagesReady = manualPrelandingMode === 'minimalCompare'
-    ? Boolean(prelandingAiImages?.key === prelandingImageBuildKey)
-    : isSingleImagePrelandingMode
-      ? Boolean(prelandingAiImages?.key === prelandingImageBuildKey && currentPrelandingAiImages?.sceneImage)
-      : Boolean(
-        currentPrelandingAiImages?.sceneImage
-        && currentPrelandingAiImages?.valueImage
-        && currentPrelandingAiImages?.ctaImage
-      );
-  const prelandingNeedsTemplate = manualPrelandingMode === 'templateStage';
+  const isSingleImagePrelandingMode = normalizedManualPrelandingMode === 'barrierProfileQuiz';
+  const prelandingAiImagesReady = isSingleImagePrelandingMode
+    ? Boolean(prelandingAiImages?.key === prelandingImageBuildKey && currentPrelandingAiImages?.sceneImage)
+    : Boolean(
+      currentPrelandingAiImages?.sceneImage
+      && currentPrelandingAiImages?.valueImage
+      && currentPrelandingAiImages?.ctaImage
+    );
+      const prelandingNeedsTemplate = normalizedManualPrelandingMode === 'templateStage';
   const prelandingTemplateReady = !prelandingNeedsTemplate || Boolean(tpl);
   const canGeneratePrelandingAi = Boolean(
     hasPrelandingKeys
@@ -6710,17 +6571,17 @@ export default function Constructor() {
     const resumableAiState = prelandingAiImages?.key === buildKey && !prelandingAiImagesReady
       ? prelandingAiImages
       : null;
-    const designRoute = resumableAiState?.designRoute || nextPrelandingDesignRoute(manualPrelandingMode);
+      const designRoute = resumableAiState?.designRoute || nextPrelandingDesignRoute(normalizedManualPrelandingMode);
     const visualMemory = readPrelandingVisualMemory();
     const visualRoute = resumableAiState?.visualRoute || nextPrelandingVisualRoute();
-    const effectiveTemplateId = manualPrelandingMode === 'templateStage'
+      const effectiveTemplateId = normalizedManualPrelandingMode === 'templateStage'
       ? selectedPrelandingTemplateId
       : 1;
     const effectiveStyle = designRoute?.style || style;
     const effectivePalette = designRoute?.palette || palette;
     const variantMeta = resumableAiState?.meta || makePrelandingVariantMeta({
         projectData: prelandingRuntimeProjectData,
-        mode: manualPrelandingMode,
+        mode: normalizedManualPrelandingMode,
         templateId: effectiveTemplateId,
         style: effectiveStyle,
         palette: effectivePalette,
@@ -6729,7 +6590,7 @@ export default function Constructor() {
         routeId: `${designRoute?.id || 'design'}-${visualRoute?.id || 'visual'}`
       });
     const specs = buildPrelandingImageSpecs({
-      mode: manualPrelandingMode,
+      mode: normalizedManualPrelandingMode,
       templateId: effectiveTemplateId,
       style: effectiveStyle,
       palette: effectivePalette,
@@ -6749,8 +6610,6 @@ export default function Constructor() {
     setPrelandingAiError('');
     setPrelandingAiStatus(resumableAiState
       ? 'Продолжаю сборку: готовые кадры сохранены, генерирую только недостающие.'
-      : manualPrelandingMode === 'minimalCompare'
-      ? 'Собираю минималистичный Tilda HTML без AI-картинок.'
       : isSingleImagePrelandingMode
         ? 'OpenAI генерирует одну смысловую hero-картинку для одностраничника. Если ответ зависнет, конструктор сам перезапустит попытку.'
         : 'OpenAI генерирует 3 разные картинки для предлендинга. Если ответ зависнет, конструктор сам перезапустит попытку.');
@@ -6776,23 +6635,6 @@ export default function Constructor() {
         }));
       }
 
-      if (manualPrelandingMode === 'minimalCompare') {
-        setPrelandingAiImages({
-          key: buildKey,
-          images: {
-            sceneImage: '',
-            valueImage: '',
-            ctaImage: ''
-          },
-          designRoute,
-          visualRoute: null,
-          meta: variantMeta,
-          createdAt: new Date().toISOString()
-        });
-        setPrelandingAiStatus(`Формат 4 готов: ${designRoute?.label || 'тихий минимализм'}. HTML можно копировать.`);
-        consumePrelandingQuota();
-        return;
-      }
       const slotLabels = {
         hero: 'hero-картинка',
         value: 'блок ценности',
@@ -6922,42 +6764,12 @@ export default function Constructor() {
     applyPreset(preset);
   };
 
-  const visiblePrelandingPresets = manualPrelandingMode === 'heroBlocks'
-    ? HERO_BLOCKS_PRESETS
-    : manualPrelandingMode === 'natureEditorial'
-      ? NATURE_EDITORIAL_PRESETS
-      : manualPrelandingMode === 'minimalCompare'
-        ? MINIMAL_COMPARE_PRESETS
-        : manualPrelandingMode === 'directionQuiz'
-          ? DIRECTION_QUIZ_PRESETS
-          : manualPrelandingMode === 'personalRouteQuiz'
-            ? PERSONAL_ROUTE_QUIZ_PRESETS
-            : manualPrelandingMode === 'barrierProfileQuiz'
-              ? BARRIER_PROFILE_QUIZ_PRESETS
-              : CORE_METHOD_PRESETS;
+  const visiblePrelandingPresets = normalizedManualPrelandingMode === 'barrierProfileQuiz'
+    ? BARRIER_PROFILE_QUIZ_PRESETS
+    : CORE_METHOD_PRESETS;
 
   const resetAll = () => {
-    if (manualPrelandingMode === 'heroBlocks') {
-      applyPreset(HERO_BLOCKS_PRESETS[0]);
-      return;
-    }
-    if (manualPrelandingMode === 'natureEditorial') {
-      applyPreset(NATURE_EDITORIAL_PRESETS[0]);
-      return;
-    }
-    if (manualPrelandingMode === 'minimalCompare') {
-      applyPreset(MINIMAL_COMPARE_PRESETS[0]);
-      return;
-    }
-    if (manualPrelandingMode === 'directionQuiz') {
-      applyPreset(DIRECTION_QUIZ_PRESETS[0]);
-      return;
-    }
-    if (manualPrelandingMode === 'personalRouteQuiz') {
-      applyPreset(PERSONAL_ROUTE_QUIZ_PRESETS[0]);
-      return;
-    }
-    if (manualPrelandingMode === 'barrierProfileQuiz') {
+    if (normalizedManualPrelandingMode === 'barrierProfileQuiz') {
       applyPreset(BARRIER_PROFILE_QUIZ_PRESETS[0]);
       return;
     }
@@ -7043,255 +6855,6 @@ export default function Constructor() {
           sceneImage: currentPrelandingAiImages.sceneImage,
           valueImage: currentPrelandingAiImages.valueImage,
           ctaImage: currentPrelandingAiImages.ctaImage
-        },
-        projectData: prelandingRuntimeProjectData,
-        landingMeta: effectivePrelandingVariantMeta
-      });
-    }
-    if (manualPrelandingMode === 'heroBlocks') {
-      const heroPreset = HERO_BLOCKS_PRESETS.find((preset) => preset.id === activePresetId) || HERO_BLOCKS_PRESETS[0];
-      const heroDesign = currentPrelandingDesignRoute || heroPreset;
-      const heroTemplateId = 1;
-      const heroStyle = heroDesign.style || heroPreset.style;
-      const heroPalette = heroDesign.palette || heroPreset.palette;
-      const heroLayout = heroDesign.layout || heroPreset.layout;
-      const heroTypo = heroDesign.typo || heroPreset.typo;
-      const heroEffects = heroDesign.effects || heroPreset.effects || [];
-      const title = enteredHeadline || 'Начните движение к цели без очередного отката назад';
-      const landingLogic = resolveClientPrelandingLogic(title, enteredText, 'heroBlocks');
-      const textLead = enteredText || landingLogic.lead;
-      const imageSeed = `manual-hero-blocks-${heroDesign.id || heroPreset.id}-${heroStyle}-${heroPalette}-${heroLayout}-${heroTypo}-${title}-${textLead}`;
-      return renderPrelandingHtml({
-        tpl: heroTemplateId,
-        style: heroStyle,
-        palette: heroPalette,
-        photo,
-        layout: heroLayout,
-        typo: heroTypo,
-        effects: heroEffects,
-        overrides: {
-          prelandingMode: 'heroBlocks',
-          renderMode: 'bannerMatched',
-          templateId: heroTemplateId,
-          themeStyle: heroStyle,
-          designFamily: `hero-blocks-${heroDesign.id || heroLayout || 'split'}`,
-          landingVariant: `hb-${heroStyle || 'style'}-${heroLayout || 'split'}`,
-          layoutMode: heroLayout,
-          typeMode: heroTypo,
-          effects: heroEffects,
-          variantKey: imageSeed,
-          visualSource: 'scene',
-          badge: landingLogic.badge,
-          title,
-          titleHtml: esc(title),
-          pills: [],
-          painTitle: landingLogic.label,
-          trustTitle: textLead,
-          trustSmall: landingLogic.trustSmall,
-          methodName: landingLogic.methodName,
-          valueTitle: landingLogic.valueTitle,
-          valueItems: landingLogic.valueItems,
-          sceneImage: currentPrelandingAiImages.sceneImage,
-          valueImage: currentPrelandingAiImages.valueImage,
-          ctaImage: currentPrelandingAiImages.ctaImage,
-          cards: landingLogic.cards,
-          proofItems: landingLogic.proofItems,
-          liveNote: landingLogic.botTransition,
-          ctaLead: landingLogic.ctaLead,
-          actionSubtitle: landingLogic.ctaLead,
-          actionTitle: landingLogic.actionTitle,
-          showProof: true,
-          showProofGrid: true
-        },
-        projectData: prelandingRuntimeProjectData,
-        landingMeta: effectivePrelandingVariantMeta
-      });
-    }
-    if (manualPrelandingMode === 'natureEditorial') {
-      const naturePreset = NATURE_EDITORIAL_PRESETS.find((preset) => preset.id === activePresetId) || NATURE_EDITORIAL_PRESETS[0];
-      const natureDesign = currentPrelandingDesignRoute || naturePreset;
-      const natureStyle = natureDesign.style || naturePreset.style;
-      const naturePalette = natureDesign.palette || naturePreset.palette;
-      const natureLayout = natureDesign.layout || naturePreset.layout;
-      const natureTypo = natureDesign.typo || naturePreset.typo || 'playfair';
-      const natureEffects = natureDesign.effects || naturePreset.effects || [];
-      const title = enteredHeadline || 'Книги прочитаны. А жизнь всё ещё не меняется?';
-      const landingLogic = resolveClientPrelandingLogic(title, enteredText, 'natureEditorial');
-      const textLead = enteredText || landingLogic.lead;
-      const storyCards = buildTildaStoryCards(title, textLead, 'natureEditorial');
-      const imageSeed = `manual-nature-editorial-${natureDesign.id || naturePreset.id}-${natureStyle}-${naturePalette}-${natureLayout}-${title}-${textLead}`;
-      return renderPrelandingHtml({
-        tpl: 1,
-        style: natureStyle,
-        palette: naturePalette,
-        photo,
-        layout: natureLayout,
-        typo: natureTypo,
-        effects: natureEffects,
-        overrides: {
-          prelandingMode: 'natureEditorial',
-          renderMode: 'natureEditorial',
-          templateId: 1,
-          themeStyle: natureStyle,
-          designFamily: `nature-editorial-${natureDesign.id || naturePreset.id || 'sage'}`,
-          landingVariant: `nd-${natureStyle || 'nature'}-${naturePalette || 'paper'}`,
-          layoutMode: natureLayout,
-          typeMode: natureTypo,
-          effects: natureEffects,
-          variantKey: imageSeed,
-          visualSource: 'scene',
-          badge: landingLogic.badge,
-          title,
-          titleHtml: esc(title),
-          trustTitle: textLead,
-          trustSmall: landingLogic.trustSmall,
-          methodName: landingLogic.methodName,
-          painTitle: landingLogic.label,
-          painAlert: landingLogic.defaultText,
-          valueTitle: landingLogic.valueTitle,
-          valueItems: landingLogic.valueItems,
-          cards: storyCards,
-          proofItems: [],
-          liveNote: landingLogic.botTransition,
-          ctaLead: buildTildaCtaLead(title, textLead, 'natureEditorial'),
-          actionSubtitle: landingLogic.ctaLead,
-          actionTitle: landingLogic.actionTitle,
-          sceneImage: currentPrelandingAiImages.sceneImage,
-          valueImage: currentPrelandingAiImages.valueImage,
-          ctaImage: currentPrelandingAiImages.ctaImage
-        },
-        projectData: prelandingRuntimeProjectData,
-        landingMeta: effectivePrelandingVariantMeta
-      });
-    }
-    if (manualPrelandingMode === 'directionQuiz'
-      || manualPrelandingMode === 'personalRouteQuiz'
-      || manualPrelandingMode === 'barrierProfileQuiz') {
-      const isPersonalRoute = manualPrelandingMode === 'personalRouteQuiz';
-      const isBarrierProfile = manualPrelandingMode === 'barrierProfileQuiz';
-      const insightPresets = isBarrierProfile
-        ? BARRIER_PROFILE_QUIZ_PRESETS
-        : isPersonalRoute
-          ? PERSONAL_ROUTE_QUIZ_PRESETS
-          : DIRECTION_QUIZ_PRESETS;
-      const fallbackPreset = insightPresets[0];
-      const insightPreset = insightPresets.find((preset) => preset.id === activePresetId) || fallbackPreset;
-      const insightDesign = currentPrelandingDesignRoute || insightPreset;
-      const insightStyle = insightDesign.style || insightPreset.style;
-      const insightPalette = insightDesign.palette || insightPreset.palette;
-      const insightEffects = insightDesign.effects || insightPreset.effects || [];
-      const title = enteredHeadline || (isBarrierProfile
-        ? 'Почему в самый важный момент всё снова срывается?'
-        : isPersonalRoute
-          ? 'Как понять, что вы идёте не по своему маршруту?'
-          : 'Как найти направление, которое подходит именно вам?');
-      const landingLogic = resolveClientPrelandingLogic(title, enteredText, manualPrelandingMode);
-      const textLead = enteredText || landingLogic.lead;
-      const imageSeed = `manual-${manualPrelandingMode}-${insightDesign.id || insightPreset.id}-${insightStyle}-${insightPalette}-${title}-${textLead}`;
-      return renderPrelandingHtml({
-        tpl: 1,
-        style: insightStyle,
-        palette: insightPalette,
-        photo,
-        layout: 'insight',
-        typo: 'manrope',
-        effects: insightEffects,
-        overrides: {
-          prelandingMode: manualPrelandingMode,
-          renderMode: isBarrierProfile
-            ? 'barrierProfile'
-            : isPersonalRoute
-              ? 'personalRoute'
-              : 'directionRoute',
-          templateId: 1,
-          themeStyle: insightStyle,
-          designFamily: isBarrierProfile
-            ? 'barrier-profile'
-            : isPersonalRoute
-              ? 'personal-route'
-              : 'direction-route',
-          landingVariant: isBarrierProfile
-            ? `bp-${insightDesign.id || insightPreset.id}`
-            : isPersonalRoute
-              ? `pr-${insightDesign.id || insightPreset.id}`
-              : `dr-${insightDesign.id || insightPreset.id}`,
-          layoutMode: 'insight',
-          typeMode: 'manrope',
-          effects: insightEffects,
-          variantKey: imageSeed,
-          visualSource: 'scene',
-          badge: landingLogic.badge,
-          title,
-          titleHtml: esc(title),
-          painTitle: landingLogic.label,
-          painAlert: landingLogic.defaultText,
-          trustTitle: textLead,
-          trustSmall: landingLogic.trustSmall,
-          methodName: landingLogic.methodName,
-          valueTitle: landingLogic.valueTitle,
-          valueItems: landingLogic.valueItems,
-          cards: landingLogic.cards,
-          proofItems: [],
-          liveNote: landingLogic.botTransition,
-          ctaLead: landingLogic.ctaLead,
-          actionSubtitle: landingLogic.ctaLead,
-          actionTitle: landingLogic.actionTitle,
-          sceneImage: currentPrelandingAiImages.sceneImage,
-          valueImage: '',
-          ctaImage: '',
-          designRoute: insightDesign,
-          designRouteId: insightDesign.id || insightPreset.id
-        },
-        projectData: prelandingRuntimeProjectData,
-        landingMeta: effectivePrelandingVariantMeta
-      });
-    }
-    if (manualPrelandingMode === 'minimalCompare') {
-      const minimalPreset = MINIMAL_COMPARE_PRESETS.find((preset) => preset.id === activePresetId) || MINIMAL_COMPARE_PRESETS[0];
-      const minimalDesign = currentPrelandingDesignRoute || minimalPreset;
-      const minimalStyle = minimalDesign.style || minimalPreset.style;
-      const minimalPalette = minimalDesign.palette || minimalPreset.palette;
-      const minimalLayout = minimalDesign.layout || minimalPreset.layout || 'minimal';
-      const minimalTypo = minimalDesign.typo || minimalPreset.typo || 'inter';
-      const minimalEffects = minimalDesign.effects || minimalPreset.effects || ['fadein'];
-      const title = enteredHeadline || 'Смотрю на других и думаю: почему у меня не так?';
-      const landingLogic = resolveClientPrelandingLogic(title, enteredText, 'minimalCompare');
-      const textLead = enteredText || landingLogic.lead;
-      const imageSeed = `manual-minimal-compare-${minimalDesign.id || minimalPreset.id}-${minimalStyle}-${minimalPalette}-${title}-${textLead}`;
-      return renderPrelandingHtml({
-        tpl: 1,
-        style: minimalStyle,
-        palette: minimalPalette,
-        photo,
-        layout: minimalLayout,
-        typo: minimalTypo,
-        effects: minimalEffects,
-        overrides: {
-          prelandingMode: 'minimalCompare',
-          renderMode: 'minimalCompare',
-          templateId: 1,
-          themeStyle: minimalStyle,
-          designFamily: `minimal-compare-${minimalDesign.id || minimalPreset.id || 'noir'}`,
-          landingVariant: `mc-${minimalStyle || 'minimal'}-${minimalPalette || 'dark'}`,
-          layoutMode: minimalLayout,
-          typeMode: minimalTypo,
-          effects: minimalEffects,
-          variantKey: imageSeed,
-          visualSource: 'none',
-          badge: landingLogic.badge,
-          title,
-          titleHtml: esc(title),
-          trustTitle: textLead,
-          trustSmall: landingLogic.trustSmall,
-          methodName: landingLogic.methodName,
-          valueTitle: landingLogic.valueTitle,
-          valueItems: landingLogic.valueItems,
-          cards: landingLogic.cards,
-          proofItems: [],
-          liveNote: landingLogic.botTransition,
-          ctaLead: landingLogic.ctaLead,
-          actionSubtitle: landingLogic.ctaLead,
-          actionTitle: landingLogic.actionTitle
         },
         projectData: prelandingRuntimeProjectData,
         landingMeta: effectivePrelandingVariantMeta
@@ -7491,19 +7054,9 @@ export default function Constructor() {
                     key={mode.id}
                     onClick={() => {
                       setManualPrelandingMode(mode.id);
-                      const modePresets = mode.id === 'heroBlocks'
-                        ? HERO_BLOCKS_PRESETS
-                        : mode.id === 'natureEditorial'
-                          ? NATURE_EDITORIAL_PRESETS
-                          : mode.id === 'minimalCompare'
-                            ? MINIMAL_COMPARE_PRESETS
-                            : mode.id === 'directionQuiz'
-                              ? DIRECTION_QUIZ_PRESETS
-                              : mode.id === 'personalRouteQuiz'
-                                ? PERSONAL_ROUTE_QUIZ_PRESETS
-                                : mode.id === 'barrierProfileQuiz'
-                                  ? BARRIER_PROFILE_QUIZ_PRESETS
-                                  : CORE_METHOD_PRESETS;
+                      const modePresets = mode.id === 'barrierProfileQuiz'
+                        ? BARRIER_PROFILE_QUIZ_PRESETS
+                        : CORE_METHOD_PRESETS;
                       const currentPresetStillFits = modePresets.some((preset) => preset.id === activePresetId);
                       if (!currentPresetStillFits) {
                         if (mode.id === 'templateStage') applyCoreMethodTemplate(1);
