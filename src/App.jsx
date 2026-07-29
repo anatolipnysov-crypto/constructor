@@ -1337,7 +1337,41 @@ function buildAtmospacePrelandingTrackingScript() {
     var counter = root.querySelector('[data-atmospace-quiz-counter]');
     var progress = root.querySelector('[data-atmospace-quiz-progress]');
     var result = root.querySelector('[data-atmospace-inline-result]');
+    var resultTitle = root.querySelector('[data-atmospace-result-title]');
+    var resultCopy = root.querySelector('[data-atmospace-result-copy]');
+    var localAnswerChoices = [];
     var index = 0;
+
+    function renderPersonalResult() {
+      var profiles = [
+        {
+          title: 'Опора уже есть — сейчас важнее выбрать один фокус',
+          copy: 'Ты не отказался от действий. Рабочая гипотеза: результат тормозит не отсутствие силы, а распыление между несколькими попытками.'
+        },
+        {
+          title: 'Главный разрыв сейчас — между планом и выполнением',
+          copy: 'Идей и намерений достаточно. Рабочая гипотеза: нужен один короткий цикл действия, который можно закончить и проверить в реальности.'
+        },
+        {
+          title: 'Силы есть, но прошлые неудачи снижают темп',
+          copy: 'Потенциал никуда не исчез. Рабочая гипотеза: следующий шаг должен быть достаточно конкретным, чтобы вернуть опору на собственный результат.'
+        },
+        {
+          title: 'Давление невыполненных обещаний мешает начать спокойно',
+          copy: 'Чем больше внутреннего долга, тем тяжелее новый рывок. Рабочая гипотеза: сначала нужен один выполнимый шаг без нового громкого обещания.'
+        }
+      ];
+      var durationLabels = ['меньше года', 'от одного до трёх лет', 'от трёх до пяти лет', 'больше пяти лет'];
+      var profileIndex = Number(localAnswerChoices[3]);
+      var profile = profiles[Number.isInteger(profileIndex) && profiles[profileIndex] ? profileIndex : 0];
+      var duration = durationLabels[Number(localAnswerChoices[0])] || '';
+      if (resultTitle) resultTitle.textContent = profile.title;
+      if (resultCopy) {
+        resultCopy.textContent = profile.copy + (duration
+          ? ' По первому ответу этот сценарий длится ' + duration + ' — поэтому важен шаг, который можно завершить сейчас.'
+          : ' Начни с шага, который можно завершить и проверить сейчас.');
+      }
+    }
 
     function showQuestion(nextIndex) {
       index = Math.max(0, Math.min(nextIndex, panels.length - 1));
@@ -1351,6 +1385,8 @@ function buildAtmospacePrelandingTrackingScript() {
       var option = event.target && event.target.closest ? event.target.closest('[data-atmospace-option]') : null;
       if (!option || !root.contains(option)) return;
       event.preventDefault();
+      var optionIndex = Number(option.getAttribute('data-atmospace-option'));
+      localAnswerChoices[index] = Number.isInteger(optionIndex) && optionIndex >= 0 ? optionIndex : 0;
       markQuestionAnswered(index);
       if (index + 1 < panels.length) {
         showQuestion(index + 1);
@@ -1358,6 +1394,7 @@ function buildAtmospacePrelandingTrackingScript() {
         return;
       }
       panels.forEach(function (panel) { panel.hidden = true; });
+      renderPersonalResult();
       if (result) result.hidden = false;
       if (counter) counter.textContent = String(panels.length) + ' / ' + String(panels.length);
       if (progress) progress.style.width = '100%';
@@ -1373,6 +1410,7 @@ function buildAtmospacePrelandingTrackingScript() {
     });
 
     root.__atmospaceStart = function () {
+      localAnswerChoices = [];
       if (result) result.hidden = true;
       showQuestion(0);
     };
@@ -4108,7 +4146,7 @@ function renderCoreMethodMiniQuiz() {
       <p class="atm-v1-question-label">Вопрос ${questionIndex + 1}</p>
       <h3>${esc(question.title)}</h3>
       <div class="atm-v1-options">
-        ${question.options.map((option) => `<button type="button" data-atmospace-option>${esc(option)}</button>`).join('')}
+        ${question.options.map((option, optionIndex) => `<button type="button" data-atmospace-option="${optionIndex}">${esc(option)}</button>`).join('')}
       </div>
       ${questionIndex > 0 ? '<button class="atm-v1-back" type="button" data-atmospace-quiz-back>Вернуться к предыдущему вопросу</button>' : ''}
     </section>`).join('');
@@ -4125,10 +4163,11 @@ function renderCoreMethodMiniQuiz() {
         <div class="atm-v1-progress" aria-hidden="true"><span data-atmospace-quiz-progress></span></div>
         <p class="atm-v1-counter" data-atmospace-quiz-counter>1 / ${ATMOSPACE_MINI_QUIZ.length}</p>
         <div class="atm-v1-questions">${questions}</div>
-        <div class="atm-v1-quiz-result" data-atmospace-inline-result hidden>
+        <div class="atm-v1-quiz-result" data-atmospace-inline-result aria-live="polite" hidden>
           <p class="atm-v1-kicker">Мини-тест пройден</p>
-          <h3>Спасибо за честные ответы.</h3>
-          <p>Теперь посмотри, почему одних усилий недостаточно и что на самом деле удерживает тебя в прежней точке.</p>
+          <h3 data-atmospace-result-title>Спасибо за честные ответы.</h3>
+          <p data-atmospace-result-copy>Сейчас появится рабочая гипотеза по выбранным ответам.</p>
+          <p class="atm-v1-result-note">Это не диагноз и не оценка личности. Ответы остаются только в этой вкладке и никуда не отправляются.</p>
           <a class="atm-v1-primary" href="#atm-v1-offer" data-atmospace-offer-scroll>Перейти к разбору</a>
         </div>
       </div>
@@ -4390,6 +4429,8 @@ html,body{overflow-x:hidden}
 .atm-v1-hero-visual img{display:block;width:100%;height:100%;object-fit:cover;object-position:66% 50%;filter:saturate(1.1) contrast(1.12) brightness(.9);transform:scale(1.01)}
 .atm-v1-hero-visual:after{content:"";position:absolute;inset:0;background:var(--atm-hero-overlay);pointer-events:none}
 .atm-v1-hero-copy{max-width:650px}
+.atm-v1-mobile-cta{display:none}
+.atm-v1-first-fold-note{margin:8px 0 0;color:#b9c7d9;font-size:12px;line-height:1.35;font-weight:750}
 .atm-v1-kicker{margin:0 0 16px;color:var(--atm-accent2);font-size:13px;line-height:1.2;font-weight:900;text-transform:uppercase}
 .atm-v1-hero h1{max-width:650px;margin:0 0 18px;color:#fff;font-size:clamp(42px,4.6vw,66px);line-height:.98;font-weight:900;letter-spacing:0;text-wrap:balance;text-shadow:0 18px 50px rgba(0,0,0,.28)}
 .atm-v1-hero h1.atm-v1-title-medium{font-size:clamp(38px,4.1vw,58px)}
@@ -4419,6 +4460,7 @@ html,body{overflow-x:hidden}
 .atm-v1-back{margin-top:18px;padding:0;border:0;background:transparent;color:#94a3b8;font:inherit;font-weight:800;cursor:pointer}
 .atm-v1-quiz-result{padding:28px 0 0}
 .atm-v1-quiz-result>p:not(.atm-v1-kicker){max-width:720px;color:#c8d3e2;font-size:19px;line-height:1.55}
+.atm-v1-quiz-result .atm-v1-result-note{margin-top:12px;color:#94a3b8;font-size:13px;line-height:1.45}
 .atm-v1-editorial{padding:clamp(72px,9vw,130px) 0;background:#fff}
 .atm-v1-editorial-dark{background:var(--atm-deep);color:#f8fafc}
 .atm-v1-editorial-accent{background:color-mix(in srgb,var(--atm-accent) 9%,#fff)}
@@ -4471,17 +4513,19 @@ html,body{overflow-x:hidden}
 @media(max-height:920px) and (min-width:801px){.atm-v1-hero{padding:28px 0}.atm-v1-hero h1{font-size:clamp(40px,4.25vw,60px);margin-bottom:14px}.atm-v1-hero h1.atm-v1-title-medium{font-size:clamp(36px,3.8vw,54px)}.atm-v1-hero h1.atm-v1-title-long{font-size:clamp(32px,3.35vw,47px)}.atm-v1-lead{font-size:17px;line-height:1.38;margin-bottom:14px}.atm-v1-primary{min-height:58px}}
 @media(max-width:800px){
   .atm-v1-shell{width:min(100% - 28px,1180px)}
-  .atm-v1-hero{min-height:100svh;align-items:end;padding:clamp(235px,34svh,310px) 0 22px;background:var(--atm-hero-bg)}
+  .atm-v1-hero{min-height:100svh;align-items:end;padding:clamp(165px,26svh,235px) 0 max(18px,env(safe-area-inset-bottom));background:var(--atm-hero-bg)}
   .atm-v1-hero-visual{inset:0;height:100%}
   .atm-v1-hero-visual img{object-position:68% 12%;filter:saturate(1.08) contrast(1.1) brightness(.82)}
   .atm-v1-hero-visual:after{background:linear-gradient(180deg,rgba(7,17,31,.02) 0%,rgba(7,17,31,.16) 34%,rgba(7,17,31,.9) 61%,var(--atm-hero-bg) 82%)}
-  .atm-v1-hero-copy{max-width:100%}
+  .atm-v1-hero-copy{max-width:100%;min-width:0}
   .atm-v1-kicker{margin-bottom:9px;font-size:11px}
-  .atm-v1-hero h1{font-size:clamp(30px,8vw,40px);line-height:1;margin-bottom:11px}
+  .atm-v1-hero h1{max-width:100%;font-size:clamp(30px,8vw,40px);line-height:1;margin-bottom:11px;overflow-wrap:anywhere}
   .atm-v1-hero h1.atm-v1-title-medium{font-size:clamp(28px,7.35vw,36px)}
   .atm-v1-hero h1.atm-v1-title-long{font-size:clamp(25px,6.6vw,32px)}
-  .atm-v1-lead{color:#d5deeb;font-size:14px;line-height:1.4;margin-bottom:13px}
+  .atm-v1-lead{max-width:100%;color:#d5deeb;font-size:14px;line-height:1.4;margin:13px 0 0;overflow-wrap:anywhere}
   .atm-v1-hero-chips,.atm-v1-question-lead{display:none}
+  .atm-v1-mobile-cta{display:block}
+  .atm-v1-desktop-cta{display:none}
   .atm-v1-primary{width:100%;min-height:58px;margin-top:3px;padding:15px 18px}
   .atm-v1-copy-grid,.atm-v1-final-grid,.atm-v1-compact-head,.atm-v1-registration-grid{grid-template-columns:1fr}
   .atm-v1-sticky-title{position:static}
@@ -4491,7 +4535,7 @@ html,body{overflow-x:hidden}
   .atm-v1-footer-inner{align-items:flex-start;flex-direction:column}
   .atm-v1-question h3{font-size:27px}
 }
-@media(max-width:420px){.atm-v1-shell{width:calc(100% - 22px)}.atm-v1-hero{padding-top:clamp(210px,30svh,265px);padding-bottom:18px}.atm-v1-hero h1{font-size:29px}.atm-v1-hero h1.atm-v1-title-medium{font-size:27px}.atm-v1-hero h1.atm-v1-title-long{font-size:24px}.atm-v1-primary{width:100%;padding-inline:16px}.atm-v1-options button{min-height:66px;padding:15px}.atm-v1-editorial,.atm-v1-roadmap,.atm-v1-final-story,.atm-v1-registration{padding:58px 0}}
+@media(max-width:420px){.atm-v1-shell{width:calc(100% - 22px)}.atm-v1-hero{padding-top:clamp(145px,23svh,195px);padding-bottom:max(16px,env(safe-area-inset-bottom))}.atm-v1-hero h1{font-size:29px}.atm-v1-hero h1.atm-v1-title-medium{font-size:27px}.atm-v1-hero h1.atm-v1-title-long{font-size:24px}.atm-v1-primary{width:100%;padding-inline:16px}.atm-v1-options button{min-height:66px;padding:15px}.atm-v1-editorial,.atm-v1-roadmap,.atm-v1-final-story,.atm-v1-registration{padding:58px 0}}
 </style>
 <div id="fh-preland-root" class="${designClass}">
   <main>
@@ -4501,10 +4545,14 @@ html,body{overflow-x:hidden}
         <div class="atm-v1-hero-copy">
           <p class="atm-v1-kicker">Короткий мини-тест</p>
           <h1 id="atm-v1-title" class="${heroTitleClass}">${esc(titleText)}</h1>
+          <div class="atm-v1-mobile-cta" data-atmospace-first-fold-cta>
+            ${renderAtmospaceQuizButton('atm-v1-primary', 'Пройти тест')}
+            <p class="atm-v1-first-fold-note">4 вопроса · около минуты · без телефона</p>
+          </div>
           <p class="atm-v1-lead">${esc(heroLead)}</p>
           <ul class="atm-v1-hero-chips">${heroPoints.map((item) => `<li>${esc(item)}</li>`).join('')}</ul>
           <div class="atm-v1-question-lead">Ответь честно на четыре вопроса. Результат увидишь сразу, ответы не сохраняются.</div>
-          <div data-atmospace-first-fold-cta>${renderAtmospaceQuizButton('atm-v1-primary', 'Пройти тест')}</div>
+          <div class="atm-v1-desktop-cta" data-atmospace-first-fold-cta>${renderAtmospaceQuizButton('atm-v1-primary', 'Пройти тест')}</div>
         </div>
       </div>
     </section>
@@ -5429,18 +5477,19 @@ html,body{overflow-x:hidden}
 #fh-preland-root .fh-si-footer a{color:var(--si-text);text-decoration:underline;text-underline-offset:3px}
 @media(max-width:900px){
   #fh-preland-root .fh-si-hero,#fh-preland-root .fh-si-final-inner{grid-template-columns:1fr}
-  #fh-preland-root .fh-si-hero{min-height:100svh;grid-template-rows:minmax(190px,30svh) auto;gap:18px;align-content:center;padding:14px 0 22px}
-  #fh-preland-root .fh-si-media{order:-1;width:100%;height:clamp(190px,30svh,280px);min-height:0;aspect-ratio:auto;box-shadow:0 18px 46px rgba(0,0,0,.25)}
+  #fh-preland-root .fh-si-hero{min-height:100svh;grid-template-rows:auto minmax(190px,30svh);gap:18px;align-content:center;padding:22px 0 max(22px,env(safe-area-inset-bottom))}
+  #fh-preland-root .fh-si-hero>div{min-width:0}
+  #fh-preland-root .fh-si-media{order:0;width:100%;height:clamp(190px,30svh,280px);min-height:0;aspect-ratio:auto;box-shadow:0 18px 46px rgba(0,0,0,.25)}
   #fh-preland-root .fh-si-kicker{margin-bottom:12px}
-  #fh-preland-root .fh-si-title{font-size:clamp(38px,7.5vw,58px);line-height:1;margin-bottom:14px}
-  #fh-preland-root .fh-si-lead{font-size:16px;line-height:1.45;margin-bottom:18px}
+  #fh-preland-root .fh-si-title{max-width:100%;font-size:clamp(34px,7vw,52px);line-height:1;margin-bottom:14px;overflow-wrap:anywhere}
+  #fh-preland-root .fh-si-lead{max-width:100%;font-size:16px;line-height:1.45;margin-bottom:18px;overflow-wrap:anywhere}
 }
 @media(max-width:640px){
   #fh-preland-root .fh-si-shell{width:calc(100% - 24px)}
-  #fh-preland-root .fh-si-hero{grid-template-rows:minmax(180px,29svh) auto;gap:12px;padding:10px 0 16px}
-  #fh-preland-root .fh-si-title{font-size:36px;line-height:1.02;margin-bottom:12px}
+  #fh-preland-root .fh-si-hero{grid-template-rows:auto minmax(160px,24svh);gap:14px;padding:18px 0 max(18px,env(safe-area-inset-bottom))}
+  #fh-preland-root .fh-si-title{font-size:clamp(30px,8.6vw,36px);line-height:1.02;margin-bottom:12px}
   #fh-preland-root .fh-si-lead{font-size:15px;line-height:1.4;margin-bottom:14px}
-  #fh-preland-root .fh-si-media{height:clamp(180px,29svh,240px);border-radius:7px}
+  #fh-preland-root .fh-si-media{height:clamp(160px,24svh,220px);border-radius:7px}
   #fh-preland-root .fh-si-cta{min-height:56px}
   #fh-preland-root .fh-si-section,#fh-preland-root .fh-si-final{padding:54px 0}
   #fh-preland-root .fh-si-cards{grid-template-columns:1fr}

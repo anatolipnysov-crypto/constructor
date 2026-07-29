@@ -110,6 +110,36 @@ assert(
   formatOneQuizRenderer.includes('data-atmospace-question-count="4"'),
   'Format 1 quiz renderer must declare exactly four questions.'
 );
+[
+  'data-atmospace-option="${optionIndex}"',
+  'data-atmospace-result-title',
+  'data-atmospace-result-copy',
+  'Ответы остаются только в этой вкладке и никуда не отправляются.'
+].forEach((snippet) => {
+  assert(formatOneQuizRenderer.includes(snippet), `Format 1 local result must include ${snippet}`);
+});
+
+const trackingRuntime = sliceBetween(
+  source,
+  'function buildAtmospacePrelandingTrackingScript',
+  'function stripHtml'
+);
+[
+  'var localAnswerChoices = [];',
+  'localAnswerChoices[index] =',
+  'function renderPersonalResult()',
+  "resultTitle.textContent = profile.title",
+  "resultCopy.textContent = profile.copy"
+].forEach((snippet) => {
+  assert(trackingRuntime.includes(snippet), `Format 1 runtime must build its result locally: ${snippet}`);
+});
+assert(!trackingRuntime.includes('localStorage'), 'Format 1 answers must not be persisted in localStorage.');
+assert(!trackingRuntime.includes('sessionStorage'), 'Format 1 answers must not be persisted in sessionStorage.');
+assert.doesNotMatch(
+  trackingRuntime,
+  /payload\.(?:answer|answer_index|option|option_index)|(?:answer|answer_index|option|option_index)\s*:/i,
+  'Format 1 answer content and selected option index must not enter Atmospace payloads.'
+);
 
 const insightRenderer = sliceBetween(
   source,
@@ -129,6 +159,11 @@ const insightRenderer = sliceBetween(
 });
 assert(!insightRenderer.includes('data-atmospace-inline-quiz'), 'Format 6 must not emit inline quiz markup.');
 assert(!insightRenderer.includes('data-atmospace-embedded-quiz'), 'Format 6 must not emit embedded quiz markup.');
+assert(insightRenderer.includes('grid-template-rows:auto minmax(190px,30svh)'), 'Format 6 mobile copy and CTA must render before media.');
+assert(insightRenderer.includes('.fh-si-media{order:0'), 'Format 6 mobile media must stay after the first-fold CTA.');
+assert(!insightRenderer.includes('.fh-si-media{order:-1'), 'Format 6 must not place mobile media before its CTA.');
+assert(formatOneRenderer.includes('atm-v1-mobile-cta'), 'Format 1 must expose a mobile CTA immediately after the headline.');
+assert(formatOneRenderer.includes('4 вопроса · около минуты · без телефона'), 'Format 1 mobile CTA must explain the short flow.');
 
 const dispatch = sliceBetween(source, 'function renderPrelandingHtml', 'function countMatches');
 [
