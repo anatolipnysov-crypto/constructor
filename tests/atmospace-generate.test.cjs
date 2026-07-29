@@ -120,6 +120,10 @@ function assertFinalRuntimeContract(name, runtime) {
     hasRegistrationStartedHandoff(runtime),
     `${name}: registration_started must precede registration navigation`,
   );
+  expect(
+    /data\.status\s*!==\s*["']ready["']/.test(runtime),
+    `${name}: registration must stay blocked until Atmospace reports status=ready`,
+  );
 
   expect(/(?:var|let|const)\s+pageInstanceId\s*=\s*makePageInstanceId\(\);/.test(runtime), `${name}: runtime must create pageInstanceId once`);
   expect((runtime.match(/(?:var|let|const)\s+pageInstanceId\s*=\s*makePageInstanceId\(\);/g) || []).length === 1, `${name}: runtime must contain one pageInstanceId declaration`);

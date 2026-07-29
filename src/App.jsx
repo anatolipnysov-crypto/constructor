@@ -1552,7 +1552,9 @@ function buildAtmospacePrelandingTrackingScript() {
       var responseBody = result && result.body ? result.body : null;
       var data = responseBody && responseBody.ok && responseBody.data ? responseBody.data : null;
       var links = data && data.links ? data.links : null;
-      if (!result || !result.ok || !applyRegistrationLink(links)) throw new Error('landing_not_ready');
+      if (!result || !result.ok || !data || data.status !== 'ready' || !applyRegistrationLink(links)) {
+        throw new Error('landing_not_ready');
+      }
       initCompleted = true;
       initInFlight = false;
       sendLandingOpenedOnce();
