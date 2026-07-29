@@ -298,6 +298,7 @@ export function buildQuizRuntimeScript(project, publishConfig, {
       if (!quizStartedSent) {
         quizStartedSent = true;
         sendAtmospaceEvent('quiz_start_click');
+        reachGoal('quiz_start_click');
       }
 
       if (questionIndex >= 0 && !answeredGoalIndexes.has(questionIndex)) {
@@ -315,6 +316,7 @@ export function buildQuizRuntimeScript(project, publishConfig, {
       if (!quizCompletedSent && answeredCount === config.questionCount) {
         quizCompletedSent = true;
         reachGoal('quiz_completed');
+        reachGoal('offer_view');
         sendAtmospaceEvent('quiz_completed');
       }
     }

@@ -115,9 +115,12 @@ assert.doesNotMatch(
 );
 assert.deepEqual(
   literalCalls(runtime, 'reachGoal').sort(),
-  ['landing_view', 'quiz_completed', 'registration_started'].sort(),
-  'Browser Metrika must receive only landing_view, quiz_completed and registration_started.'
+  ['landing_view', 'quiz_start_click', 'quiz_completed', 'offer_view', 'registration_started'].sort(),
+  'Browser Metrika must receive the live-compatible funnel goal set.'
 );
+assert.ok(runtime.includes('window.mainMetrikaId'), 'Runtime must reuse the native Tilda counter identity.');
+assert.ok(runtime.includes('existingCounterId'), 'Runtime must detect an already initialized Tilda counter.');
+assert.ok(runtime.includes('script[src*="mc.yandex.ru/metrika/tag"]'), 'Runtime must recognize an existing Metrika loader.');
 assert.ok(
   hasRegistrationStartedHandoff(runtime),
   'registration_started must be emitted immediately before registration navigation.'

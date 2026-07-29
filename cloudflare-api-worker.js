@@ -687,6 +687,7 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
   var quizCompletedSent=false;
   var landingOpenedSent=false;
   var landingViewSent=false;
+  var offerViewSent=false;
   var initInFlight=false;
   var initFailed=false;
   var answeredQuestionNumbers={};
@@ -723,6 +724,9 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
     var counterId=getCounterId();
     if(!counterId)return Promise.resolve(false);
 
+    var hadMetrika=typeof window.ym==="function";
+    var existingCounterId=String(window.mainMetrikaId||"").trim();
+    window.mainMetrikaId=String(counterId);
     window.__atmospaceMetrikaCounters=window.__atmospaceMetrikaCounters||{};
     if(typeof window.ym!=="function"){
       window.ym=function(){(window.ym.a=window.ym.a||[]).push(arguments);};
@@ -731,8 +735,8 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
 
     if(!window.__atmospaceMetrikaLoaderStarted){
       window.__atmospaceMetrikaLoaderStarted=true;
-      var existing=document.querySelector('script[src="https://mc.yandex.ru/metrika/tag.js"]');
-      if(!existing){
+      var existing=document.querySelector('script[src*="mc.yandex.ru/metrika/tag"]');
+      if(!hadMetrika&&!existing){
         var script=document.createElement("script");
         script.async=true;
         script.src="https://mc.yandex.ru/metrika/tag.js";
@@ -743,26 +747,36 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
 
     if(!window.__atmospaceMetrikaCounters[counterId]){
       window.__atmospaceMetrikaCounters[counterId]=true;
-      window.ym(counterId,"init",{
-        clickmap:true,
-        trackLinks:true,
-        accurateTrackBounce:true,
-        webvisor:true
-      });
+      if(!hadMetrika||!existingCounterId||existingCounterId!==String(counterId)){
+        window.ym(counterId,"init",{
+          clickmap:true,
+          trackLinks:true,
+          accurateTrackBounce:true,
+          webvisor:true
+        });
+      }
     }
     return Promise.resolve(true);
   }
 
-  function reachGoal(goalName,params){
-    if(isLocalPreview())return;
+  function isQuizRequired(){
+    return Boolean(document.querySelector(quizSelector)||document.querySelector("[data-atmospace-inline-quiz]"));
+  }
+
+  function reachGoal(goalName,params,callback){
+    if(typeof params==="function"){callback=params;params={};}
+    var called=false;
+    function done(){if(called)return;called=true;if(typeof callback==="function")callback();}
+    if(isLocalPreview()){done();return;}
     var counterId=getCounterId();
-    if(!counterId)return;
+    if(!counterId){done();return;}
     ensureMetrika();
     try{
       if(typeof window.ym==="function"){
-        window.ym(counterId,"reachGoal",goalName,params||{});
+        window.ym(counterId,"reachGoal",goalName,params||{},done);
       }
-    }catch(error){}
+    }catch(error){done();}
+    window.setTimeout(done,1200);
   }
 
   function sendLandingViewOnce(){
@@ -884,6 +898,8 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
     if(!firstButton)return null;
     var node=document.createElement("p");
     node.setAttribute("data-atmospace-runtime-message","");
+    node.setAttribute("role","status");
+    node.setAttribute("aria-live","polite");
     node.hidden=true;
     node.style.cssText="display:none;margin:12px 0 0;color:#991b1b;font-size:14px;line-height:1.45;font-weight:700;text-align:center;";
     firstButton.insertAdjacentElement("afterend",node);
@@ -921,7 +937,7 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
   }
 
   function setRegistrationState(state){
-    var canContinue=state==="ready"&&atmospaceReady&&quizCompleted&&registrationUrl;
+    var canContinue=state==="ready"&&atmospaceReady&&(!isQuizRequired()||quizCompleted)&&registrationUrl;
     document.querySelectorAll(registrationSelector).forEach(function(button){
       button.setAttribute("data-atmospace-state",canContinue?"ready":state);
       if(canContinue){
@@ -935,7 +951,7 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
   }
 
   function syncRegistrationState(){
-    if(atmospaceReady&&quizCompleted&&registrationUrl)setRegistrationState("ready");
+    if(atmospaceReady&&(!isQuizRequired()||quizCompleted)&&registrationUrl)setRegistrationState("ready");
     else if(initFailed)setRegistrationState("error");
     else if(atmospaceReady)setRegistrationState("waiting-quiz");
     else setRegistrationState("loading");
@@ -964,6 +980,7 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
     if(quizStartSent)return;
     quizStartSent=true;
     sendEvent("quiz_start_click");
+    reachGoal("quiz_start_click");
   }
 
   function markQuestionAnswered(event){
@@ -979,8 +996,15 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
     quizCompleted=true;
     sendEvent("quiz_completed");
     reachGoal("quiz_completed");
+    markOfferViewed();
     syncRegistrationState();
     if(initFailed)setRuntimeMessage(runtimeErrorMessage,true);
+  }
+
+  function markOfferViewed(){
+    if(offerViewSent)return;
+    offerViewSent=true;
+    reachGoal("offer_view");
   }
 
   document.addEventListener("atmospace:quiz-start",markQuizStarted);
@@ -1001,15 +1025,14 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
     var registrationLink=event.target&&event.target.closest?event.target.closest(registrationSelector):null;
     if(!registrationLink)return;
     event.preventDefault();
-    if(!registrationUrl||!atmospaceReady||!quizCompleted||registrationNavigationStarted){
+    if(!registrationUrl||!atmospaceReady||(isQuizRequired()&&!quizCompleted)||registrationNavigationStarted){
       if(initFailed)setRuntimeMessage(runtimeErrorMessage,true);
       return;
     }
 
     registrationNavigationStarted=true;
     sendEvent("registration_started");
-    reachGoal("registration_started");
-    window.location.assign(registrationUrl);
+    reachGoal("registration_started",function(){window.location.assign(registrationUrl);});
   },true);
 
   function failInit(canRetry){
@@ -1066,6 +1089,7 @@ function buildAtmospaceRuntimeScript({ publicLandingKey, counterId, landingName,
     syncRegistrationState();
     ensureMetrika();
     sendLandingViewOnce();
+    if(!isQuizRequired())markOfferViewed();
     initRuntime();
   }
 
@@ -1182,7 +1206,7 @@ function validateAtmospaceEmbedCode({ embedCode, publicLandingKey, counterId, la
   if (!/function startRuntime\(\)\{[\s\S]{0,700}?initRuntime\(\);/.test(runtime)) {
     errors.push('init_on_page_open_missing');
   }
-  if (!runtime.includes('atmospaceReady&&quizCompleted&&registrationUrl')) {
+  if (!runtime.includes('isQuizRequired') || !runtime.includes('!isQuizRequired()||quizCompleted')) {
     errors.push('registration_gate_contract_invalid');
   }
   if (runtime.includes('sessionStorage') || runtime.includes('localStorage')) {
@@ -1206,7 +1230,7 @@ function validateAtmospaceEmbedCode({ embedCode, publicLandingKey, counterId, la
   if (!runtime.includes('advertising_params')) errors.push('advertising_params_missing');
 
   const browserMetrikaGoals = Array.from(runtime.matchAll(/reachGoal\("([^"]+)"/g), (match) => match[1]);
-  const requiredBrowserMetrikaGoals = ['landing_view', 'quiz_completed', 'registration_started'];
+  const requiredBrowserMetrikaGoals = ['landing_view', 'quiz_start_click', 'quiz_completed', 'offer_view', 'registration_started'];
   requiredBrowserMetrikaGoals.forEach((goalName) => {
     if (browserMetrikaGoals.filter((candidate) => candidate === goalName).length !== 1) {
       errors.push(`metrika_goal_invalid:${goalName}`);

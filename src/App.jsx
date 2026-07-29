@@ -972,6 +972,7 @@ function buildAtmospacePrelandingTrackingScript() {
   var initCompleted = false;
   var landingOpenedSent = false;
   var landingViewSent = false;
+  var offerViewSent = false;
   var pendingClickEvents = [];
   var METRIKA_SCRIPT_URL = 'https://mc.yandex.ru/metrika/tag.js';
   var RUNTIME_ERROR_MESSAGE = 'Сейчас переход временно недоступен. Попробуйте ещё раз чуть позже.';
@@ -1119,6 +1120,9 @@ function buildAtmospacePrelandingTrackingScript() {
     if (metrikaReadyPromise) return metrikaReadyPromise;
 
     metrikaReadyPromise = new Promise(function (resolve) {
+      var hadMetrika = typeof window.ym === 'function';
+      var existingCounterId = String(window.mainMetrikaId || '').trim();
+      window.mainMetrikaId = String(metrikaCounterId);
       window.ym = window.ym || function () {
         (window.ym.a = window.ym.a || []).push(arguments);
       };
@@ -1126,15 +1130,22 @@ function buildAtmospacePrelandingTrackingScript() {
       window.__atmospaceMetrikaInited = window.__atmospaceMetrikaInited || {};
       if (!window.__atmospaceMetrikaInited[metrikaCounterId]) {
         window.__atmospaceMetrikaInited[metrikaCounterId] = true;
-        window.ym(metrikaCounterId, 'init', {
-          clickmap: true,
-          trackLinks: true,
-          accurateTrackBounce: true,
-          webvisor: true
-        });
+        if (!hadMetrika || !existingCounterId || existingCounterId !== String(metrikaCounterId)) {
+          window.ym(metrikaCounterId, 'init', {
+            clickmap: true,
+            trackLinks: true,
+            accurateTrackBounce: true,
+            webvisor: true
+          });
+        }
       }
 
-      var existing = document.querySelector('script[src="' + METRIKA_SCRIPT_URL + '"]');
+      if (hadMetrika) {
+        resolve(true);
+        return;
+      }
+
+      var existing = document.querySelector('script[src*="mc.yandex.ru/metrika/tag"]');
       if (existing) {
         if (existing.getAttribute('data-atmospace-loaded') === 'true') {
           resolve(true);
@@ -1212,6 +1223,8 @@ function buildAtmospacePrelandingTrackingScript() {
     if (!firstLink) return null;
     node = document.createElement('p');
     node.setAttribute('data-atmospace-runtime-message', '');
+    node.setAttribute('role', 'status');
+    node.setAttribute('aria-live', 'polite');
     node.hidden = true;
     node.style.cssText = 'display:none;margin:12px 0 0;color:#b91c1c;font-size:14px;line-height:1.45;font-weight:800;text-align:center;';
     firstLink.insertAdjacentElement('afterend', node);
@@ -1276,6 +1289,7 @@ function buildAtmospacePrelandingTrackingScript() {
     if (quizStartSent) return;
     quizStartSent = true;
     sendEvent('quiz_start_click');
+    reachGoal('quiz_start_click');
   }
 
   function markQuestionAnswered(index) {
@@ -1293,6 +1307,13 @@ function buildAtmospacePrelandingTrackingScript() {
     quizCompleted = true;
     sendEvent('quiz_completed');
     reachGoal('quiz_completed');
+    markOfferViewed();
+  }
+
+  function markOfferViewed() {
+    if (offerViewSent) return;
+    offerViewSent = true;
+    reachGoal('offer_view');
   }
 
   document.addEventListener('atmospace:quiz-start', markQuizStarted);
@@ -1459,10 +1480,9 @@ function buildAtmospacePrelandingTrackingScript() {
     }
     registrationNavigationStarted = true;
     sendEvent('registration_started');
-    reachGoal('registration_started');
-    window.setTimeout(function () {
+    reachGoal('registration_started', function () {
       window.location.assign(registrationUrl);
-    }, 180);
+    });
   }, true);
 
   function sendLandingOpenedOnce() {
@@ -1517,6 +1537,7 @@ function buildAtmospacePrelandingTrackingScript() {
     setRegistrationState('loading');
     var inlineQuiz = document.querySelector('[data-atmospace-inline-quiz]');
     if (inlineQuiz) setupInlineQuiz(inlineQuiz);
+    else markOfferViewed();
     ensureMetrikaReady();
     if (!landingViewSent) {
       landingViewSent = true;
@@ -4355,6 +4376,8 @@ function renderCoreMethodInlinePrelanding({ templateId, content, projectData, la
   return `${buildAtmospaceHeadConfig({ projectData, ...(landingMeta || {}) })}
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800;900&display=swap');
+html,body{overflow-x:hidden}
+@supports(overflow:clip){html,body{overflow-x:clip}}
 #fh-preland-root{--atm-bg:#f5f8fc;--atm-ink:#0b1324;--atm-muted:#526176;--atm-accent:#ef6c33;--atm-accent2:#f4b942;--atm-deep:#111d31;--atm-line:rgba(37,55,83,.14);--atm-hero-bg:#07111f;--atm-hero-overlay:linear-gradient(90deg,#07111f 0%,#07111f 27%,rgba(7,17,31,.94) 42%,rgba(7,17,31,.52) 65%,rgba(7,17,31,.15) 100%),linear-gradient(180deg,rgba(4,10,19,.04),rgba(4,10,19,.34));width:100vw;min-height:100vh;margin-left:calc(50% - 50vw);margin-right:calc(50% - 50vw);overflow:hidden;background:var(--atm-bg);color:var(--atm-ink);font-family:'Manrope',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;-webkit-font-smoothing:antialiased}
 #fh-preland-root.atm-v1-blue{--atm-accent:#2576f3;--atm-accent2:#39b7e8;--atm-deep:#0a1d39;--atm-hero-bg:#07182d;--atm-hero-overlay:linear-gradient(90deg,#07182d 0%,#07182d 27%,rgba(7,24,45,.94) 42%,rgba(7,24,45,.52) 65%,rgba(7,24,45,.14) 100%),linear-gradient(180deg,rgba(3,13,27,.04),rgba(3,13,27,.34))}
 #fh-preland-root.atm-v1-green{--atm-accent:#1aaa75;--atm-accent2:#a6d34b;--atm-deep:#0c2923;--atm-hero-bg:#071f1a;--atm-hero-overlay:linear-gradient(90deg,#071f1a 0%,#071f1a 27%,rgba(7,31,26,.94) 42%,rgba(7,31,26,.52) 65%,rgba(7,31,26,.14) 100%),linear-gradient(180deg,rgba(2,18,14,.04),rgba(2,18,14,.34))}
@@ -5374,6 +5397,8 @@ function renderStaticInsightPrelanding({
   --si-bg:${theme.bg};--si-panel:${theme.panel};--si-soft:${theme.soft};--si-accent:${theme.accent};--si-accent2:${theme.accent2};--si-text:${theme.text};--si-muted:${theme.muted};--si-line:${theme.line};
   width:100vw;min-height:100svh;margin-left:calc(50% - 50vw);margin-right:calc(50% - 50vw);overflow:hidden;background:var(--si-bg);color:var(--si-text);font-family:'Manrope',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;letter-spacing:0
 }
+html,body{overflow-x:hidden}
+@supports(overflow:clip){html,body{overflow-x:clip}}
 #fh-preland-root.fh-si26 a{color:inherit;text-decoration:none}
 #fh-preland-root .fh-si-shell{width:min(1180px,calc(100% - 32px));margin:0 auto}
 #fh-preland-root .fh-si-hero{min-height:100svh;display:grid;grid-template-columns:minmax(0,1fr) minmax(390px,.86fr);gap:46px;align-items:center;padding:46px 0}
@@ -5398,6 +5423,10 @@ function renderStaticInsightPrelanding({
 #fh-preland-root .fh-si-final h2{margin:0 0 14px;font-size:clamp(34px,4.4vw,58px);line-height:1.06;font-weight:900;letter-spacing:0;text-wrap:balance}
 #fh-preland-root .fh-si-final p{margin:0;color:var(--si-muted);font-size:17px;line-height:1.55;font-weight:600}
 #fh-preland-root .fh-si-legal{margin:18px auto 0;color:var(--si-muted);font-size:11px;line-height:1.5;text-align:center}
+#fh-preland-root .fh-si-footer{padding:24px 0;border-top:1px solid var(--si-line);color:var(--si-muted);font-size:12px;line-height:1.5}
+#fh-preland-root .fh-si-footer-inner{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}
+#fh-preland-root .fh-si-footer-links{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:16px}
+#fh-preland-root .fh-si-footer a{color:var(--si-text);text-decoration:underline;text-underline-offset:3px}
 @media(max-width:900px){
   #fh-preland-root .fh-si-hero,#fh-preland-root .fh-si-final-inner{grid-template-columns:1fr}
   #fh-preland-root .fh-si-hero{min-height:100svh;grid-template-rows:minmax(190px,30svh) auto;gap:18px;align-content:center;padding:14px 0 22px}
@@ -5417,6 +5446,8 @@ function renderStaticInsightPrelanding({
   #fh-preland-root .fh-si-cards{grid-template-columns:1fr}
   #fh-preland-root .fh-si-card{min-height:auto}
   #fh-preland-root .fh-si-final-inner{padding:24px}
+  #fh-preland-root .fh-si-footer-inner{flex-direction:column}
+  #fh-preland-root .fh-si-footer-links{justify-content:flex-start}
 }
 </style>
 <div id="fh-preland-root" class="fh-si26 ${isBarrier ? 'fh-si-barrier' : isPersonal ? 'fh-si-personal' : 'fh-si-direction'}">
@@ -5443,6 +5474,15 @@ function renderStaticInsightPrelanding({
     </div>
     <p class="fh-si-legal">Регистрация и согласие выполняются на защищённой странице Atmospace.</p>
   </section>
+  <footer class="fh-si-footer">
+    <div class="fh-si-shell fh-si-footer-inner">
+      <span>Материал носит информационный характер. Результат зависит от действий участника.</span>
+      <nav class="fh-si-footer-links" aria-label="Юридическая информация">
+        <a href="https://modernisto.ru/politics" target="_blank" rel="noopener noreferrer">Политика конфиденциальности</a>
+        <a href="https://modernisto.ru/approval" target="_blank" rel="noopener noreferrer">Согласие на обработку данных</a>
+      </nav>
+    </div>
+  </footer>
 </div>
 ${buildAtmospacePrelandingTrackingScript()}`;
 }
@@ -5766,7 +5806,7 @@ function validateAtmospaceTildaHtml(html = '', config = {}, options = {}) {
     errors.push('Событие ответа квиза не соответствует текущему контракту.');
   }
   const browserMetrikaGoals = Array.from(source.matchAll(/\breachGoal\(\s*['"]([^'"]+)['"]/g), (match) => match[1]);
-  const expectedBrowserMetrikaGoals = ['landing_view', 'quiz_completed', 'registration_started'];
+  const expectedBrowserMetrikaGoals = ['landing_view', 'quiz_start_click', 'quiz_completed', 'offer_view', 'registration_started'];
   const unexpectedBrowserMetrikaGoals = browserMetrikaGoals.filter((goalName) => !expectedBrowserMetrikaGoals.includes(goalName));
   if (unexpectedBrowserMetrikaGoals.length || expectedBrowserMetrikaGoals.some((goalName) => !browserMetrikaGoals.includes(goalName))) {
     errors.push('Набор браузерных целей Метрики не соответствует текущей версии лендинга.');
@@ -6963,6 +7003,9 @@ export default function Constructor() {
                   <h2 className={`text-xl font-black ${text}`}>Режим генерации предлендинга</h2>
                   <p className={`text-sm ${dark ? 'text-red-100' : 'text-red-900'}`}>
                     Доступны два формата предлендинга: 1 и 6. Каждый берёт заголовок и описание клиента как основу, собирает смысловые блоки без брендов и готовит HTML для вставки в Tilda.
+                  </p>
+                  <p className={`mt-2 text-xs font-bold ${dark ? 'text-red-100' : 'text-red-900'}`}>
+                    Для честного A/B-сравнения публикуйте форматы 1 и 6 с разными названием и кодом рекламного лендинга из Atmospace. Один код нельзя использовать как две независимые вариации.
                   </p>
                 </div>
               </div>

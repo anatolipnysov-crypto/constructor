@@ -104,8 +104,17 @@ function assertFinalRuntimeContract(name, runtime) {
   );
   const browserMetrikaGoals = literalCalls(runtime, 'reachGoal').sort();
   expect(
-    JSON.stringify(browserMetrikaGoals) === JSON.stringify(['landing_view', 'quiz_completed', 'registration_started'].sort()),
-    `${name}: browser Metrika must receive only landing_view, quiz_completed and registration_started`,
+    JSON.stringify(browserMetrikaGoals) === JSON.stringify(['landing_view', 'quiz_start_click', 'quiz_completed', 'offer_view', 'registration_started'].sort()),
+    `${name}: browser Metrika must receive the live-compatible funnel goal set`,
+  );
+  expect(runtime.includes('window.mainMetrikaId'), `${name}: runtime must reuse the native Tilda counter identity`);
+  expect(runtime.includes('existingCounterId'), `${name}: runtime must detect an already initialized Tilda counter`);
+  expect(runtime.includes('script[src*="mc.yandex.ru/metrika/tag"]'), `${name}: runtime must recognize an existing Metrika loader`);
+  expect(
+    name === 'frontend'
+      ? runtime.includes('else markOfferViewed()')
+      : runtime.includes('!isQuizRequired()||quizCompleted'),
+    `${name}: direct-registration formats must not be blocked by a missing quiz`,
   );
   expect(
     hasRegistrationStartedHandoff(runtime),

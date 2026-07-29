@@ -121,6 +121,8 @@ const insightRenderer = sliceBetween(
   'data-atmospace-first-fold',
   'data-atmospace-first-fold-cta',
   "renderAtmospaceRegistrationButton('fh-si-cta')",
+  'https://modernisto.ru/politics',
+  'https://modernisto.ru/approval',
   'buildAtmospacePrelandingTrackingScript'
 ].forEach((snippet) => {
   assert(insightRenderer.includes(snippet), `Format 6 must include ${snippet}`);
@@ -241,6 +243,10 @@ assert(!source.includes('for (let index = 0; index < specs.length; index += 1)')
 assert(
   source.includes("const isCoreMethod = normalizedMode === 'templateStage';"),
   'Format 1 image generation must use the normalized mode and its masculine high-contrast prompt.'
+);
+assert(
+  source.includes('Один код нельзя использовать как две независимые вариации.'),
+  'Constructor must warn operators to separate Atmospace codes for Format 1/6 A/B attribution.'
 );
 
 [
