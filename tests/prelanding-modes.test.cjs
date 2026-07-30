@@ -5,6 +5,8 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const source = fs.readFileSync(path.join(root, 'src', 'App.jsx'), 'utf8');
 const bannerStudio = fs.readFileSync(path.join(root, 'src', 'components', 'AIBannerStudio.jsx'), 'utf8');
+const aiServerSource = fs.readFileSync(path.join(root, 'ai-server.js'), 'utf8');
+const workerSource = fs.readFileSync(path.join(root, 'cloudflare-api-worker.js'), 'utf8');
 
 function sliceBetween(text, startSnippet, endSnippet) {
   const start = text.indexOf(startSnippet);
@@ -45,13 +47,41 @@ assert(source.includes('Доступны два формата предленд�
 const fixedQuiz = sliceBetween(source, 'const ATMOSPACE_MINI_QUIZ = Object.freeze([', ']);');
 assert((fixedQuiz.match(/title:/g) || []).length === 4, 'Format 1 must contain exactly four fixed questions.');
 [
-  'Сколько лет ты уже говоришь себе',
-  'Если завтра тебя не станет',
-  'Представь прошло 5 лет',
-  'Каким мужчиной ты себя видишь прямо сейчас'
-].forEach((question) => {
-  assert(fixedQuiz.includes(question), `Fixed quiz must contain: ${question}`);
+  'Сколько лет ты уже говоришь себе: «Ща,-ща, ещё немного — и всё изменится»?',
+  'Меньше 1 года',
+  '1-3 года',
+  '3-5 лет',
+  'Больше 5 лет',
+  'Если завтра тебя не станет, что самое неприятное про себя слышать?',
+  'Мда, он так много хотел, но так ничего и не сделал.',
+  'Обещал-обещал семье другое будущее, но так и не вывез.',
+  'Он не оставил семье ничего кроме долгов.',
+  'Он так и не стал тем, кем всегда хотел быть.',
+  'Представь прошло 5 лет. Ничего не изменилось. Что тяжелее всего признать?',
+  'Я так и не смог ничего добиться, просто сдался и смирился.',
+  'Я всё также работаю на других и обслуживаю чужую жизнь за зарплату.',
+  'Ребёнок вырос, но видит во мне НЕ авторитета, а уставшего пузатого скуфа, обиженного на жизнь.',
+  'Я вижу как другие живут так как хотел я, а у меня больше нет сил на новые попытки. Осталась только боль и обида, которую я каждый вечер заливаю пивом.',
+  'Каким мужчиной ты себя видишь прямо сейчас?',
+  'Всё норм, я не сдался, я знаю что смогу. Я действую.',
+  'Ходячая папка с планами, которые не реализовались и хрен знает реализуются ли.',
+  'Во мне есть силы, есть потенциал, но из-за кучи провалов я стал терять веру в себя.',
+  'Остались только обещания себе и семье, которые я так и не выполнил.'
+].forEach((copy) => {
+  assert(fixedQuiz.includes(copy), `Fixed quiz must contain the approved copy: ${copy}`);
 });
+const fixedQuizOptionGroups = [...fixedQuiz.matchAll(/options:\s*\[([\s\S]*?)\]/g)];
+assert.equal(fixedQuizOptionGroups.length, 4, 'Every fixed question must expose one answer group.');
+fixedQuizOptionGroups.forEach((match, questionIndex) => {
+  const options = [...match[1].matchAll(/'([^']+)'/g)].map((optionMatch) => optionMatch[1]);
+  assert.equal(options.length, 4, `Question ${questionIndex + 1} must contain exactly four answers.`);
+});
+
+const fixedOfferRenderer = sliceBetween(
+  source,
+  'function renderCoreMethodFixedOffer',
+  'function renderCoreMethodInlinePrelanding'
+);
 
 const formatOneRenderer = sliceBetween(
   source,
@@ -61,17 +91,69 @@ const formatOneRenderer = sliceBetween(
 [
   'renderCoreMethodMiniQuiz()',
   'renderAtmospaceQuizButton',
-  "renderAtmospaceQuizButton('atm-v1-primary', 'Пройти тест')",
+  "renderAtmospaceQuizButton('atm-v1-primary', 'Пройти мини-тест')",
   'data-atmospace-first-fold',
   'data-atmospace-first-fold-cta',
+  'data-atmospace-format1-stage="start"',
   '--atm-hero-bg:#07111f',
   'background:var(--atm-hero-bg)',
   'color:#fff',
-  'renderCoreMethodCompactOffer',
+  'renderCoreMethodFixedOffer',
   'buildAtmospacePrelandingTrackingScript'
 ].forEach((snippet) => {
   assert(formatOneRenderer.includes(snippet), `Format 1 must include ${snippet}`);
 });
+assert(!source.includes('renderCoreMethodCompactOffer'), 'Format 1 must not keep the rejected AI-written compact offer renderer.');
+[
+  'Ты уже не первый год пытаешься перейти на новый уровень:',
+  'увеличить доход',
+  'найти своё дело',
+  'Но что бы ты ни делал - результата <strong>НЕТ</strong>.',
+  'Сколько ты ещё так сможешь, пока окончательно не выгоришь?',
+  'Готов увидеть <strong>НАСТОЯЩУЮ</strong> причину твоих проблем?'
+].forEach((snippet) => {
+  assert(formatOneRenderer.includes(snippet), `Format 1 start screen must preserve: ${snippet}`);
+});
+assert.deepEqual(
+  [...formatOneRenderer.matchAll(/content\?\.([A-Za-z0-9_]+)/g)].map((match) => match[1]).sort(),
+  ['description', 'title', 'titleHtml'],
+  'Only headline and description may enter visible Format 1 copy.'
+);
+[
+  'Итак, почему ты не можешь реализовать лучший вариант своей жизни...',
+  'Ты не беспомощный. Не тупой.',
+  'И каждый день тебя долбит одна из этих мыслей:',
+  'И ты можешь сделать ещё 100+ попыток, но так и НЕ пробьёшь свой уровень.',
+  'Главная причина по которой мы желаем ОДНО, а получаем ДРУГОЕ - рассинхрон психики.',
+  'РАССИНХРОН происходит именно в бессознательной части психики.',
+  'ВСЁ ЭТО - работа ТВОИХ бессознательных программ.',
+  'Их можно ПЕРЕПИСАТЬ НА НУЖНЫЕ.',
+  'Подключайся к АТМОСФЕРЕ.',
+  'Смена программ - переформатирование',
+  'Затем займёмся базовым доходом',
+  'Атмосфера - это не курс, не тренинг. Это живые люди.',
+  'Любая цель реализуется максимум за 1 год.',
+  'Форма регистрации',
+  'data-atmospace-registration-section',
+  'data-atmospace-runtime-message'
+].forEach((snippet) => {
+  assert(fixedOfferRenderer.includes(snippet), `Format 1 fixed offer must preserve: ${snippet}`);
+});
+assert(!fixedOfferRenderer.includes('content?.'), 'The fixed offer must not read generated campaign copy.');
+[
+  'Что станет яснее после разбора',
+  'Исходная точка',
+  'Главный вопрос',
+  'Первый тест',
+  'Откройте разбор своей ситуации'
+].forEach((snippet) => {
+  assert(!fixedOfferRenderer.includes(snippet), `Rejected generated offer copy must not return: ${snippet}`);
+});
+assert.deepEqual(
+  [...source.matchAll(/data-atmospace-format1-stage="([^"]+)"/g)].map((match) => match[1]),
+  ['quiz', 'offer', 'start'],
+  'Format 1 must expose exactly the start, quiz and offer stages.'
+);
 assert(!formatOneRenderer.includes('.atm-v1-hero{position:relative;min-height:min(900px,100svh)'), 'Format 1 must not regress to the pale split hero.');
 
 const imageSpecBuilder = sliceBetween(
@@ -88,10 +170,27 @@ const imageSpecBuilder = sliceBetween(
   'A person is optional and must never be the automatic default',
   'face and torso centered around 68-74 percent of frame width',
   "persona: 'mixed'",
-  "visualMode: 'metaphor'"
+  "visualMode: 'metaphor'",
+  'const visualSeedInput = [',
+  'const semanticRotation = hashText(visualSeedInput);',
+  'Role-specific casting fingerprints:',
+  'const semanticHeroScene = routeScenes[0]',
+  'Casting fingerprint: ${heroFingerprint.prompt}',
+  'Casting fingerprint: ${valueFingerprint.prompt}',
+  'Casting fingerprint: ${ctaFingerprint.prompt}',
+  'If the semantic scene names a woman, couple or group, adapt it to this one different adult man.',
+  'variationKey: `${variantSeed}|value|${valueFingerprint.id}`',
+  'variationKey: `${variantSeed}|cta|${ctaFingerprint.id}`'
 ].forEach((snippet) => {
   assert(imageSpecBuilder.includes(snippet), `Format 1 image contract must include ${snippet}`);
 });
+assert(!imageSpecBuilder.includes('Date.now()'), 'Image specs must not use wall-clock randomness as a fake visual seed.');
+assert(!imageSpecBuilder.includes('Math.random()'), 'Image specs must be reproducible from semantic and rotation inputs.');
+assert.equal(
+  (source.match(/id: '(?:shaved-charcoal-35mm|curly-navy-50mm|silver-olive-wide|fair-rust-documentary|buzz-black-overhead|auburn-denim-profile)'/g) || []).length,
+  6,
+  'Format 1 must rotate through six explicit casting and camera fingerprints.'
+);
 
 [
   '.atm-v1-hero-visual{position:absolute;z-index:0;inset:0 0 0 30%',
@@ -112,12 +211,15 @@ assert(
 );
 [
   'data-atmospace-option="${optionIndex}"',
-  'data-atmospace-result-title',
-  'data-atmospace-result-copy',
-  'Ответы остаются только в этой вкладке и никуда не отправляются.'
+  'data-atmospace-format1-stage="quiz"',
+  'Мини-тест',
+  'Здесь нет правильных ответов.',
+  'Их никто не сохраняет и не оценивает - кроме тебя.',
+  'Просто будь честен с самим собой.'
 ].forEach((snippet) => {
-  assert(formatOneQuizRenderer.includes(snippet), `Format 1 local result must include ${snippet}`);
+  assert(formatOneQuizRenderer.includes(snippet), `Format 1 fixed quiz must include ${snippet}`);
 });
+assert(!formatOneQuizRenderer.includes('data-atmospace-inline-result'), 'Format 1 must not add a fourth personalized-result stage.');
 
 const trackingRuntime = sliceBetween(
   source,
@@ -125,14 +227,19 @@ const trackingRuntime = sliceBetween(
   'function stripHtml'
 );
 [
-  'var localAnswerChoices = [];',
-  'localAnswerChoices[index] =',
   'function renderPersonalResult()',
-  "resultTitle.textContent = profile.title",
-  "resultCopy.textContent = profile.copy"
+  'var profiles = [',
+  'var durationLabels =',
+  'data-atmospace-result-title',
+  'data-atmospace-result-copy'
 ].forEach((snippet) => {
-  assert(trackingRuntime.includes(snippet), `Format 1 runtime must build its result locally: ${snippet}`);
+  assert(!trackingRuntime.includes(snippet), `Format 1 runtime must not generate unapproved result copy: ${snippet}`);
 });
+assert.match(
+  trackingRuntime,
+  /markQuizCompleted\(\);\s*revealOffer\(\);\s*var offer = document\.querySelector\('\[data-atmospace-offer\]'\);\s*if \(offer\) offer\.scrollIntoView/,
+  'The fourth answer must open and scroll directly to the fixed offer.'
+);
 assert(!trackingRuntime.includes('localStorage'), 'Format 1 answers must not be persisted in localStorage.');
 assert(!trackingRuntime.includes('sessionStorage'), 'Format 1 answers must not be persisted in sessionStorage.');
 assert.doesNotMatch(
@@ -164,6 +271,49 @@ assert(insightRenderer.includes('.fh-si-media{order:0'), 'Format 6 mobile media 
 assert(!insightRenderer.includes('.fh-si-media{order:-1'), 'Format 6 must not place mobile media before its CTA.');
 assert(formatOneRenderer.includes('atm-v1-mobile-cta'), 'Format 1 must expose a mobile CTA immediately after the headline.');
 assert(formatOneRenderer.includes('4 вопроса · около минуты · без телефона'), 'Format 1 mobile CTA must explain the short flow.');
+[
+  '.atm-v1-quiz[data-atmospace-quiz-active="true"] .atm-v1-quiz-intro{display:none}',
+  '.atm-v1-quiz-band{min-height:100svh',
+  '.atm-v1-quiz[data-atmospace-quiz-active="true"] .atm-v1-options{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}',
+  '.atm-v1-quiz[data-atmospace-quiz-active="true"] .atm-v1-back{display:none}'
+].forEach((snippet) => {
+  assert(formatOneRenderer.includes(snippet), `Format 1 mobile quiz must include ${snippet}`);
+});
+assert(
+  trackingRuntime.includes("root.setAttribute('data-atmospace-quiz-active', 'true');"),
+  'Starting the quiz must activate the compact viewport layout.'
+);
+assert.match(
+  trackingRuntime,
+  /root\.__atmospaceStart\s*=\s*function[\s\S]{0,240}showQuestion\(0\)/,
+  'The CTA must open question one immediately.'
+);
+assert.match(
+  trackingRuntime,
+  /if \(index \+ 1 < panels\.length\) \{\s*showQuestion\(index \+ 1\);/,
+  'Selecting an answer must advance directly to the next question.'
+);
+
+[
+  ['local image API', aiServerSource],
+  ['Cloudflare Worker', workerSource]
+].forEach(([name, backendSource]) => {
+  const imageHandler = sliceBetween(
+    backendSource,
+    name === 'local image API' ? 'async function handleGenerateImage(req, res)' : 'async function handleGenerateImage(env, request)',
+    name === 'local image API' ? 'async function handlePublishImage' : 'export default'
+  );
+  assert(
+    imageHandler.includes("const variationKey = String(input.variationKey || '')"),
+    `${name} must consume the visual variation key.`
+  );
+  assert(imageHandler.includes('const variationLine = variationKey'), `${name} must turn the key into a prompt contract.`);
+  assert.equal(
+    (imageHandler.match(/\$\{variationLine\}/g) || []).length,
+    2,
+    `${name} must pass the variation contract to both image prompt modes.`
+  );
+});
 
 const dispatch = sliceBetween(source, 'function renderPrelandingHtml', 'function countMatches');
 [
@@ -200,6 +350,25 @@ assert(generatedPrelandingFlow.includes("prelandingMode: 'coreMethod'"), 'Format
 assert(generatedPrelandingFlow.includes("prelandingMode: 'barrierProfileQuiz'"), 'Format 6 must call the barrier renderer.');
 assert(!generatedPrelandingFlow.includes('if (prelandingSync?.fromBanner)'), 'Banner handoff must not bypass the selected format.');
 assert(!generatedPrelandingFlow.includes('overrides: prelandingSync'), 'Generated HTML must not fall through to a legacy renderer override.');
+const generatedFormatOneRoute = sliceBetween(
+  generatedPrelandingFlow,
+  "if (normalizedManualPrelandingMode === 'templateStage') {",
+  'const insightPreset ='
+);
+assert(generatedFormatOneRoute.includes('description: textLead'), 'Format 1 must pass the entered description through an explicit slot.');
+[
+  'resolveClientPrelandingLogic(',
+  'cards:',
+  'valueTitle:',
+  'valueItems:',
+  'actionTitle:',
+  'actionSubtitle:',
+  'ctaLead:',
+  'painItems:',
+  'trustSmall:'
+].forEach((snippet) => {
+  assert(!generatedFormatOneRoute.includes(snippet), `Format 1 visible copy must not be generated from ${snippet}`);
+});
 
 assert(
   source.includes("В формате без мини-теста найдена видимая квиз-разметка. Используйте прямую регистрацию Atmospace."),
@@ -314,6 +483,11 @@ const built = fs.readFileSync(path.join(distAssetsDir, bundle), 'utf8');
   '/api/landing-runtime/click',
   'data-atmospace-registration-link',
   'data-atmospace-question-count="4"',
+  'data-atmospace-format1-stage="start"',
+  'data-atmospace-format1-stage="quiz"',
+  'data-atmospace-format1-stage="offer"',
+  'Ты уже не первый год пытаешься перейти на новый уровень:',
+  'И ты можешь сделать ещё 100+ попыток, но так и НЕ пробьёшь свой уровень.',
   'Проверка пройдена. HTML готов к копированию.'
 ].forEach((snippet) => {
   assert(built.includes(snippet), `Built bundle must contain ${snippet}`);

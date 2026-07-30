@@ -1336,42 +1336,7 @@ function buildAtmospacePrelandingTrackingScript() {
     var panels = Array.prototype.slice.call(root.querySelectorAll('[data-atmospace-question]'));
     var counter = root.querySelector('[data-atmospace-quiz-counter]');
     var progress = root.querySelector('[data-atmospace-quiz-progress]');
-    var result = root.querySelector('[data-atmospace-inline-result]');
-    var resultTitle = root.querySelector('[data-atmospace-result-title]');
-    var resultCopy = root.querySelector('[data-atmospace-result-copy]');
-    var localAnswerChoices = [];
     var index = 0;
-
-    function renderPersonalResult() {
-      var profiles = [
-        {
-          title: 'Опора уже есть — сейчас важнее выбрать один фокус',
-          copy: 'Ты не отказался от действий. Рабочая гипотеза: результат тормозит не отсутствие силы, а распыление между несколькими попытками.'
-        },
-        {
-          title: 'Главный разрыв сейчас — между планом и выполнением',
-          copy: 'Идей и намерений достаточно. Рабочая гипотеза: нужен один короткий цикл действия, который можно закончить и проверить в реальности.'
-        },
-        {
-          title: 'Силы есть, но прошлые неудачи снижают темп',
-          copy: 'Потенциал никуда не исчез. Рабочая гипотеза: следующий шаг должен быть достаточно конкретным, чтобы вернуть опору на собственный результат.'
-        },
-        {
-          title: 'Давление невыполненных обещаний мешает начать спокойно',
-          copy: 'Чем больше внутреннего долга, тем тяжелее новый рывок. Рабочая гипотеза: сначала нужен один выполнимый шаг без нового громкого обещания.'
-        }
-      ];
-      var durationLabels = ['меньше года', 'от одного до трёх лет', 'от трёх до пяти лет', 'больше пяти лет'];
-      var profileIndex = Number(localAnswerChoices[3]);
-      var profile = profiles[Number.isInteger(profileIndex) && profiles[profileIndex] ? profileIndex : 0];
-      var duration = durationLabels[Number(localAnswerChoices[0])] || '';
-      if (resultTitle) resultTitle.textContent = profile.title;
-      if (resultCopy) {
-        resultCopy.textContent = profile.copy + (duration
-          ? ' По первому ответу этот сценарий длится ' + duration + ' — поэтому важен шаг, который можно завершить сейчас.'
-          : ' Начни с шага, который можно завершить и проверить сейчас.');
-      }
-    }
 
     function showQuestion(nextIndex) {
       index = Math.max(0, Math.min(nextIndex, panels.length - 1));
@@ -1385,8 +1350,6 @@ function buildAtmospacePrelandingTrackingScript() {
       var option = event.target && event.target.closest ? event.target.closest('[data-atmospace-option]') : null;
       if (!option || !root.contains(option)) return;
       event.preventDefault();
-      var optionIndex = Number(option.getAttribute('data-atmospace-option'));
-      localAnswerChoices[index] = Number.isInteger(optionIndex) && optionIndex >= 0 ? optionIndex : 0;
       markQuestionAnswered(index);
       if (index + 1 < panels.length) {
         showQuestion(index + 1);
@@ -1394,12 +1357,12 @@ function buildAtmospacePrelandingTrackingScript() {
         return;
       }
       panels.forEach(function (panel) { panel.hidden = true; });
-      renderPersonalResult();
-      if (result) result.hidden = false;
       if (counter) counter.textContent = String(panels.length) + ' / ' + String(panels.length);
       if (progress) progress.style.width = '100%';
       markQuizCompleted();
       revealOffer();
+      var offer = document.querySelector('[data-atmospace-offer]');
+      if (offer) offer.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
 
     root.addEventListener('click', function (event) {
@@ -1410,8 +1373,6 @@ function buildAtmospacePrelandingTrackingScript() {
     });
 
     root.__atmospaceStart = function () {
-      localAnswerChoices = [];
-      if (result) result.hidden = true;
       showQuestion(0);
     };
   }
@@ -2045,6 +2006,33 @@ const PRELANDING_VISUAL_ROUTES = [
   }
 ];
 
+const CORE_METHOD_HERO_FINGERPRINTS = Object.freeze([
+  {
+    id: 'shaved-charcoal-35mm',
+    prompt: 'Man age 34-39, shaved head, short dark stubble, charcoal overshirt, lean build; candid three-quarter 35mm frame at eye level.'
+  },
+  {
+    id: 'curly-navy-50mm',
+    prompt: 'Man age 40-46, short curly dark hair, clean-shaven face, navy field jacket, athletic-average build; close 50mm frame from a slightly low angle.'
+  },
+  {
+    id: 'silver-olive-wide',
+    prompt: 'Man age 48-55, close salt-and-pepper hair, neat full beard, olive chore jacket, broad build; wider environmental 35mm frame with strong foreground depth.'
+  },
+  {
+    id: 'fair-rust-documentary',
+    prompt: 'Man age 32-38, short fair hair, light stubble, rust knit layer under a dark coat, slim build; documentary side angle with visible hands in action.'
+  },
+  {
+    id: 'buzz-black-overhead',
+    prompt: 'Man age 42-49, dark buzz cut, moustache and short beard, black work jacket, sturdy build; high three-quarter camera angle with an active gesture, never a static portrait.'
+  },
+  {
+    id: 'auburn-denim-profile',
+    prompt: 'Man age 37-44, short auburn hair, clean-shaven face, dark denim jacket, average build; cinematic profile-to-three-quarter frame with practical movement.'
+  }
+]);
+
 function readRotationIndex(key) {
   try {
     return Number(localStorage.getItem(key) || '0') || 0;
@@ -2127,7 +2115,18 @@ function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline,
     : landingLogic.bannerPersonas?.length
       ? landingLogic.bannerPersonas
       : route.personas || ['man', 'none', 'man'];
-  const semanticRotation = Math.abs(hashText(`${route.id || ''}|${designRoute?.id || ''}|${title}|${Date.now()}|${Math.random()}`));
+  const visualSeedInput = [
+    normalizedMode,
+    templateId,
+    style || '',
+    palette || '',
+    title,
+    subtitle,
+    landingLogic.semanticId || '',
+    route.id || '',
+    designRoute?.id || ''
+  ].join('|');
+  const semanticRotation = hashText(visualSeedInput);
   const rotateItems = (items, offset) => items.map((_, index) => items[(index + offset) % items.length]);
   const semanticSceneSets = Array.isArray(landingLogic.prelandingVisualSceneSets)
     ? landingLogic.prelandingVisualSceneSets.filter(set => Array.isArray(set) && set.length >= 3)
@@ -2145,6 +2144,15 @@ function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline,
   const routePersonas = rotateItems(semanticPersonas, semanticPersonas.length ? semanticRotation % semanticPersonas.length : 0);
   const designMood = designRoute?.visualMood || 'clean premium light prelanding design';
   const isCoreMethod = normalizedMode === 'templateStage';
+  const heroFingerprint = CORE_METHOD_HERO_FINGERPRINTS[semanticRotation % CORE_METHOD_HERO_FINGERPRINTS.length];
+  const valueFingerprint = CORE_METHOD_HERO_FINGERPRINTS[(semanticRotation + 2) % CORE_METHOD_HERO_FINGERPRINTS.length];
+  const ctaFingerprint = CORE_METHOD_HERO_FINGERPRINTS[(semanticRotation + 4) % CORE_METHOD_HERO_FINGERPRINTS.length];
+  const visualFingerprint = isCoreMethod
+    ? heroFingerprint
+    : {
+        id: `semantic-${semanticRotation % 12}`,
+        prompt: `Semantic scene signature ${semanticRotation % 12}: derive the focal subject, setting and camera from the exact headline and subtitle.`
+      };
   const modeDescription = isBarrierProfile
     ? 'dark high-contrast premium barrier profile with a framed semantic scene derived from the headline; a person is optional'
     : 'premium masculine mini-test landing with one strong cinematic full-bleed first-screen story';
@@ -2158,6 +2166,9 @@ function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline,
     `Mode: ${modeDescription}`,
     `Design route: ${designRoute?.label || style || 'clean premium'}; palette: ${palette || 'soft bright'}; visual mood: ${designMood}`,
     `Current visual route: ${route.label || route.id || 'new route'}.`,
+    isCoreMethod
+      ? `Role-specific casting fingerprints: hero ${heroFingerprint.id}; value ${valueFingerprint.id}; CTA ${ctaFingerprint.id}. They are three different adult men and must never share a face, hair, clothes, build or camera treatment.`
+      : `Visual casting and composition fingerprint: ${visualFingerprint.id}. ${visualFingerprint.prompt}`,
     memoryLine,
     'No text, no letters, no numbers, no logos, no UI screenshots, no bank cards, no money stacks.',
     `Landing rules: ${CLIENT_PRELANDING_RULES.join('; ')}.`,
@@ -2167,7 +2178,7 @@ function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline,
       ? 'High-contrast premium masculine editorial photography: deep graphite, navy or forest shadows, one restrained warm accent, cinematic directional light, realistic materials and crisp focus. Never use pale pastel haze or a washed-out white page look.'
       : 'Bright clean premium lifestyle photography for a modern Russian ad landing, not gloomy, not dark, not stock-like.',
     isCoreMethod
-      ? 'The hero is an adult man age 32-48 with character and a natural focused emotion. Show him inside a meaningful action, choice or visual metaphor from the exact headline, never as a generic man in a blue shirt sitting beside a laptop.'
+      ? 'The hero is an adult man selected by the casting fingerprint, with natural focused emotion and a visibly different age band, face type, hair, clothes and camera treatment from recent generations. Show him inside a meaningful action, choice or visual metaphor from the exact headline, never as a generic man in a blue shirt sitting beside a laptop.'
       : 'The person must look alive and modern, age 32-50, visible face and natural emotion, not elderly, not tired, not overexposed.',
     isCoreMethod
       ? 'Build depth with a real location, weather, architecture, workshop, road, water, landscape or another semantically justified environment. The scene must feel specific to this headline, not like reusable office stock photography.'
@@ -2180,7 +2191,7 @@ function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline,
     route.negative ? `Negative visual repetition: ${route.negative}.` : ''
   ].join('\n');
   const imageStylePreset = designRoute?.imageStylePreset || prelandingImageStylePreset(style, palette);
-  const variantSeed = `${normalizedMode}|${templateId}|${style}|${palette}|${title}|${subtitle}|${Date.now()}|${Math.random().toString(36).slice(2, 8)}`;
+  const variantSeed = `prelanding-${semanticRotation.toString(36)}-${visualFingerprint.id}`;
   if (isBarrierProfile) {
   const routeLabel = 'static semantic barrier-profile landing about a repeating pattern and one realistic first step';
     const semanticScene = routeScenes[0]
@@ -2216,9 +2227,11 @@ function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline,
       visualPrompt: routeContext
     }];
   }
-  const heroSubject = 'hero image: one cinematic adult man actively living the exact conflict, decision or metaphor from the headline; strong posture and authentic emotion; a specific premium environment with texture and depth; no generic office desk, no plain shirt portrait, no laptop pose, no blank white interior; subject on the right third with protected darker space on the left for white HTML headline';
-  const valueSubject = `middle section image: ${routeScenes[1] || 'a different adult man in a different location confronting the real consequence of the problem or making a concrete new choice'}, cinematic documentary detail, distinct action, clothes, setting and camera angle, no repeated hero object`;
-  const ctaSubject = `final CTA image: ${routeScenes[2] || 'a different adult man moving toward a clear next step in a new outdoor, architectural or workshop setting'}, restrained confidence and relief, cinematic contrast, no repeated location or prop`;
+  const semanticHeroScene = routeScenes[0]
+    || 'one cinematic adult man actively living the exact conflict, decision or metaphor from the headline';
+  const heroSubject = `hero image semantic scene: ${semanticHeroScene}. Casting fingerprint: ${heroFingerprint.prompt} Preserve the scene's core action, place and objects, but if it names a woman, couple or group, adapt the visible protagonist to this one adult man. Strong posture and authentic emotion; a specific premium environment with texture and depth; no generic office desk, no plain shirt portrait, no laptop pose, no blank white interior; subject on the right third with protected darker space on the left for white HTML headline`;
+  const valueSubject = `middle section semantic scene: ${routeScenes[1] || 'a different adult man in a different location confronting the real consequence of the problem or making a concrete new choice'}. Casting fingerprint: ${valueFingerprint.prompt} If the semantic scene names a woman, couple or group, adapt it to this one different adult man. Cinematic documentary detail, distinct action, clothes, setting and camera angle, no repeated hero object`;
+  const ctaSubject = `final CTA semantic scene: ${routeScenes[2] || 'a different adult man moving toward a clear next step in a new outdoor, architectural or workshop setting'}. Casting fingerprint: ${ctaFingerprint.prompt} If the semantic scene names a woman, couple or group, adapt it to this one different adult man. Restrained confidence and relief, cinematic contrast, no repeated location or prop`;
 
   return [
     {
@@ -2228,7 +2241,7 @@ function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline,
       persona: isCoreMethod ? 'man' : (routePersonas[0] || 'woman'),
       visualMode: 'generatedPerson',
       stylePreset: imageStylePreset,
-      variationKey: `${variantSeed}|hero`,
+      variationKey: `${variantSeed}|hero|${heroFingerprint.id}`,
       visualPrompt: `${baseContext}\n\nROLE 1 — TRIGGERING EVENT. ${heroSubject}\nShow one clear focal problem object only. Composition: wide horizontal premium hero photo, cinematic 35mm lifestyle look, subject on the right side, generous clean space on the left, no text.`
     },
     {
@@ -2238,7 +2251,7 @@ function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline,
       persona: isCoreMethod ? 'man' : (routePersonas[1] || 'man'),
       visualMode: 'generatedPerson',
       stylePreset: imageStylePreset,
-      variationKey: `${variantSeed}|value`,
+      variationKey: `${variantSeed}|value|${valueFingerprint.id}`,
       visualPrompt: `${baseContext}\n\nROLE 2 — CONSEQUENCE OR CHANGED CHOICE. ${valueSubject}\nHard exclusion: do not show the hero problem object, washing machine, laundry room, broken appliance, repair counter, repair tools or repair estimate. Composition: horizontal editorial photo for a white rounded content section, different person, location, focal object and camera angle from hero, no text.`
     },
     {
@@ -2248,7 +2261,7 @@ function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline,
       persona: isCoreMethod ? 'man' : (routePersonas[2] || 'mixed'),
       visualMode: 'generatedPerson',
       stylePreset: imageStylePreset,
-      variationKey: `${variantSeed}|cta`,
+      variationKey: `${variantSeed}|cta|${ctaFingerprint.id}`,
       visualPrompt: `${baseContext}\n\nROLE 3 — RELIEF AND NEXT STEP. ${ctaSubject}\nHard exclusion: no broken object, no washing machine, no laundry room, no appliance, no car breakdown, no repair counter, no repair tools and no location used in hero or value. Composition: horizontal CTA photo, close but uncluttered, different person, place, action and camera angle from hero and value, no text.`
     }
   ];
@@ -4153,7 +4166,7 @@ function renderCoreMethodMiniQuiz() {
       ${questionIndex > 0 ? '<button class="atm-v1-back" type="button" data-atmospace-quiz-back>Вернуться к предыдущему вопросу</button>' : ''}
     </section>`).join('');
 
-  return `<section id="atmospace-mini-quiz" class="atm-v1-quiz-band" aria-labelledby="atm-v1-quiz-title">
+  return `<section id="atmospace-mini-quiz" class="atm-v1-quiz-band" aria-labelledby="atm-v1-quiz-title" data-atmospace-format1-stage="quiz">
     <div class="atm-v1-shell">
       <div class="atm-v1-quiz" data-atmospace-inline-quiz data-atmospace-embedded-quiz="true" data-atmospace-question-count="4">
         <div class="atm-v1-quiz-intro">
@@ -4165,13 +4178,6 @@ function renderCoreMethodMiniQuiz() {
         <div class="atm-v1-progress" aria-hidden="true"><span data-atmospace-quiz-progress></span></div>
         <p class="atm-v1-counter" data-atmospace-quiz-counter>1 / ${ATMOSPACE_MINI_QUIZ.length}</p>
         <div class="atm-v1-questions">${questions}</div>
-        <div class="atm-v1-quiz-result" data-atmospace-inline-result aria-live="polite" hidden>
-          <p class="atm-v1-kicker">Мини-тест пройден</p>
-          <h3 data-atmospace-result-title>Спасибо за честные ответы.</h3>
-          <p data-atmospace-result-copy>Сейчас появится рабочая гипотеза по выбранным ответам.</p>
-          <p class="atm-v1-result-note">Это не диагноз и не оценка личности. Ответы остаются только в этой вкладке и никуда не отправляются.</p>
-          <a class="atm-v1-primary" href="#atm-v1-offer" data-atmospace-offer-scroll>Перейти к разбору</a>
-        </div>
       </div>
     </div>
   </section>`;
@@ -4234,18 +4240,23 @@ function renderAtmospaceSharedInlineQuiz({
 </section>`;
 }
 
-function renderCoreMethodFixedOffer({ valueImage, ctaImage }) {
-  return `<div id="atm-v1-offer" data-atmospace-offer hidden>
+function renderCoreMethodFixedOffer({ description, valueImage, ctaImage }) {
+  const problemSlot = stripHtml(description || 'свою цель');
+  return `<div id="atm-v1-offer" data-atmospace-offer data-atmospace-format1-stage="offer" hidden>
     <section class="atm-v1-editorial atm-v1-editorial-dark">
       <div class="atm-v1-shell atm-v1-copy-grid">
         <div>
-          <p class="atm-v1-kicker">Почему всё ещё не получилось</p>
-          <h2>Ты не беспомощный. Не тупой. И умеешь решать сложные задачи.</h2>
+          <p class="atm-v1-kicker">Почему ты не можешь реализовать лучший вариант своей жизни</p>
+          <h2>Ты не беспомощный. Не тупой.</h2>
         </div>
         <div class="atm-v1-prose">
-          <p>Итак, почему ты не можешь реализовать лучший вариант своей жизни, при том что умеешь решать проблемы и разбираться в сложных вещах?</p>
-          <p>Ты знаешь, что в тебе есть потенциал: заниматься своим делом, иметь хороший дом, ездить на машине, которая нравится, путешествовать с семьёй без надрыва для бюджета, иметь запас денег и быть независимым.</p>
-          <p>Но сколько бы ты ни старался, в реальности происходит другое: деньги идут туго, семья не получает желаемого уровня жизни, своё дело не построено, свободы нет, накоплений недостаточно, время уходит, а очередная попытка снова не дала результата.</p>
+          <p>Итак, почему ты не можешь реализовать лучший вариант своей жизни...</p>
+          <p>...при том что ты не беспомощный. Не тупой.</p>
+          <p>Умеешь решать проблемы и разбираться в сложных вещах.</p>
+          <p>Ты знаешь, что в тебе есть потенциал:</p>
+          <ul class="atm-v1-list"><li>заниматься своим делом;</li><li>иметь свой дом или хорошую квартиру;</li><li>ездить на машине, которая нравится, а не какую хватило;</li><li>путешествовать с семьёй без надрыва для бюджета;</li><li>иметь запас денег, а лучше капитал;</li><li>быть независимым;</li></ul>
+          <p>Но сколько бы ты не старался в реальности происходит другое:</p>
+          <ul class="atm-v1-list"><li>деньги идут туго, их вечно не хватает;</li><li>семья не получает желаемого уровня жизни;</li><li>своё дело не построено;</li><li>свободы нет;</li><li>накоплений недостаточно;</li><li>время уходит;</li><li>очередная попытка не дала результата.</li></ul>
         </div>
       </div>
     </section>
@@ -4253,78 +4264,104 @@ function renderCoreMethodFixedOffer({ valueImage, ctaImage }) {
     <section class="atm-v1-editorial">
       <div class="atm-v1-shell atm-v1-copy-grid">
         <div class="atm-v1-sticky-title">
-          <p class="atm-v1-kicker">Мысли, которые возвращаются</p>
+          <p class="atm-v1-kicker">Мысли, которые возвращаются каждый день</p>
           <h2>Почему другие смогли, а я нет?</h2>
         </div>
         <div class="atm-v1-quotes">
-          <blockquote>«Может, я просто не такой способный, как о себе думаю?»</blockquote>
+          <p>И каждый день тебя долбит одна из этих мыслей:</p>
+          <blockquote>«Может я просто не такой способный, как о себе думаю?»</blockquote>
           <blockquote>«Почему я хорошо решаю чужие задачи, но не могу выстроить собственную жизнь?»</blockquote>
           <blockquote>«Сколько ещё попыток выдержу я сам и сколько выдержит моя семья?»</blockquote>
           <blockquote>«Что я скажу детям, если через пять лет всё останется так же?»</blockquote>
-          <blockquote>«А вдруг мой сегодняшний уровень - это и есть мой предел?»</blockquote>
+          <blockquote>«А вдруг мой сегодняшний уровень — это и есть мой предел?»</blockquote>
+          <div class="atm-v1-prose">
+            <p>надо найти наставника</p><p>надо найти тренд и попасть в волну</p><p>надо менять направление/работу/нишу</p><p>надо больше работать</p><p>надо...</p><p>надо...</p><p>надо...</p>
+          </div>
         </div>
       </div>
     </section>
 
-    <section class="atm-v1-visual-break">
-      <div class="atm-v1-shell">
-        <img src="${esc(valueImage)}" alt="Человек в моменте честного переосмысления своей жизни" loading="lazy" decoding="async">
-      </div>
-    </section>
+    <section class="atm-v1-visual-break"><div class="atm-v1-shell"><img src="${esc(valueImage)}" alt="Мужчина в моменте честного переосмысления своей жизни" loading="lazy" decoding="async"></div></section>
 
     <section class="atm-v1-editorial atm-v1-editorial-accent">
       <div class="atm-v1-shell atm-v1-copy-grid">
         <div>
-          <p class="atm-v1-kicker">Можно сделать ещё 100+ попыток</p>
-          <h2>Но так и не пробить свой уровень.</h2>
+          <p class="atm-v1-kicker">Ещё 100+ попыток</p>
+          <h2>И ты можешь сделать ещё 100+ попыток, но так и НЕ пробьёшь свой уровень.</h2>
         </div>
         <div class="atm-v1-prose">
-          <p>Найти наставника. Поймать тренд. Сменить направление, работу или нишу. Начать работать ещё больше.</p>
-          <p><strong>Знаешь почему этого может снова оказаться недостаточно?</strong></p>
-          <p>Потому что у проблемы есть одна причина - твоя психика. Слово знакомое, но спроси себя: «Я точно знаю, что это такое и как это работает?»</p>
+          <p>Знаешь почему?</p>
+          <p>Потому что у твоей проблемы одна причина - <strong>ТВОЯ психика.</strong></p>
+          <p>Слово знакомое и вроде все знают его значение.</p>
+          <p>Но спроси себя: «Я точно знаю ЧТО ЭТО такое и КАК ЭТО работает?»</p>
+          <p>В жизни работа психики проявляется:</p>
+          <ul class="atm-v1-list"><li>В деньгах.</li><li>В отношениях.</li><li>В здоровье.</li><li>В хобби.</li><li>В работе.</li></ul>
+          <p>Перечислять можно долго...</p>
+          <p>И что с ней не так?</p>
+          <p>Главная причина по которой мы желаем ОДНО, а получаем ДРУГОЕ - рассинхрон психики.</p>
+          <p><strong>РАССИНХРОН</strong> - это когда твоя психика работает некорректно.</p>
+          <p>Причём этот процесс происходит БЕССОЗНАТЕЛЬНО, т.е. часто мы даже не знаем в какой раскорячке находится психика.</p>
+          <p>Если бы мы знали что психика в рассинхроне, то не транслировали бы всякую ДИЧЬ. Но мы его даже не замечаем, из-за чего в жизни творится всякая херня.</p>
+          <p>Поэтому хоть все направления испробуй, хоть Илона Маска в наставники возьми, хоть реальностью зауправляйся - РАССИНХРОН ПСИХИКИ превращает всё это в сомнительный интертеймент (развлечение), а чаще в провалы и боль.</p>
         </div>
       </div>
     </section>
 
     <section class="atm-v1-editorial">
       <div class="atm-v1-shell atm-v1-copy-grid">
-        <div class="atm-v1-sticky-title">
-          <p class="atm-v1-kicker">Рассинхрон психики</p>
-          <h2>Желаешь одно, а бессознательно воспроизводишь другое.</h2>
-        </div>
+        <div class="atm-v1-sticky-title"><p class="atm-v1-kicker">Что делать?</p><h2>Рассинхрон происходит именно в бессознательной части психики.</h2></div>
         <div class="atm-v1-prose">
-          <p>Работа психики проявляется в деньгах, отношениях, здоровье, хобби и работе. Главная причина, по которой мы желаем одно, а получаем другое, - рассинхрон психики.</p>
-          <p>Рассинхрон - это состояние, при котором психика работает некорректно. Процесс происходит бессознательно, поэтому человек часто даже не замечает, что снова транслирует старый сценарий.</p>
-          <p>Можно испробовать все направления, взять сильнейшего наставника и научиться управлять планами, но рассинхрон превращает усилия в развлечения, провалы и боль.</p>
-          <div class="atm-v1-callout">Сейчас важно понять одну вещь: рассинхрон происходит именно в бессознательной части психики.</div>
+          <div class="atm-v1-callout">❗Вот сейчас будет очень важная вещь, которую нужно понять, чтобы перестать быть дятлом долбящим и жить ТОЙ САМОЙ жизнью.</div>
+          <p>РАССИНХРОН происходит именно в бессознательной части психики.</p>
+          <p>А в бессознательном режиме человеком управляют Программы.</p>
+          <p>Вот буквально, НЕ в переносном смысле.</p>
+          <p>Программа - это нейронные связи для выполнения задач.</p>
+          <p>Когда мы осваиваем какой-либо навык (езда на машине, чтение, печать на клавиатуре, приготовление еды и т.д.) наши нейроны приходят в действие и образуют между собой связи (сцепляются).</p>
         </div>
       </div>
     </section>
 
     <section class="atm-v1-editorial atm-v1-editorial-dark">
       <div class="atm-v1-shell atm-v1-copy-grid">
-        <div>
-          <p class="atm-v1-kicker">Бессознательные программы</p>
-          <h2>Каждый результат опирается на уже сформированные нейронные связи.</h2>
-        </div>
+        <div><p class="atm-v1-kicker">Бессознательные программы</p><h2>И за реализацию любой цели отвечают сформированные бессознательные программы.</h2></div>
         <div class="atm-v1-prose">
-          <p>Программа - это нейронные связи для выполнения задач. Когда мы осваиваем вождение, чтение, печать или приготовление еды, нейроны приходят в действие и образуют связи.</p>
-          <p>За реализацию любой цели отвечают сформированные бессознательные программы: сколько ты зарабатываешь, как ведёшь себя в сложных ситуациях, сколько у тебя энергии, как работает дисциплина и доводишь ли ты дела до конца.</p>
-          <p><strong>Чем мощнее психика, тем выше результат.</strong> Но программы, сформированные воспитанием и социумом, часто просто не соответствуют большим и амбициозным целям.</p>
-          <p>Поэтому так сложно перескочить на другие рельсы и начать новый образ жизни. Но у нас есть свобода выбора: программы можно переписать на нужные.</p>
+          <ul class="atm-v1-list"><li>сколько денег ты зарабатываешь</li><li>как ты ведешь себя в разных ситуациях</li><li>сколько у тебя энергии</li><li>какая у тебя сила воли и дисциплина</li><li>как ты доводишь дела до конца</li><li>и т.д.</li></ul>
+          <p>ВСЁ ЭТО - работа ТВОИХ бессознательных программ.</p>
+          <p><strong>Чем мощнее психика - тем выше результат</strong></p>
+          <p>Программы, которые у тебя сформированы воспитанием и социумом просто НЕ соответствуют большим и амбициозным целям!</p>
+          <p>Именно поэтому ты всё ещё ТОПЧЕШЬСЯ В ТОЧКЕ А.</p>
+          <p>Всё что мы сейчас делаем УЖЕ записано. Каждый наш шаг, каждое действие и РЕЗУЛЬТАТ в этом смысле предопределены. Но не Божественным промыслом или судьбой, а Программой.</p>
+          <p>Поэтому так сложно перескочить на другие рельсы и начать новый образ жизни - мы все тупо управляемся программами (за очень редким исключением).</p>
+          <p>❗Но у нас есть свобода выбора Программ.</p>
+          <p>Их можно ПЕРЕПИСАТЬ НА НУЖНЫЕ.</p>
+          <p>В одинокого это делать трудно.</p>
+          <p>Нужна сильная мотивация и воля.</p>
+          <p>Или нужно довести себя до критической точки чтобы включился этот буст.</p>
+          <p>Но есть более простой и адекватный способ это сделать.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="atm-v1-editorial">
+      <div class="atm-v1-shell atm-v1-copy-grid">
+        <div><p class="atm-v1-kicker">Готов?</p><h2>Готов развивать свою психику и сформировать новые программы поведения, которые дают тот самый РЕЗУЛЬТАТ?</h2></div>
+        <div class="atm-v1-prose">
+          <ul class="atm-v1-list"><li>чтобы больше зарабатывать;</li><li>чтобы стать независимым;</li><li>чтобы найти и создать своё дело;</li><li>чтобы обеспечить семью;</li><li>чтобы жить свободно;</li><li>и чувствовать гордость за себя.</li></ul>
+          <p>Тогда погнали это делать.</p>
+          <p><strong>Подключайся к АТМОСФЕРЕ.</strong></p>
         </div>
       </div>
     </section>
 
     <section class="atm-v1-roadmap">
       <div class="atm-v1-shell">
-        <p class="atm-v1-kicker">С чего мы начнём</p>
-        <h2>Четыре шага к новому сценарию жизни</h2>
+        <p class="atm-v1-kicker">Вот с чего мы начнём</p>
+        <h2>Четыре шага</h2>
         <div class="atm-v1-roadmap-grid">
-          <article><span>01</span><h3>Почему не получается</h3><p>Разберём конкретную причину, которая мешает заниматься своим делом, вырваться из нужды и реализовывать цели. Неудачи - лишь её следствия.</p></article>
-          <article><span>02</span><h3>Смена программ</h3><p>Приведём в действие механизм замены старых программ на новые через практические ключи и действия, изменения от которых видно в реальности.</p></article>
-          <article><span>03</span><h3>Базовый доход</h3><p>Уберём ситуацию, когда после рабочего марафона ты пытаешься строить новую жизнь на остатках сил, времени и энергии.</p></article>
-          <article><span>04</span><h3>Живая движуха</h3><p>Встречи, активный отдых, путешествия, знакомства и совместные челленджи с людьми, которые тоже выбирают свой путь.</p></article>
+          <article><span>01</span><h3>Сначала разберёмся с тем, «Почему НЕ получается»</h3><ul class="atm-v1-list"><li>заниматься СВОИМ делом;</li><li>вырваться из нужды и низкого достатка;</li><li>реализовывать цели;</li><li>${esc(problemSlot)}.</li></ul><p>У всех проблем есть одна конкретная причина.</p><p>Неудачи лишь её следствия - разберёмся как её устранить.</p></article>
+          <article><span>02</span><h3>Смена программ - переформатирование</h3><p>Здесь приведём в действие механизм замены старых программ на новые. Для этого есть конкретные КЛЮЧИ - практические действия, внедряя которые ты будешь видеть изменения в своей окружающей реальности.</p><p>Ты наконец то увидишь и ощутишь как реальность начала реагировать на твоё воздействие. В первый раз это может вызвать ШОК, вот буквально.</p></article>
+          <article><span>03</span><h3>Затем займёмся базовым доходом</h3><p>Представь ты целый день бежал марафон, а потом пошёл в зал на тренировку. Звучит так себе, верно?</p><p>Но именно этим занимаются люди, когда пытаются вечером после работы освоить НЕЧТО, что изменит их образ жизни, даст больше дохода и свободы.</p><p>Пока ты неравноценно обмениваешь своё время и энергию на небольшую сумму денег, пока страх остаться без денег приковывает тебя к работе - никакого прорыва в новую реальность не случится.</p></article>
+          <article><span>04</span><h3>Движуха</h3><p>Атмосфера - это не курс, не тренинг. Это живые люди.</p><p>Встречи, активный отдых, путешествия, чат, знакомства, совместные челленджи.</p><p>Атмосфера - это ключ открывающий доступ к новому стилю жизни, где ты встречаешь СВОИХ людей, встаёшь на СВОЙ путь и реализуешься в нём.</p></article>
         </div>
         <a class="atm-v1-primary atm-v1-primary-wide" href="#atmospace-registration" data-atmospace-registration-scroll>Перейти к регистрации</a>
       </div>
@@ -4333,64 +4370,28 @@ function renderCoreMethodFixedOffer({ valueImage, ctaImage }) {
     <section class="atm-v1-final-story">
       <div class="atm-v1-shell atm-v1-final-grid">
         <div>
-          <p class="atm-v1-kicker">Ещё один год пройдёт в любом случае</p>
-          <h2>Вопрос только один: ты готов?</h2>
-          <p>Можно снова искать новую идею, смотреть ролики, сохранять полезные посты, обещать себе начать с понедельника.</p>
-          <p>И через год обнаружить те же долги, тот же доход, ту же работу и те же вопросы к себе.</p>
+          <p class="atm-v1-kicker">Любая цель реализуется максимум за 1 год.</p>
+          <h2>Вопрос только один - ты готов?</h2>
+          <p>Ещё один год пройдёт в любом случае</p>
+          <p>Можно снова искать новую идею.</p><p>Смотреть ролики.</p><p>Сохранять полезные посты.</p><p>Обещать себе начать с понедельника.</p>
+          <p>И через год обнаружить:</p>
+          <ul class="atm-v1-list"><li>те же долги;</li><li>тот же доход;</li><li>ту же работу;</li><li>те же вопросы к себе.</li></ul>
           <p>А можно взять и разобраться, почему предыдущие попытки не давали результата.</p>
-          <p><strong>В конце концов, что ты теряешь? В любой момент всё можно пересмотреть.</strong></p>
+          <p>Пора развлечься и будь что будет☺</p>
+          <p>В конце концов что ты теряете? В любой момент всё можно откатить назад.</p>
         </div>
-        <img src="${esc(ctaImage)}" alt="Следующий шаг к осознанным изменениям" loading="lazy" decoding="async">
-      </div>
-    </section>
-  </div>`;
-}
-
-function renderCoreMethodCompactOffer({ content, valueImage, ctaImage }) {
-  const fallbackItems = [
-    'увидеть повторяющийся сценарий, который незаметно возвращает в прежнюю точку',
-    'отделить реальную причину от очередной попытки заставить себя работать ещё больше',
-    'перейти к одному следующему шагу без нового рывка и перегруза'
-  ];
-  const sourceCards = Array.isArray(content?.cards) && content.cards.length
-    ? content.cards
-    : (Array.isArray(content?.valueItems) ? content.valueItems : fallbackItems);
-  const cards = sourceCards.slice(0, 3).map((item, index) => {
-    const title = typeof item === 'object' && item ? item.title : `Смысл ${index + 1}`;
-    const text = typeof item === 'object' && item ? item.text : item;
-    return `<article class="atm-v1-compact-card"><span>0${index + 1}</span><h3>${esc(title || `Смысл ${index + 1}`)}</h3><p>${esc(text || fallbackItems[index])}</p></article>`;
-  }).join('');
-  const offerTitle = stripHtml(content?.valueTitle || content?.actionTitle || 'Что станет понятнее после мини-теста');
-  const offerLead = stripHtml(content?.trustSmall || content?.ctaLead || 'Короткий разбор помогает увидеть не новую теорию, а конкретный повторяющийся сценарий и первый реалистичный шаг.');
-  const registrationTitle = stripHtml(content?.actionTitle || 'Продолжи на защищённой странице Atmospace');
-  const registrationText = stripHtml(content?.actionSubtitle || 'Сервер уже подготовил персональную форму регистрации и сохранил рекламную атрибуцию.');
-
-  return `<div id="atm-v1-offer" data-atmospace-offer hidden>
-    <section class="atm-v1-compact">
-      <div class="atm-v1-shell">
-        <div class="atm-v1-compact-head">
-          <div>
-            <p class="atm-v1-kicker">После мини-теста</p>
-            <h2>${esc(offerTitle)}</h2>
-            <p>${esc(offerLead)}</p>
-          </div>
-          <img src="${esc(valueImage)}" alt="Смысловой кадр к короткому разбору" loading="lazy" decoding="async">
-        </div>
-        <div class="atm-v1-compact-cards">${cards}</div>
+        <img src="${esc(ctaImage)}" alt="Мужчина делает следующий шаг" loading="lazy" decoding="async">
       </div>
     </section>
 
     <section id="atmospace-registration" class="atm-v1-registration" data-atmospace-registration-section aria-labelledby="atm-v1-registration-title">
-      <div class="atm-v1-shell atm-v1-registration-panel atm-v1-registration-grid">
-        <div>
-          <p class="atm-v1-kicker">Следующий шаг</p>
-          <h2 id="atm-v1-registration-title">${esc(registrationTitle)}</h2>
-          <p>${esc(registrationText)}</p>
-          ${renderAtmospaceRegistrationButton('atm-v1-register-button', 'Открыть форму регистрации')}
-          <p class="atm-v1-secure">Ссылка приходит напрямую с сервера. Лендинг не собирает пароль и не изменяет адрес регистрации.</p>
-          <p data-atmospace-runtime-message hidden></p>
-        </div>
-        <img src="${esc(ctaImage)}" alt="Следующий шаг после мини-теста" loading="lazy" decoding="async">
+      <div class="atm-v1-shell atm-v1-registration-panel">
+        <p class="atm-v1-kicker">Форма регистрации</p>
+        <h2 id="atm-v1-registration-title">Подключайся к АТМОСФЕРЕ.</h2>
+        <p>Открой защищённую форму регистрации и продолжи на стороне Atmospace.</p>
+        ${renderAtmospaceRegistrationButton('atm-v1-register-button', 'Открыть форму регистрации')}
+        <p class="atm-v1-secure">Ссылка приходит напрямую с сервера. Лендинг не собирает пароль и не изменяет адрес регистрации.</p>
+        <p data-atmospace-runtime-message hidden></p>
       </div>
     </section>
   </div>`;
@@ -4408,11 +4409,7 @@ function renderCoreMethodInlinePrelanding({ templateId, content, projectData, la
   const heroImage = bothelpImageSrc(sceneImage || PRELANDING_FALLBACK_IMAGES[0]);
   const offerImage = bothelpImageSrc(valueImage || PRELANDING_FALLBACK_IMAGES[1]);
   const finalImage = bothelpImageSrc(ctaImage || PRELANDING_FALLBACK_IMAGES[2]);
-  const heroLead = stripHtml(content?.trustTitle || content?.trustSmall || content?.ctaLead || 'Короткий мини-тест поможет увидеть повторяющийся сценарий и перейти к одному понятному следующему шагу.');
-  const heroPoints = (Array.isArray(content?.pills) && content.pills.length
-    ? content.pills
-    : ['4 честных вопроса', 'Ответы не сохраняются', 'Защищённая регистрация'])
-    .slice(0, 3);
+  const heroLead = stripHtml(content?.description || 'Короткий мини-тест поможет увидеть настоящую причину повторяющегося сценария.');
 
   return `${buildAtmospaceHeadConfig({ projectData, ...(landingMeta || {}) })}
 <style>
@@ -4438,9 +4435,11 @@ html,body{overflow-x:hidden}
 .atm-v1-hero h1.atm-v1-title-medium{font-size:clamp(38px,4.1vw,58px)}
 .atm-v1-hero h1.atm-v1-title-long{font-size:clamp(34px,3.7vw,52px)}
 .atm-v1-lead{max-width:610px;margin:0 0 20px;color:#d5deeb;font-size:clamp(17px,1.55vw,22px);line-height:1.45;font-weight:700;text-shadow:0 8px 28px rgba(0,0,0,.28)}
-.atm-v1-hero-chips{display:none;flex-wrap:wrap;gap:10px;margin:0 0 24px;padding:0;list-style:none}
-.atm-v1-hero-chips li{display:inline-flex;align-items:center;min-height:40px;padding:9px 13px;border:1px solid var(--atm-line);border-radius:999px;background:rgba(255,255,255,.84);color:#263449;font-size:13px;line-height:1.3;font-weight:900}
-.atm-v1-question-lead{display:none;max-width:670px;margin:26px 0 0;padding:20px 0 0;border-top:1px solid var(--atm-line);color:var(--atm-ink);font-size:20px;line-height:1.45;font-weight:900}
+.atm-v1-start-story{max-width:620px;margin-top:18px;color:#d5deeb;font-size:15px;line-height:1.45}
+.atm-v1-start-story p{margin:10px 0}
+.atm-v1-points{display:grid;gap:4px;margin:10px 0 14px;padding:0;list-style:none;font-weight:800}
+.atm-v1-points li:before{content:'•';margin-right:9px;color:var(--atm-accent2)}
+.atm-v1-question-lead{max-width:670px;margin:18px 0 0;padding:16px 0 0;border-top:1px solid rgba(255,255,255,.18);color:#f8fafc;font-size:17px;line-height:1.42;font-weight:900}
 .atm-v1-primary{display:inline-flex;align-items:center;justify-content:center;min-height:64px;margin-top:26px;padding:17px 30px;border:1px solid rgba(255,255,255,.18);border-radius:8px;background:linear-gradient(135deg,var(--atm-accent),var(--atm-accent2));box-shadow:0 18px 46px color-mix(in srgb,var(--atm-accent) 34%,transparent);color:#fff!important;text-decoration:none!important;font-size:17px;line-height:1.2;font-weight:900;cursor:pointer;transition:transform .18s ease,filter .18s ease}
 .atm-v1-primary:hover{transform:translateY(-2px);filter:brightness(1.06)}
 .atm-v1-primary:focus-visible{outline:3px solid rgba(255,255,255,.84);outline-offset:4px}
@@ -4449,6 +4448,7 @@ html,body{overflow-x:hidden}
 .atm-v1-quiz-band{padding:clamp(64px,9vw,120px) 0;background:var(--atm-deep);color:#f8fafc}
 .atm-v1-quiz{max-width:900px;margin:0 auto}
 .atm-v1-quiz-intro{max-width:760px;margin-bottom:34px}
+.atm-v1-quiz[data-atmospace-quiz-active="true"] .atm-v1-quiz-intro{display:none}
 .atm-v1-quiz h2{margin:0 0 18px;font-size:clamp(38px,6vw,68px);line-height:1.02;font-weight:900;letter-spacing:0}
 .atm-v1-quiz-intro p:not(.atm-v1-kicker){margin:8px 0;color:#c8d3e2;font-size:18px;line-height:1.55}
 .atm-v1-progress{height:8px;overflow:hidden;border-radius:999px;background:rgba(255,255,255,.12)}
@@ -4470,6 +4470,8 @@ html,body{overflow-x:hidden}
 .atm-v1-copy-grid h2,.atm-v1-roadmap h2,.atm-v1-final-story h2{margin:0;font-size:clamp(38px,5.5vw,68px);line-height:1.03;font-weight:900;letter-spacing:0;text-wrap:balance}
 .atm-v1-prose{display:grid;gap:18px;color:var(--atm-muted);font-size:18px;line-height:1.72}
 .atm-v1-prose p{margin:0}
+.atm-v1-list{display:grid;gap:8px;margin:0;padding:0 0 0 20px}
+.atm-v1-list li::marker{color:var(--atm-accent);font-weight:900}
 .atm-v1-editorial-dark .atm-v1-prose{color:#c8d3e2}
 .atm-v1-sticky-title{position:sticky;top:30px}
 .atm-v1-quotes{display:grid;gap:12px}
@@ -4484,6 +4486,8 @@ html,body{overflow-x:hidden}
 .atm-v1-roadmap article span{display:block;margin-bottom:26px;color:var(--atm-accent);font-size:34px;font-weight:900}
 .atm-v1-roadmap article h3{margin:0 0 12px;font-size:25px;line-height:1.2}
 .atm-v1-roadmap article p{margin:0;color:var(--atm-muted);font-size:16px;line-height:1.6}
+.atm-v1-roadmap article p+p{margin-top:12px}
+.atm-v1-roadmap article .atm-v1-list{margin:14px 0;color:var(--atm-muted);font-size:15px;line-height:1.5}
 .atm-v1-final-story{padding:clamp(72px,9vw,130px) 0;background:#fff}
 .atm-v1-final-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,.75fr);gap:clamp(36px,7vw,90px);align-items:center}
 .atm-v1-final-grid p:not(.atm-v1-kicker){margin:18px 0 0;color:var(--atm-muted);font-size:18px;line-height:1.65}
@@ -4492,19 +4496,6 @@ html,body{overflow-x:hidden}
 .atm-v1-registration-panel{max-width:880px;margin:0 auto;text-align:center}
 .atm-v1-registration h2{margin:0 0 18px;font-size:clamp(40px,6vw,72px);line-height:1.02;font-weight:900;letter-spacing:0}
 .atm-v1-registration p{max-width:700px;margin:0 auto;color:#c8d3e2;font-size:18px;line-height:1.6}
-.atm-v1-compact{padding:clamp(68px,9vw,118px) 0;background:#fff}
-.atm-v1-compact-head{display:grid;grid-template-columns:minmax(0,.9fr) minmax(300px,.65fr);gap:clamp(30px,6vw,78px);align-items:center}
-.atm-v1-compact-head h2{margin:0;font-size:clamp(38px,5.6vw,68px);line-height:1.03;font-weight:900;letter-spacing:0;text-wrap:balance}
-.atm-v1-compact-head img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px}
-.atm-v1-compact-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:38px}
-.atm-v1-compact-card{min-height:190px;padding:24px;border:1px solid var(--atm-line);border-radius:8px;background:#f4f7fb}
-.atm-v1-compact-card span{display:block;margin-bottom:18px;color:var(--atm-accent);font-size:26px;font-weight:900}
-.atm-v1-compact-card h3{margin:0 0 10px;font-size:21px;line-height:1.25}
-.atm-v1-compact-card p{margin:0;color:var(--atm-muted);font-size:15px;line-height:1.55}
-.atm-v1-registration-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,.55fr);gap:clamp(30px,6vw,72px);align-items:center;text-align:left}
-.atm-v1-registration-grid img{display:block;width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:8px}
-.atm-v1-registration-grid .atm-v1-register-button{margin-left:0}
-.atm-v1-registration-grid .atm-v1-secure{margin-left:0!important}
 .atm-v1-register-button{display:flex;align-items:center;justify-content:center;width:min(520px,100%);min-height:68px;margin:30px auto 0;padding:18px 24px;border-radius:8px;background:linear-gradient(135deg,var(--atm-accent),var(--atm-accent2));color:#fff!important;text-decoration:none!important;font-size:18px;font-weight:900}
 .atm-v1-register-button[aria-disabled=true]{pointer-events:none;opacity:.58}
 .atm-v1-secure{margin-top:14px!important;color:#94a3b8!important;font-size:13px!important}
@@ -4525,42 +4516,57 @@ html,body{overflow-x:hidden}
   .atm-v1-hero h1.atm-v1-title-medium{font-size:clamp(28px,7.35vw,36px)}
   .atm-v1-hero h1.atm-v1-title-long{font-size:clamp(25px,6.6vw,32px)}
   .atm-v1-lead{max-width:100%;color:#d5deeb;font-size:14px;line-height:1.4;margin:13px 0 0;overflow-wrap:anywhere}
-  .atm-v1-hero-chips,.atm-v1-question-lead{display:none}
   .atm-v1-mobile-cta{display:block}
   .atm-v1-desktop-cta{display:none}
   .atm-v1-primary{width:100%;min-height:58px;margin-top:3px;padding:15px 18px}
-  .atm-v1-copy-grid,.atm-v1-final-grid,.atm-v1-compact-head,.atm-v1-registration-grid{grid-template-columns:1fr}
+  .atm-v1-quiz-band{min-height:100svh;padding:16px 0 max(16px,env(safe-area-inset-bottom))}
+  .atm-v1-quiz{width:100%;max-width:none}
+  .atm-v1-quiz[data-atmospace-quiz-active="true"]{display:flex;min-height:calc(100svh - 32px);flex-direction:column;justify-content:center}
+  .atm-v1-quiz[data-atmospace-quiz-active="true"] .atm-v1-progress{height:6px}
+  .atm-v1-quiz[data-atmospace-quiz-active="true"] .atm-v1-counter{margin:9px 0 14px;font-size:12px}
+  .atm-v1-quiz[data-atmospace-quiz-active="true"] .atm-v1-question-label{margin-bottom:7px;font-size:11px}
+  .atm-v1-quiz[data-atmospace-quiz-active="true"] .atm-v1-question h3{margin-bottom:15px;font-size:clamp(22px,6.2vw,29px);line-height:1.12}
+  .atm-v1-quiz[data-atmospace-quiz-active="true"] .atm-v1-options{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .atm-v1-quiz[data-atmospace-quiz-active="true"] .atm-v1-options button{min-height:68px;padding:10px 12px;font-size:13px;line-height:1.25}
+  .atm-v1-quiz[data-atmospace-quiz-active="true"] .atm-v1-back{display:none}
+  .atm-v1-copy-grid,.atm-v1-final-grid{grid-template-columns:1fr}
   .atm-v1-sticky-title{position:static}
-  .atm-v1-options,.atm-v1-roadmap-grid,.atm-v1-compact-cards{grid-template-columns:1fr}
-  .atm-v1-roadmap article,.atm-v1-compact-card{min-height:auto}
-  .atm-v1-final-grid img,.atm-v1-compact-head img,.atm-v1-registration-grid img{aspect-ratio:16/10}
+  .atm-v1-options,.atm-v1-roadmap-grid{grid-template-columns:1fr}
+  .atm-v1-roadmap article{min-height:auto}
+  .atm-v1-final-grid img{aspect-ratio:16/10}
   .atm-v1-footer-inner{align-items:flex-start;flex-direction:column}
   .atm-v1-question h3{font-size:27px}
 }
+@media(max-width:800px) and (max-height:700px){.atm-v1-quiz[data-atmospace-quiz-active="true"]{min-height:calc(100svh - 20px)}.atm-v1-quiz[data-atmospace-quiz-active="true"] .atm-v1-counter{margin:7px 0 10px}.atm-v1-quiz[data-atmospace-quiz-active="true"] .atm-v1-question h3{margin-bottom:11px;font-size:20px}.atm-v1-quiz[data-atmospace-quiz-active="true"] .atm-v1-options button{min-height:58px;padding:8px 9px;font-size:12px}}
 @media(max-width:420px){.atm-v1-shell{width:calc(100% - 22px)}.atm-v1-hero{padding-top:clamp(145px,23svh,195px);padding-bottom:max(16px,env(safe-area-inset-bottom))}.atm-v1-hero h1{font-size:29px}.atm-v1-hero h1.atm-v1-title-medium{font-size:27px}.atm-v1-hero h1.atm-v1-title-long{font-size:24px}.atm-v1-primary{width:100%;padding-inline:16px}.atm-v1-options button{min-height:66px;padding:15px}.atm-v1-editorial,.atm-v1-roadmap,.atm-v1-final-story,.atm-v1-registration{padding:58px 0}}
 </style>
 <div id="fh-preland-root" class="${designClass}">
   <main>
-    <section class="atm-v1-hero" aria-labelledby="atm-v1-title" data-atmospace-first-fold>
+    <section class="atm-v1-hero" aria-labelledby="atm-v1-title" data-atmospace-first-fold data-atmospace-format1-stage="start">
       <div class="atm-v1-hero-visual" aria-hidden="true"><img src="${esc(heroImage)}" alt="" loading="eager" decoding="async" fetchpriority="high"></div>
       <div class="atm-v1-shell">
         <div class="atm-v1-hero-copy">
           <p class="atm-v1-kicker">Короткий мини-тест</p>
           <h1 id="atm-v1-title" class="${heroTitleClass}">${esc(titleText)}</h1>
+          <p class="atm-v1-lead" data-atmospace-format1-description>${esc(heroLead)}</p>
           <div class="atm-v1-mobile-cta" data-atmospace-first-fold-cta>
-            ${renderAtmospaceQuizButton('atm-v1-primary', 'Пройти тест')}
+            ${renderAtmospaceQuizButton('atm-v1-primary', 'Пройти мини-тест')}
             <p class="atm-v1-first-fold-note">4 вопроса · около минуты · без телефона</p>
           </div>
-          <p class="atm-v1-lead">${esc(heroLead)}</p>
-          <ul class="atm-v1-hero-chips">${heroPoints.map((item) => `<li>${esc(item)}</li>`).join('')}</ul>
-          <div class="atm-v1-question-lead">Ответь честно на четыре вопроса. Результат увидишь сразу, ответы не сохраняются.</div>
-          <div class="atm-v1-desktop-cta" data-atmospace-first-fold-cta>${renderAtmospaceQuizButton('atm-v1-primary', 'Пройти тест')}</div>
+          <div class="atm-v1-start-story">
+            <p>Ты уже не первый год пытаешься перейти на новый уровень:</p>
+            <ul class="atm-v1-points"><li>увеличить доход</li><li>найти своё дело</li><li>изменить привычки</li><li>и жить так, как хочешь именно ты.</li></ul>
+            <p>Но что бы ты ни делал - результата <strong>НЕТ</strong>.</p>
+            <p>Новая попытка как удар по вере в себя.</p>
+            <div class="atm-v1-question-lead">Сколько ты ещё так сможешь, пока окончательно не выгоришь?<br><br>Почему у других получается, а у тебя нет?<br>Готов увидеть <strong>НАСТОЯЩУЮ</strong> причину твоих проблем?</div>
+          </div>
+          <div class="atm-v1-desktop-cta" data-atmospace-first-fold-cta>${renderAtmospaceQuizButton('atm-v1-primary', 'Пройти мини-тест')}</div>
         </div>
       </div>
     </section>
 
     ${renderCoreMethodMiniQuiz()}
-    ${renderCoreMethodCompactOffer({ content, valueImage: offerImage, ctaImage: finalImage })}
+    ${renderCoreMethodFixedOffer({ description: heroLead, valueImage: offerImage, ctaImage: finalImage })}
     <footer class="atm-v1-footer">
       <div class="atm-v1-shell atm-v1-footer-inner">
         <span>Материал носит информационный характер. Результат зависит от действий участника.</span>
@@ -5653,6 +5659,7 @@ function renderPrelandingHtml({ tpl, style, palette, photo, overrides, projectDa
     badge: content.badge || landingLogic.badge,
     title,
     titleHtml: content.titleHtml || title,
+    description: overrides?.description || content.description || '',
     pills: content.pills || [],
     painTitle: content.painTitle || landingLogic.label,
     painItems: content.painItems || [],
@@ -6778,11 +6785,7 @@ export default function Constructor() {
       const baseContent = PRELANDING_CONTENT[selectedTemplateId] || PRELANDING_CONTENT[1];
       const coreDesign = currentPrelandingDesignRoute || CORE_METHOD_DESIGN_ROUTES[(selectedTemplateId - 1 + CORE_METHOD_DESIGN_ROUTES.length) % CORE_METHOD_DESIGN_ROUTES.length];
       const title = enteredHeadline || stripHtml(baseContent.titleHtml || baseContent.title || 'Откройте короткий разбор и первый шаг');
-      const landingLogic = resolveClientPrelandingLogic(title, enteredText || baseContent.trustTitle || baseContent.valueTitle, 'templateStage');
-      const textLead = enteredText || landingLogic.lead;
-      const corePainItems = landingLogic.painItems?.length
-        ? landingLogic.painItems
-        : landingLogic.cards.map((item) => `${item.title}: ${item.text}`);
+      const textLead = enteredText || stripHtml(baseContent.trustTitle || 'Короткий мини-тест поможет увидеть настоящую причину повторяющегося сценария.');
       const imageSeed = `manual-core-${selectedTemplateId}-${coreDesign?.id || style}-${coreDesign?.palette || palette}-${title}-${textLead}`;
       return renderPrelandingHtml({
         tpl: selectedTemplateId,
@@ -6802,24 +6805,9 @@ export default function Constructor() {
           designFamily: `core-method-${coreDesign?.id || 'default'}`,
           variantKey: imageSeed,
           visualSource: 'scene',
-          badge: landingLogic.badge,
           title,
           titleHtml: esc(title),
-          pills: [],
-          painTitle: landingLogic.label,
-          painItems: corePainItems,
-          painAlert: landingLogic.defaultText,
-          trustTitle: textLead,
-          trustSmall: landingLogic.trustSmall,
-          methodName: landingLogic.methodName,
-          valueTitle: landingLogic.valueTitle,
-          valueItems: landingLogic.valueItems,
-          cards: landingLogic.cards,
-          proofItems: landingLogic.proofItems,
-          liveNote: landingLogic.botTransition,
-          ctaLead: landingLogic.ctaLead,
-          actionSubtitle: landingLogic.ctaLead,
-          actionTitle: landingLogic.actionTitle,
+          description: textLead,
           sceneImage: currentPrelandingAiImages.sceneImage,
           valueImage: currentPrelandingAiImages.valueImage,
           ctaImage: currentPrelandingAiImages.ctaImage
@@ -7110,7 +7098,7 @@ export default function Constructor() {
                 />
               </div>
               <p className={`mt-3 text-xs font-bold ${dark ? 'text-red-100' : 'text-red-900'}`}>
-                Все форматы сохраняют ваш заголовок и текст, определяют конкретный сценарий и собирают под него разные офферы, блоки и визуальные сцены. Общие заготовки поверх смысла не подставляются.
+                Формат 1 меняет только ваш заголовок, описание и визуальные сцены; стартовая, квиз и оффер остаются неизменными. Формат 6 собирает смысловой профиль без возврата старых форматов.
               </p>
             </div>
 

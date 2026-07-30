@@ -2317,6 +2317,10 @@ async function handleGenerateImage(env, request) {
   const headline = String(input.headline || '').trim();
   const methodName = String(input.methodName || '').trim();
   const stylePreset = String(input.stylePreset || 'editorialGold');
+  const variationKey = String(input.variationKey || '')
+    .trim()
+    .replace(/[^a-zA-Z0-9|:._-]+/g, '-')
+    .slice(0, 240);
   const heroImage = dataUrlToInputImage(input.heroImage);
   const visualMode = String(input.visualMode || 'reference');
   const requestedSize = normalizeImageSize(input.imageSize || input.size, input.imagePurpose === 'prelandingHero' ? '1536x1024' : '1024x1024');
@@ -2335,12 +2339,16 @@ async function handleGenerateImage(env, request) {
       : input.persona === 'mixed'
         ? 'Use a balanced audience rotation: man, woman, couple, or no-face scene depending on the visual prompt. Do not default to a woman.'
         : 'Prefer an ordinary real-looking woman 35-55 as the hero unless the visual prompt explicitly asks for another age. Do not default to an elderly woman in a dark workshop.';
+  const variationLine = variationKey
+    ? `Creative variation seed: ${variationKey}. Treat it as a strict casting and composition fingerprint: change face type, age band, hair, clothes, action, setting and camera treatment when the seed changes; never drift back to one recurring model.`
+    : 'Creative variation seed: none. Still avoid a recurring stock model and derive the casting and composition from the visual direction.';
 
   const prompt = input.fullBanner ? `
 Create a finished premium 1:1 Russian advertising banner, like a high-quality ChatGPT image generation result, not a web template mockup.
 Context:
 ${audienceContext}
 ${personaLine}
+${variationLine}
 
 Visual direction:
 ${visualPrompt}
@@ -2378,6 +2386,7 @@ Generate a premium advertising photo background without any text.
 Context:
 ${audienceContext}
 ${personaLine}
+${variationLine}
 
 Visual direction:
 ${visualPrompt}
