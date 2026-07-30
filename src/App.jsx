@@ -2190,6 +2190,21 @@ function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline,
       ? 'Build depth with a real location, weather, architecture, workshop, road, water, landscape or another semantically justified environment. The scene must feel specific to this headline, not like reusable office stock photography.'
       : 'Avoid washed-out white backgrounds and blown highlights: keep readable skin tone, natural contrast, real room/cafe/city depth, vivid daylight, crisp focus.',
     'When a person is present, keep the face and upper body comfortably framed and never cropped at the edge. For a personless scene, give the object, metaphor or environment one clear cinematic focal point. Always leave safe negative space for HTML text without making the whole image empty white.',
+    isCoreMethod
+      ? 'RESPONSIVE DUAL-CROP CONTRACT: create one 3:2 landscape source that remains readable on desktop and in a tall-phone cover crop.'
+      : '',
+    isCoreMethod
+      ? 'Keep the complete indispensable subject inside the middle-right safe column x=54-80%, y=12-58%, with its focal center at x=68-72%, y=32-42%. Keep x=0-45% dark, calm and low-detail for the desktop HTML headline.'
+      : '',
+    isCoreMethod
+      ? 'Treat x=82-100% and y=62-100% as expendable background; no face, body edge, hand, key object or decisive action may live there. The scene must still read when only the vertical source slice around x=54-85% is visible.'
+      : '',
+    isCoreMethod
+      ? "For a human hero, keep the man's entire face, head, torso and essential gesture inside the safe column; never park him against the far-right edge."
+      : '',
+    isCoreMethod
+      ? 'For an object/metaphor hero, keep the complete object and every meaning-bearing part inside the safe column; do not use a tiny distant focal point.'
+      : '',
     'Every image must be a different scene, different camera angle, different background, different clothes and different composition.',
     'Three-image story contract: hero shows one concrete triggering event; value shows its consequence or changed choice in another location; CTA shows relief, direction and the next step after the problem.',
     'Across all three images never repeat the same person, room, focal object, problem object, pose, clothes, camera angle or narrative moment. A different person beside the same appliance still counts as repetition and is forbidden.',
@@ -2235,7 +2250,7 @@ function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline,
   }
   const semanticHeroScene = routeScenes[0]
     || 'one concrete object, visual metaphor or meaningful environment that expresses the exact conflict or decision from the headline, with a person only when essential';
-  const heroSubject = `hero image semantic scene: ${semanticHeroScene}. Choose the strongest semantic representation: a concrete object, visual metaphor, place or environment; use a human only when the headline meaning genuinely requires one. If any human is visible, show exactly one adult man; never show a woman, female character, couple, family or group. For a human hero use this casting fingerprint: ${heroFingerprint.prompt} Ignore female, couple or group casting from the source scene instead of reproducing it. For a personless hero, make the headline-specific object, metaphor or environment the dominant focal subject. Use a specific premium setting with texture and depth; no generic office desk, no plain-shirt portrait, no laptop pose and no blank white interior; keep the semantic focal point on the right third with protected darker space on the left for white HTML headline`;
+  const heroSubject = `hero image semantic scene: ${semanticHeroScene}. Choose the strongest semantic representation: a concrete object, visual metaphor, place or environment; use a human only when the headline meaning genuinely requires one. If any human is visible, show exactly one adult man; never show a woman, female character, couple, family or group. For a human hero use this casting fingerprint: ${heroFingerprint.prompt} Ignore female, couple or group casting from the source scene instead of reproducing it. For a personless hero, make the headline-specific object, metaphor or environment the dominant focal subject. Use a specific premium setting with texture and depth; no generic office desk, no plain-shirt portrait, no laptop pose and no blank white interior; keep the semantic focal point inside the middle-right dual-crop safe column with protected darker space on the left for white HTML headline`;
   const valueSubject = `middle section semantic scene: ${routeScenes[1] || 'a different adult man in a different location confronting the real consequence of the problem or making a concrete new choice'}. Show exactly one adult man with this casting fingerprint: ${valueFingerprint.prompt} Ignore any woman, female character, couple, family or group named by the source scene. He must not repeat a face, age band, hair, clothes, build, pose or camera treatment from a human hero. Cinematic documentary detail, distinct action, setting and camera angle, no repeated hero object`;
   const ctaSubject = `final CTA semantic scene: ${routeScenes[2] || 'a different adult man moving toward a clear next step in a new outdoor, architectural or workshop setting'}. Show exactly one different adult man with this casting fingerprint: ${ctaFingerprint.prompt} Ignore any woman, female character, couple, family or group named by the source scene. He must not repeat a face, age band, hair, clothes, build, pose or camera treatment from the hero or value scene. Restrained confidence and relief, cinematic contrast, no repeated location or prop`;
 
@@ -2248,7 +2263,7 @@ function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline,
       visualMode: isCoreMethod ? 'metaphor' : 'generatedPerson',
       stylePreset: imageStylePreset,
       variationKey: `${variantSeed}|hero-semantic|${heroFingerprint.id}`,
-      visualPrompt: `${baseContext}\n\nROLE 1 — TRIGGERING EVENT. ${heroSubject}\nShow one clear semantic focal point only: it may be the headline-specific object, metaphor, environment or one adult man. Composition: wide horizontal premium hero photo, cinematic 35mm lifestyle look, focal point on the right side, generous clean space on the left, no text.`
+      visualPrompt: `${baseContext}\n\nROLE 1 — TRIGGERING EVENT. ${heroSubject}\nShow one clear semantic focal point only: it may be the headline-specific object, metaphor, environment or one adult man. Composition: wide horizontal 3:2 premium hero photo, cinematic 35mm lifestyle look, focal point inside the specified middle-right safe column, generous clean space on the left, no text.`
     },
     {
       slot: 'value',
@@ -4519,17 +4534,19 @@ html,body{overflow-x:hidden}
 @media(max-height:920px) and (min-width:801px){.atm-v1-hero{padding:28px 0}.atm-v1-hero h1{font-size:clamp(40px,4.25vw,60px);margin-bottom:14px}.atm-v1-hero h1.atm-v1-title-medium{font-size:clamp(36px,3.8vw,54px)}.atm-v1-hero h1.atm-v1-title-long{font-size:clamp(32px,3.35vw,47px)}.atm-v1-lead{font-size:17px;line-height:1.38;margin-bottom:14px}.atm-v1-primary{min-height:58px}}
 @media(max-width:800px){
   .atm-v1-shell{width:min(100% - 28px,1180px)}
-  .atm-v1-hero{min-height:100svh;align-items:end;padding:clamp(165px,26svh,235px) 0 max(18px,env(safe-area-inset-bottom));background:var(--atm-hero-bg)}
-  .atm-v1-hero-visual{inset:0;height:100%}
-  .atm-v1-hero-visual img{object-position:50% 50%;filter:saturate(1.08) contrast(1.1) brightness(.82)}
-  .atm-v1-hero-visual:after{background:linear-gradient(180deg,rgba(7,17,31,.02) 0%,rgba(7,17,31,.16) 34%,rgba(7,17,31,.9) 61%,var(--atm-hero-bg) 82%)}
-  .atm-v1-hero-copy{max-width:100%;min-width:0}
+  .atm-v1-hero{min-height:100svh;display:grid;grid-template-rows:clamp(280px,52svh,460px) minmax(min-content,1fr);align-items:stretch;padding:0;background:var(--atm-hero-bg)}
+  .atm-v1-hero-visual{position:relative;grid-row:1;inset:auto;height:auto;min-height:0}
+  .atm-v1-hero-visual img{object-position:78% 42%;transform:none;filter:saturate(1.08) contrast(1.1) brightness(.88)}
+  .atm-v1-hero-visual:after{background:linear-gradient(180deg,rgba(7,17,31,0) 60%,var(--atm-hero-bg) 100%)}
+  .atm-v1-hero-content{grid-row:2;display:grid;align-items:center;padding:22px 0 max(24px,env(safe-area-inset-bottom))}
+  .atm-v1-hero-copy{max-width:620px;min-width:0;display:grid;gap:18px;margin:0 auto;width:100%}
+  .atm-v1-hero h1,.atm-v1-lead,.atm-v1-hero-action,.atm-v1-hero .atm-v1-primary{margin:0}
   .atm-v1-kicker{margin-bottom:9px;font-size:11px}
-  .atm-v1-hero h1{max-width:100%;font-size:clamp(30px,8vw,40px);line-height:1;margin-bottom:11px;overflow-wrap:anywhere}
+  .atm-v1-hero h1{max-width:100%;font-size:clamp(30px,8vw,40px);line-height:1;overflow-wrap:anywhere}
   .atm-v1-hero h1.atm-v1-title-medium{font-size:clamp(28px,7.35vw,36px)}
   .atm-v1-hero h1.atm-v1-title-long{font-size:clamp(25px,6.6vw,32px)}
-  .atm-v1-lead{max-width:100%;color:#d5deeb;font-size:14px;line-height:1.4;margin:13px 0 0;overflow-wrap:anywhere}
-  .atm-v1-primary{width:100%;min-height:58px;margin-top:3px;padding:15px 18px}
+  .atm-v1-lead{max-width:100%;color:#d5deeb;font-size:14px;line-height:1.4;overflow-wrap:anywhere}
+  .atm-v1-primary{width:100%;min-height:58px;padding:15px 18px}
   .atm-v1-start-story{padding:58px 0}
   .atm-v1-story-grid{grid-template-columns:1fr;gap:30px}
   .atm-v1-story-intro{position:static}
@@ -4557,14 +4574,14 @@ html,body{overflow-x:hidden}
   .atm-v1-footer-inner{align-items:flex-start;flex-direction:column}
   .atm-v1-question h3{font-size:27px}
 }
-@media(max-width:800px) and (max-height:700px){.atm-v1-quiz[data-atmospace-quiz-active="true"]{min-height:calc(100svh - 20px)}.atm-v1-quiz[data-atmospace-quiz-active="true"] .atm-v1-counter{margin:7px 0 10px}.atm-v1-quiz[data-atmospace-quiz-active="true"] .atm-v1-question h3{margin-bottom:11px;font-size:20px}.atm-v1-quiz[data-atmospace-quiz-active="true"] .atm-v1-options button{min-height:58px;padding:8px 9px;font-size:12px}}
-@media(max-width:420px){.atm-v1-shell{width:calc(100% - 22px)}.atm-v1-hero{padding-top:clamp(145px,23svh,195px);padding-bottom:max(16px,env(safe-area-inset-bottom))}.atm-v1-hero h1{font-size:29px}.atm-v1-hero h1.atm-v1-title-medium{font-size:27px}.atm-v1-hero h1.atm-v1-title-long{font-size:24px}.atm-v1-primary{width:100%;padding-inline:16px}.atm-v1-options button{min-height:66px;padding:15px}.atm-v1-start-story,.atm-v1-editorial,.atm-v1-roadmap,.atm-v1-final-story,.atm-v1-registration{padding:58px 0}}
+@media(max-width:800px) and (max-height:700px){.atm-v1-hero{grid-template-rows:clamp(250px,46svh,310px) minmax(min-content,1fr)}.atm-v1-hero-content{padding:18px 0 max(20px,env(safe-area-inset-bottom))}.atm-v1-hero-copy{gap:14px}.atm-v1-quiz[data-atmospace-quiz-active="true"]{min-height:calc(100svh - 20px)}.atm-v1-quiz[data-atmospace-quiz-active="true"] .atm-v1-counter{margin:7px 0 10px}.atm-v1-quiz[data-atmospace-quiz-active="true"] .atm-v1-question h3{margin-bottom:11px;font-size:20px}.atm-v1-quiz[data-atmospace-quiz-active="true"] .atm-v1-options button{min-height:58px;padding:8px 9px;font-size:12px}}
+@media(max-width:420px){.atm-v1-shell{width:calc(100% - 22px)}.atm-v1-hero h1{font-size:29px}.atm-v1-hero h1.atm-v1-title-medium{font-size:27px}.atm-v1-hero h1.atm-v1-title-long{font-size:24px}.atm-v1-primary{width:100%;padding-inline:16px}.atm-v1-options button{min-height:66px;padding:15px}.atm-v1-start-story,.atm-v1-editorial,.atm-v1-roadmap,.atm-v1-final-story,.atm-v1-registration{padding:58px 0}}
 </style>
 <div id="fh-preland-root" class="${designClass}">
   <main>
     <section class="atm-v1-hero" aria-labelledby="atm-v1-title" data-atmospace-first-fold data-atmospace-format1-stage="start">
       <div class="atm-v1-hero-visual" aria-hidden="true"><img src="${esc(heroImage)}" alt="" loading="eager" decoding="async" fetchpriority="high"></div>
-      <div class="atm-v1-shell">
+      <div class="atm-v1-shell atm-v1-hero-content">
         <div class="atm-v1-hero-copy">
           <h1 id="atm-v1-title" class="${heroTitleClass}">${esc(titleText)}</h1>
           ${heroLead ? `<p class="atm-v1-lead" data-atmospace-format1-description>${esc(heroLead)}</p>` : ''}

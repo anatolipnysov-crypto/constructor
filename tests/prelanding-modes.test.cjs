@@ -100,6 +100,21 @@ const formatOneStoryMarkup = sliceBetween(
   '<section class="atm-v1-start-story"',
   '</section>'
 );
+const formatOneMobileCss = sliceBetween(
+  formatOneRenderer,
+  '@media(max-width:800px){',
+  '@media(max-width:800px) and (max-height:700px)'
+);
+const formatOneShortMobileCss = sliceBetween(
+  formatOneRenderer,
+  '@media(max-width:800px) and (max-height:700px)',
+  '@media(max-width:420px)'
+);
+const formatOneNarrowCss = sliceBetween(
+  formatOneRenderer,
+  '@media(max-width:420px)',
+  '</style>'
+);
 [
   'renderCoreMethodMiniQuiz()',
   'renderAtmospaceQuizButton',
@@ -141,6 +156,10 @@ assert(formatOneHeroMarkup.includes('atm-v1-hero-action'), 'Format 1 hero must e
 assert(!formatOneHeroMarkup.includes('atm-v1-mobile-cta'), 'Format 1 hero must not keep the duplicated mobile CTA wrapper.');
 assert(!formatOneHeroMarkup.includes('atm-v1-desktop-cta'), 'Format 1 hero must not keep the duplicated desktop CTA wrapper.');
 assert(!formatOneHeroMarkup.includes('atm-v1-first-fold-note'), 'Format 1 hero must not add explanatory copy below its CTA.');
+assert(
+  formatOneHeroMarkup.includes('<div class="atm-v1-shell atm-v1-hero-content">'),
+  'Format 1 hero must expose a separate content row below the bounded mobile media.'
+);
 [
   'Ты уже не первый год пытаешься перейти на новый уровень:',
   'увеличить доход',
@@ -258,7 +277,12 @@ const imageSpecBuilder = sliceBetween(
   'const subtitle = isCoreMethod',
   '? suppliedSubtitle',
   'Landing subtitle / meaning: not provided. Derive all visual semantics only from the exact landing headline; do not borrow or invent supporting copy.',
-  'Show one clear semantic focal point only: it may be the headline-specific object, metaphor, environment or one adult man.'
+  'Show one clear semantic focal point only: it may be the headline-specific object, metaphor, environment or one adult man.',
+  'RESPONSIVE DUAL-CROP CONTRACT: create one 3:2 landscape source that remains readable on desktop and in a tall-phone cover crop.',
+  'Keep the complete indispensable subject inside the middle-right safe column x=54-80%, y=12-58%, with its focal center at x=68-72%, y=32-42%.',
+  'Treat x=82-100% and y=62-100% as expendable background; no face, body edge, hand, key object or decisive action may live there.',
+  "For a human hero, keep the man's entire face, head, torso and essential gesture inside the safe column; never park him against the far-right edge.",
+  'For an object/metaphor hero, keep the complete object and every meaning-bearing part inside the safe column; do not use a tiny distant focal point.'
 ].forEach((snippet) => {
   assert(imageSpecBuilder.includes(snippet), `Format 1 image generation without a description must include ${snippet}`);
 });
@@ -277,10 +301,37 @@ assert.equal(
 [
   '.atm-v1-hero-visual{position:absolute;z-index:0;inset:0 0 0 26%',
   'object-position:56% 50%',
-  'object-position:50% 50%'
 ].forEach((snippet) => {
   assert(formatOneRenderer.includes(snippet), `Format 1 hero framing must include ${snippet}`);
 });
+[
+  '.atm-v1-hero{min-height:100svh;display:grid;',
+  'grid-template-rows:clamp(280px,52svh,460px) minmax(min-content,1fr)',
+  'align-items:stretch;padding:0;background:var(--atm-hero-bg)',
+  '.atm-v1-hero-visual{position:relative;grid-row:1;inset:auto;height:auto;min-height:0}',
+  '.atm-v1-hero-visual img{object-position:78% 42%;transform:none;',
+  '.atm-v1-hero-content{grid-row:2;display:grid;align-items:center;padding:22px 0 max(24px,env(safe-area-inset-bottom))}',
+  'display:grid;gap:18px;',
+  '.atm-v1-hero h1,.atm-v1-lead,.atm-v1-hero-action,.atm-v1-hero .atm-v1-primary{margin:0}',
+  'linear-gradient(180deg,rgba(7,17,31,0) 60%,var(--atm-hero-bg) 100%)'
+].forEach((snippet) => {
+  assert(formatOneMobileCss.includes(snippet), `Format 1 bounded mobile hero must include ${snippet}`);
+});
+[
+  '.atm-v1-hero{grid-template-rows:clamp(250px,46svh,310px) minmax(min-content,1fr)}',
+  '.atm-v1-hero-content{padding:18px 0 max(20px,env(safe-area-inset-bottom))}',
+  '.atm-v1-hero-copy{gap:14px}'
+].forEach((snippet) => {
+  assert(formatOneShortMobileCss.includes(snippet), `Format 1 short-phone composition must include ${snippet}`);
+});
+assert(
+  !formatOneMobileCss.includes('.atm-v1-hero-visual{inset:0;height:100%}'),
+  'Mobile media must not return to an unbounded full-height layer behind all hero copy.'
+);
+assert(
+  !formatOneNarrowCss.includes('padding-top:clamp(145px,23svh,195px)'),
+  'The narrow-phone override must not undo the split hero grid with legacy top padding.'
+);
 
 const formatOneQuizRenderer = sliceBetween(
   source,
