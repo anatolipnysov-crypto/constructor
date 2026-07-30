@@ -36,6 +36,8 @@ assert(
 assert(!modeSelector.includes("id: 'personalRouteQuiz'"), 'Removed legacy modes must not appear in the selector.');
 assert(source.includes('один из двух форматов'), 'Constructor copy must describe the two-format surface.');
 assert(source.includes('Доступны два формата предлендинга: 1 и 6.'), 'Mode selector must describe Formats 1 and 6.');
+assert(source.includes('label="Текст / подзаголовок (необязательно)"'), 'Constructor UI must mark the Format 1 description as optional.');
+assert(source.includes('оставьте пустым — под заголовком ничего не будет'), 'Constructor UI must explain the headline-only generation path.');
 [
   'один из шести форматов',
   'Доступны шесть форматов предлендинга',
@@ -88,12 +90,24 @@ const formatOneRenderer = sliceBetween(
   'function renderCoreMethodInlinePrelanding',
   'function staticLandingSlug'
 );
+const formatOneHeroMarkup = sliceBetween(
+  formatOneRenderer,
+  '<section class="atm-v1-hero"',
+  '</section>'
+);
+const formatOneStoryMarkup = sliceBetween(
+  formatOneRenderer,
+  '<section class="atm-v1-start-story"',
+  '</section>'
+);
 [
   'renderCoreMethodMiniQuiz()',
   'renderAtmospaceQuizButton',
   "renderAtmospaceQuizButton('atm-v1-primary', 'Пройти мини-тест')",
   'data-atmospace-first-fold',
   'data-atmospace-first-fold-cta',
+  'data-atmospace-format1-story',
+  'data-atmospace-story-cta',
   'data-atmospace-format1-stage="start"',
   '--atm-hero-bg:#07111f',
   'background:var(--atm-hero-bg)',
@@ -104,6 +118,29 @@ const formatOneRenderer = sliceBetween(
   assert(formatOneRenderer.includes(snippet), `Format 1 must include ${snippet}`);
 });
 assert(!source.includes('renderCoreMethodCompactOffer'), 'Format 1 must not keep the rejected AI-written compact offer renderer.');
+assert(
+  formatOneRenderer.includes("const heroLead = stripHtml(content?.description || '');"),
+  'Format 1 must preserve an empty description instead of inventing fallback copy.'
+);
+assert.match(
+  formatOneHeroMarkup,
+  /\$\{heroLead\s*\?\s*`<p class="atm-v1-lead" data-atmospace-format1-description>\$\{esc\(heroLead\)\}<\/p>`\s*:\s*''\}/,
+  'Format 1 must omit the description element entirely when the operator enters no text.'
+);
+assert(!formatOneRenderer.includes('content?.description || \'Короткий'), 'Format 1 must not restore fallback text below the headline.');
+assert(!formatOneHeroMarkup.includes('atm-v1-kicker'), 'Format 1 hero must not render a kicker above the headline.');
+assert(!formatOneHeroMarkup.includes('Короткий мини-тест'), 'Format 1 hero must not render the rejected kicker copy.');
+assert(!formatOneHeroMarkup.includes('atm-v1-start-story'), 'Fixed story copy must not crowd the first viewport.');
+assert(!formatOneHeroMarkup.includes('Ты уже не первый год'), 'Fixed story copy must start below the hero.');
+assert.equal(
+  (formatOneHeroMarkup.match(/data-atmospace-first-fold-cta/g) || []).length,
+  1,
+  'Format 1 hero must contain one CTA without separate mobile and desktop duplicates.'
+);
+assert(formatOneHeroMarkup.includes('atm-v1-hero-action'), 'Format 1 hero must expose one responsive action slot.');
+assert(!formatOneHeroMarkup.includes('atm-v1-mobile-cta'), 'Format 1 hero must not keep the duplicated mobile CTA wrapper.');
+assert(!formatOneHeroMarkup.includes('atm-v1-desktop-cta'), 'Format 1 hero must not keep the duplicated desktop CTA wrapper.');
+assert(!formatOneHeroMarkup.includes('atm-v1-first-fold-note'), 'Format 1 hero must not add explanatory copy below its CTA.');
 [
   'Ты уже не первый год пытаешься перейти на новый уровень:',
   'увеличить доход',
@@ -112,8 +149,38 @@ assert(!source.includes('renderCoreMethodCompactOffer'), 'Format 1 must not keep
   'Сколько ты ещё так сможешь, пока окончательно не выгоришь?',
   'Готов увидеть <strong>НАСТОЯЩУЮ</strong> причину твоих проблем?'
 ].forEach((snippet) => {
-  assert(formatOneRenderer.includes(snippet), `Format 1 start screen must preserve: ${snippet}`);
+  assert(formatOneStoryMarkup.includes(snippet), `Format 1 story section must preserve: ${snippet}`);
 });
+[
+  'atm-v1-story-grid',
+  'atm-v1-story-intro',
+  'atm-v1-story-points',
+  'atm-v1-story-question',
+  'atm-v1-story-action',
+  'data-atmospace-story-cta'
+].forEach((snippet) => {
+  assert(formatOneStoryMarkup.includes(snippet), `Format 1 story section must include ${snippet}`);
+});
+assert(
+  formatOneRenderer.indexOf('data-atmospace-format1-story') > formatOneRenderer.indexOf('data-atmospace-format1-stage="start"')
+    && formatOneRenderer.indexOf('data-atmospace-format1-story') < formatOneRenderer.indexOf('${renderCoreMethodMiniQuiz()}'),
+  'The fixed story section must render after the clean hero and before the quiz.'
+);
+assert.match(
+  formatOneRenderer,
+  /\.atm-v1-story-grid\{[^}]*display:grid[^}]*grid-template-columns:/,
+  'Desktop story copy must use a structured grid instead of one continuous text column.'
+);
+assert.match(
+  formatOneRenderer,
+  /@media\(max-width:800px\)[\s\S]*?\.atm-v1-story-grid\{[^}]*grid-template-columns:1fr/,
+  'The story grid must collapse to one column on mobile.'
+);
+assert(
+  formatOneRenderer.includes('@media(max-width:800px)')
+    && formatOneRenderer.includes('.atm-v1-hero{min-height:100svh'),
+  'The mobile first viewport must remain a full-height hero containing only image, headline, optional description and CTA.'
+);
 assert.deepEqual(
   [...formatOneRenderer.matchAll(/content\?\.([A-Za-z0-9_]+)/g)].map((match) => match[1]).sort(),
   ['description', 'title', 'titleHtml'],
@@ -163,27 +230,42 @@ const imageSpecBuilder = sliceBetween(
 );
 [
   'High-contrast premium masculine editorial photography',
-  'never as a generic man in a blue shirt sitting beside a laptop',
+  'Never force a generic man in a blue shirt beside a laptop into a headline that is better explained without a person.',
   'Never use pale pastel haze or a washed-out white page look',
   "persona: isCoreMethod ? 'man'",
   'Masculine visual language comes from decisive composition',
   'A person is optional and must never be the automatic default',
-  'face and torso centered around 68-74 percent of frame width',
   "persona: 'mixed'",
-  "visualMode: 'metaphor'",
+  "visualMode: isCoreMethod ? 'metaphor' : 'generatedPerson'",
   'const visualSeedInput = [',
   'const semanticRotation = hashText(visualSeedInput);',
-  'Role-specific casting fingerprints:',
+  'Role-specific visual fingerprints:',
   'const semanticHeroScene = routeScenes[0]',
-  'Casting fingerprint: ${heroFingerprint.prompt}',
-  'Casting fingerprint: ${valueFingerprint.prompt}',
-  'Casting fingerprint: ${ctaFingerprint.prompt}',
-  'If the semantic scene names a woman, couple or group, adapt it to this one different adult man.',
+  'For a human hero use this casting fingerprint: ${heroFingerprint.prompt}',
+  'Show exactly one adult man with this casting fingerprint: ${valueFingerprint.prompt}',
+  'Show exactly one different adult man with this casting fingerprint: ${ctaFingerprint.prompt}',
+  'Choose the strongest semantic representation: a concrete object, visual metaphor, place or environment; use a human only when the headline meaning genuinely requires one.',
+  'If any human is visible, show exactly one adult man; never show a woman, female character, couple, family or group.',
+  'The value and CTA scenes use two different adult men; neither may repeat a face, age band, hair, clothes, build, pose or camera treatment from the hero or from each other.',
+  'variationKey: `${variantSeed}|hero-semantic|${heroFingerprint.id}`',
   'variationKey: `${variantSeed}|value|${valueFingerprint.id}`',
   'variationKey: `${variantSeed}|cta|${ctaFingerprint.id}`'
 ].forEach((snippet) => {
   assert(imageSpecBuilder.includes(snippet), `Format 1 image contract must include ${snippet}`);
 });
+[
+  "const suppliedSubtitle = stripHtml(text || '');",
+  'const subtitle = isCoreMethod',
+  '? suppliedSubtitle',
+  'Landing subtitle / meaning: not provided. Derive all visual semantics only from the exact landing headline; do not borrow or invent supporting copy.',
+  'Show one clear semantic focal point only: it may be the headline-specific object, metaphor, environment or one adult man.'
+].forEach((snippet) => {
+  assert(imageSpecBuilder.includes(snippet), `Format 1 image generation without a description must include ${snippet}`);
+});
+assert(
+  !imageSpecBuilder.includes('If the semantic scene names a woman, couple or group, adapt it to this one different adult man.'),
+  'Format 1 hero must no longer coerce every semantic scene into a stock portrait.'
+);
 assert(!imageSpecBuilder.includes('Date.now()'), 'Image specs must not use wall-clock randomness as a fake visual seed.');
 assert(!imageSpecBuilder.includes('Math.random()'), 'Image specs must be reproducible from semantic and rotation inputs.');
 assert.equal(
@@ -193,9 +275,9 @@ assert.equal(
 );
 
 [
-  '.atm-v1-hero-visual{position:absolute;z-index:0;inset:0 0 0 30%',
-  'object-position:66% 50%',
-  'object-position:68% 12%'
+  '.atm-v1-hero-visual{position:absolute;z-index:0;inset:0 0 0 26%',
+  'object-position:56% 50%',
+  'object-position:50% 50%'
 ].forEach((snippet) => {
   assert(formatOneRenderer.includes(snippet), `Format 1 hero framing must include ${snippet}`);
 });
@@ -269,8 +351,8 @@ assert(!insightRenderer.includes('data-atmospace-embedded-quiz'), 'Format 6 must
 assert(insightRenderer.includes('grid-template-rows:auto minmax(190px,30svh)'), 'Format 6 mobile copy and CTA must render before media.');
 assert(insightRenderer.includes('.fh-si-media{order:0'), 'Format 6 mobile media must stay after the first-fold CTA.');
 assert(!insightRenderer.includes('.fh-si-media{order:-1'), 'Format 6 must not place mobile media before its CTA.');
-assert(formatOneRenderer.includes('atm-v1-mobile-cta'), 'Format 1 must expose a mobile CTA immediately after the headline.');
-assert(formatOneRenderer.includes('4 вопроса · около минуты · без телефона'), 'Format 1 mobile CTA must explain the short flow.');
+assert(formatOneRenderer.includes('atm-v1-hero-action'), 'Format 1 must expose one responsive CTA immediately after the headline or optional description.');
+assert(!formatOneRenderer.includes('4 вопроса · около минуты · без телефона'), 'Format 1 hero must not restore removed explanatory microcopy.');
 [
   '.atm-v1-quiz[data-atmospace-quiz-active="true"] .atm-v1-quiz-intro{display:none}',
   '.atm-v1-quiz-band{min-height:100svh',
@@ -355,7 +437,10 @@ const generatedFormatOneRoute = sliceBetween(
   "if (normalizedManualPrelandingMode === 'templateStage') {",
   'const insightPreset ='
 );
-assert(generatedFormatOneRoute.includes('description: textLead'), 'Format 1 must pass the entered description through an explicit slot.');
+assert(generatedFormatOneRoute.includes('const textLead = enteredText;'), 'Format 1 must preserve an intentionally empty description.');
+assert(generatedFormatOneRoute.includes('description: textLead'), 'Format 1 must pass only the entered description through an explicit slot.');
+assert(!generatedFormatOneRoute.includes('baseContent.trustTitle'), 'Format 1 must not substitute preset copy for an empty description.');
+assert(!generatedFormatOneRoute.includes('Короткий мини-тест поможет'), 'Format 1 must not restore the rejected description fallback.');
 [
   'resolveClientPrelandingLogic(',
   'cards:',
@@ -486,6 +571,8 @@ const built = fs.readFileSync(path.join(distAssetsDir, bundle), 'utf8');
   'data-atmospace-format1-stage="start"',
   'data-atmospace-format1-stage="quiz"',
   'data-atmospace-format1-stage="offer"',
+  'data-atmospace-format1-story',
+  'data-atmospace-story-cta',
   'Ты уже не первый год пытаешься перейти на новый уровень:',
   'И ты можешь сделать ещё 100+ попыток, но так и НЕ пробьёшь свой уровень.',
   'Проверка пройдена. HTML готов к копированию.'
@@ -503,7 +590,9 @@ const built = fs.readFileSync(path.join(distAssetsDir, bundle), 'utf8');
   /supabase\.co\/functions\/v1/,
   /registration_click/,
   /registration_success/,
-  /payment_success/
+  /payment_success/,
+  /Короткий мини-тест/,
+  /4 вопроса · около минуты · без телефона/
 ].forEach((pattern) => {
   assert(!pattern.test(built), `Built bundle must not match ${pattern}`);
 });

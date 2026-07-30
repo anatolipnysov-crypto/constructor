@@ -2103,9 +2103,16 @@ function buildPrelandingMemoryLine(memory = []) {
 function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline, text, projectData, designRoute, visualRoute, visualMemory }) {
   const normalizedMode = normalizeManualPrelandingMode(mode);
   const isBarrierProfile = normalizedMode === 'barrierProfileQuiz';
+  const isCoreMethod = normalizedMode === 'templateStage';
   const content = PRELANDING_CONTENT[templateId] || PRELANDING_CONTENT[1];
   const title = stripHtml(headline || content.titleHtml || 'Откройте короткий разбор и первый понятный шаг');
-  const subtitle = stripHtml(text || content.trustTitle || content.valueTitle || 'Короткий разбор показывает механику и следующий шаг без долгой подготовки');
+  const suppliedSubtitle = stripHtml(text || '');
+  const subtitle = isCoreMethod
+    ? suppliedSubtitle
+    : suppliedSubtitle || stripHtml(content.trustTitle || content.valueTitle || 'Короткий разбор показывает механику и следующий шаг без долгой подготовки');
+  const subtitleContextLine = subtitle
+    ? `Landing subtitle / meaning: ${subtitle}`
+    : 'Landing subtitle / meaning: not provided. Derive all visual semantics only from the exact landing headline; do not borrow or invent supporting copy.';
   const landingLogic = resolveClientPrelandingLogic(title, subtitle, mode);
   const clientName = projectData?.clientDisplayName || projectData?.clientName || '';
   const route = visualRoute || PRELANDING_VISUAL_ROUTES[0];
@@ -2143,7 +2150,6 @@ function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline,
     : rotateItems(fallbackRouteScenes, fallbackRouteScenes.length ? semanticRotation % fallbackRouteScenes.length : 0).slice(0, 3);
   const routePersonas = rotateItems(semanticPersonas, semanticPersonas.length ? semanticRotation % semanticPersonas.length : 0);
   const designMood = designRoute?.visualMood || 'clean premium light prelanding design';
-  const isCoreMethod = normalizedMode === 'templateStage';
   const heroFingerprint = CORE_METHOD_HERO_FINGERPRINTS[semanticRotation % CORE_METHOD_HERO_FINGERPRINTS.length];
   const valueFingerprint = CORE_METHOD_HERO_FINGERPRINTS[(semanticRotation + 2) % CORE_METHOD_HERO_FINGERPRINTS.length];
   const ctaFingerprint = CORE_METHOD_HERO_FINGERPRINTS[(semanticRotation + 4) % CORE_METHOD_HERO_FINGERPRINTS.length];
@@ -2155,10 +2161,10 @@ function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline,
       };
   const modeDescription = isBarrierProfile
     ? 'dark high-contrast premium barrier profile with a framed semantic scene derived from the headline; a person is optional'
-    : 'premium masculine mini-test landing with one strong cinematic full-bleed first-screen story';
+    : 'premium masculine mini-test landing with one strong cinematic full-bleed first-screen story; the hero may be a person, object, metaphor or environment according to the headline';
   const baseContext = [
     `Landing headline: ${title}`,
-    `Landing subtitle / meaning: ${subtitle}`,
+    subtitleContextLine,
     `Marketing semantic: ${landingLogic.semanticId || 'problem-route'}; angle: ${landingLogic.label}`,
     `Bot transition logic: ${landingLogic.actionSubtitle}`,
     `Core offer cards: ${landingLogic.cards.map(item => `${item.title}: ${item.text}`).join(' | ')}`,
@@ -2167,7 +2173,7 @@ function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline,
     `Design route: ${designRoute?.label || style || 'clean premium'}; palette: ${palette || 'soft bright'}; visual mood: ${designMood}`,
     `Current visual route: ${route.label || route.id || 'new route'}.`,
     isCoreMethod
-      ? `Role-specific casting fingerprints: hero ${heroFingerprint.id}; value ${valueFingerprint.id}; CTA ${ctaFingerprint.id}. They are three different adult men and must never share a face, hair, clothes, build or camera treatment.`
+      ? `Role-specific visual fingerprints: hero ${heroFingerprint.id}; value ${valueFingerprint.id}; CTA ${ctaFingerprint.id}. Use the hero fingerprint only if the semantic hero needs a human. The hero may instead be fully personless. The value and CTA scenes use two different adult men; neither may repeat a face, age band, hair, clothes, build, pose or camera treatment from the hero or from each other.`
       : `Visual casting and composition fingerprint: ${visualFingerprint.id}. ${visualFingerprint.prompt}`,
     memoryLine,
     'No text, no letters, no numbers, no logos, no UI screenshots, no bank cards, no money stacks.',
@@ -2178,12 +2184,12 @@ function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline,
       ? 'High-contrast premium masculine editorial photography: deep graphite, navy or forest shadows, one restrained warm accent, cinematic directional light, realistic materials and crisp focus. Never use pale pastel haze or a washed-out white page look.'
       : 'Bright clean premium lifestyle photography for a modern Russian ad landing, not gloomy, not dark, not stock-like.',
     isCoreMethod
-      ? 'The hero is an adult man selected by the casting fingerprint, with natural focused emotion and a visibly different age band, face type, hair, clothes and camera treatment from recent generations. Show him inside a meaningful action, choice or visual metaphor from the exact headline, never as a generic man in a blue shirt sitting beside a laptop.'
+      ? 'Choose the strongest semantic representation for the hero: a concrete object, visual metaphor, place or environment; use a human only when the headline meaning genuinely requires one. If any human is visible, show exactly one adult man selected by the casting fingerprint; never show a woman, female character, couple, family or group. Never force a generic man in a blue shirt beside a laptop into a headline that is better explained without a person.'
       : 'The person must look alive and modern, age 32-50, visible face and natural emotion, not elderly, not tired, not overexposed.',
     isCoreMethod
       ? 'Build depth with a real location, weather, architecture, workshop, road, water, landscape or another semantically justified environment. The scene must feel specific to this headline, not like reusable office stock photography.'
       : 'Avoid washed-out white backgrounds and blown highlights: keep readable skin tone, natural contrast, real room/cafe/city depth, vivid daylight, crisp focus.',
-    'Keep the face and upper body comfortably framed, never cropped at the edge; leave safe negative space for text without making the whole image empty white.',
+    'When a person is present, keep the face and upper body comfortably framed and never cropped at the edge. For a personless scene, give the object, metaphor or environment one clear cinematic focal point. Always leave safe negative space for HTML text without making the whole image empty white.',
     'Every image must be a different scene, different camera angle, different background, different clothes and different composition.',
     'Three-image story contract: hero shows one concrete triggering event; value shows its consequence or changed choice in another location; CTA shows relief, direction and the next step after the problem.',
     'Across all three images never repeat the same person, room, focal object, problem object, pose, clothes, camera angle or narrative moment. A different person beside the same appliance still counts as repetition and is forbidden.',
@@ -2228,10 +2234,10 @@ function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline,
     }];
   }
   const semanticHeroScene = routeScenes[0]
-    || 'one cinematic adult man actively living the exact conflict, decision or metaphor from the headline';
-  const heroSubject = `hero image semantic scene: ${semanticHeroScene}. Casting fingerprint: ${heroFingerprint.prompt} Preserve the scene's core action, place and objects, but if it names a woman, couple or group, adapt the visible protagonist to this one adult man. Strong posture and authentic emotion; a specific premium environment with texture and depth; no generic office desk, no plain shirt portrait, no laptop pose, no blank white interior; subject on the right third with protected darker space on the left for white HTML headline`;
-  const valueSubject = `middle section semantic scene: ${routeScenes[1] || 'a different adult man in a different location confronting the real consequence of the problem or making a concrete new choice'}. Casting fingerprint: ${valueFingerprint.prompt} If the semantic scene names a woman, couple or group, adapt it to this one different adult man. Cinematic documentary detail, distinct action, clothes, setting and camera angle, no repeated hero object`;
-  const ctaSubject = `final CTA semantic scene: ${routeScenes[2] || 'a different adult man moving toward a clear next step in a new outdoor, architectural or workshop setting'}. Casting fingerprint: ${ctaFingerprint.prompt} If the semantic scene names a woman, couple or group, adapt it to this one different adult man. Restrained confidence and relief, cinematic contrast, no repeated location or prop`;
+    || 'one concrete object, visual metaphor or meaningful environment that expresses the exact conflict or decision from the headline, with a person only when essential';
+  const heroSubject = `hero image semantic scene: ${semanticHeroScene}. Choose the strongest semantic representation: a concrete object, visual metaphor, place or environment; use a human only when the headline meaning genuinely requires one. If any human is visible, show exactly one adult man; never show a woman, female character, couple, family or group. For a human hero use this casting fingerprint: ${heroFingerprint.prompt} Ignore female, couple or group casting from the source scene instead of reproducing it. For a personless hero, make the headline-specific object, metaphor or environment the dominant focal subject. Use a specific premium setting with texture and depth; no generic office desk, no plain-shirt portrait, no laptop pose and no blank white interior; keep the semantic focal point on the right third with protected darker space on the left for white HTML headline`;
+  const valueSubject = `middle section semantic scene: ${routeScenes[1] || 'a different adult man in a different location confronting the real consequence of the problem or making a concrete new choice'}. Show exactly one adult man with this casting fingerprint: ${valueFingerprint.prompt} Ignore any woman, female character, couple, family or group named by the source scene. He must not repeat a face, age band, hair, clothes, build, pose or camera treatment from a human hero. Cinematic documentary detail, distinct action, setting and camera angle, no repeated hero object`;
+  const ctaSubject = `final CTA semantic scene: ${routeScenes[2] || 'a different adult man moving toward a clear next step in a new outdoor, architectural or workshop setting'}. Show exactly one different adult man with this casting fingerprint: ${ctaFingerprint.prompt} Ignore any woman, female character, couple, family or group named by the source scene. He must not repeat a face, age band, hair, clothes, build, pose or camera treatment from the hero or value scene. Restrained confidence and relief, cinematic contrast, no repeated location or prop`;
 
   return [
     {
@@ -2239,10 +2245,10 @@ function buildPrelandingImageSpecs({ mode, templateId, style, palette, headline,
       headline: title,
       methodName: subtitle,
       persona: isCoreMethod ? 'man' : (routePersonas[0] || 'woman'),
-      visualMode: 'generatedPerson',
+      visualMode: isCoreMethod ? 'metaphor' : 'generatedPerson',
       stylePreset: imageStylePreset,
-      variationKey: `${variantSeed}|hero|${heroFingerprint.id}`,
-      visualPrompt: `${baseContext}\n\nROLE 1 — TRIGGERING EVENT. ${heroSubject}\nShow one clear focal problem object only. Composition: wide horizontal premium hero photo, cinematic 35mm lifestyle look, subject on the right side, generous clean space on the left, no text.`
+      variationKey: `${variantSeed}|hero-semantic|${heroFingerprint.id}`,
+      visualPrompt: `${baseContext}\n\nROLE 1 — TRIGGERING EVENT. ${heroSubject}\nShow one clear semantic focal point only: it may be the headline-specific object, metaphor, environment or one adult man. Composition: wide horizontal premium hero photo, cinematic 35mm lifestyle look, focal point on the right side, generous clean space on the left, no text.`
     },
     {
       slot: 'value',
@@ -4409,7 +4415,7 @@ function renderCoreMethodInlinePrelanding({ templateId, content, projectData, la
   const heroImage = bothelpImageSrc(sceneImage || PRELANDING_FALLBACK_IMAGES[0]);
   const offerImage = bothelpImageSrc(valueImage || PRELANDING_FALLBACK_IMAGES[1]);
   const finalImage = bothelpImageSrc(ctaImage || PRELANDING_FALLBACK_IMAGES[2]);
-  const heroLead = stripHtml(content?.description || 'Короткий мини-тест поможет увидеть настоящую причину повторяющегося сценария.');
+  const heroLead = stripHtml(content?.description || '');
 
   return `${buildAtmospaceHeadConfig({ projectData, ...(landingMeta || {}) })}
 <style>
@@ -4424,22 +4430,29 @@ html,body{overflow-x:hidden}
 .atm-v1-shell{width:min(1180px,calc(100% - 40px));margin:0 auto}
 .atm-v1-hero{position:relative;min-height:100svh;display:grid;align-items:center;overflow:hidden;isolation:isolate;padding:clamp(32px,5vh,56px) 0;background:var(--atm-hero-bg);color:#f8fafc}
 .atm-v1-hero>.atm-v1-shell{position:relative;z-index:2}
-.atm-v1-hero-visual{position:absolute;z-index:0;inset:0 0 0 30%;overflow:hidden;background:#111d2c}
-.atm-v1-hero-visual img{display:block;width:100%;height:100%;object-fit:cover;object-position:66% 50%;filter:saturate(1.1) contrast(1.12) brightness(.9);transform:scale(1.01)}
+.atm-v1-hero-visual{position:absolute;z-index:0;inset:0 0 0 26%;overflow:hidden;background:#111d2c}
+.atm-v1-hero-visual img{display:block;width:100%;height:100%;object-fit:cover;object-position:56% 50%;filter:saturate(1.1) contrast(1.12) brightness(.9);transform:scale(1.01)}
 .atm-v1-hero-visual:after{content:"";position:absolute;inset:0;background:var(--atm-hero-overlay);pointer-events:none}
 .atm-v1-hero-copy{max-width:650px}
-.atm-v1-mobile-cta{display:none}
-.atm-v1-first-fold-note{margin:8px 0 0;color:#b9c7d9;font-size:12px;line-height:1.35;font-weight:750}
 .atm-v1-kicker{margin:0 0 16px;color:var(--atm-accent2);font-size:13px;line-height:1.2;font-weight:900;text-transform:uppercase}
 .atm-v1-hero h1{max-width:650px;margin:0 0 18px;color:#fff;font-size:clamp(42px,4.6vw,66px);line-height:.98;font-weight:900;letter-spacing:0;text-wrap:balance;text-shadow:0 18px 50px rgba(0,0,0,.28)}
 .atm-v1-hero h1.atm-v1-title-medium{font-size:clamp(38px,4.1vw,58px)}
 .atm-v1-hero h1.atm-v1-title-long{font-size:clamp(34px,3.7vw,52px)}
 .atm-v1-lead{max-width:610px;margin:0 0 20px;color:#d5deeb;font-size:clamp(17px,1.55vw,22px);line-height:1.45;font-weight:700;text-shadow:0 8px 28px rgba(0,0,0,.28)}
-.atm-v1-start-story{max-width:620px;margin-top:18px;color:#d5deeb;font-size:15px;line-height:1.45}
-.atm-v1-start-story p{margin:10px 0}
-.atm-v1-points{display:grid;gap:4px;margin:10px 0 14px;padding:0;list-style:none;font-weight:800}
-.atm-v1-points li:before{content:'•';margin-right:9px;color:var(--atm-accent2)}
-.atm-v1-question-lead{max-width:670px;margin:18px 0 0;padding:16px 0 0;border-top:1px solid rgba(255,255,255,.18);color:#f8fafc;font-size:17px;line-height:1.42;font-weight:900}
+.atm-v1-hero-action{margin-top:8px}
+.atm-v1-start-story{padding:clamp(70px,8vw,116px) 0;background:#f7f9fc;color:var(--atm-ink)}
+.atm-v1-story-grid{display:grid;grid-template-columns:minmax(0,.88fr) minmax(0,1.12fr);gap:clamp(34px,7vw,96px);align-items:start}
+.atm-v1-story-intro{position:sticky;top:32px}
+.atm-v1-story-intro h2{max-width:560px;margin:0;font-size:clamp(38px,5vw,64px);line-height:1.02;font-weight:900;letter-spacing:-.025em;text-wrap:balance}
+.atm-v1-story-body{display:grid;gap:22px}
+.atm-v1-story-points{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:0;padding:0;list-style:none}
+.atm-v1-story-points li{display:flex;align-items:center;min-height:74px;padding:16px 18px;border:1px solid var(--atm-line);border-radius:10px;background:#fff;box-shadow:0 14px 34px rgba(24,42,70,.07);font-size:16px;line-height:1.35;font-weight:850}
+.atm-v1-story-points li:before{content:'✓';display:grid;flex:0 0 28px;width:28px;height:28px;margin-right:11px;place-items:center;border-radius:50%;background:color-mix(in srgb,var(--atm-accent) 12%,#fff);color:var(--atm-accent);font-size:15px;font-weight:900}
+.atm-v1-story-copy{display:grid;gap:10px;color:var(--atm-muted);font-size:18px;line-height:1.6}
+.atm-v1-story-copy p{margin:0}
+.atm-v1-story-question{margin-top:4px;padding:24px;border-left:5px solid var(--atm-accent);border-radius:0 10px 10px 0;background:#fff;box-shadow:0 14px 34px rgba(24,42,70,.07);color:var(--atm-ink);font-size:clamp(20px,2.1vw,28px);line-height:1.32;font-weight:900}
+.atm-v1-story-question span{display:block;margin-top:12px;color:var(--atm-accent)}
+.atm-v1-story-action .atm-v1-primary{margin-top:0}
 .atm-v1-primary{display:inline-flex;align-items:center;justify-content:center;min-height:64px;margin-top:26px;padding:17px 30px;border:1px solid rgba(255,255,255,.18);border-radius:8px;background:linear-gradient(135deg,var(--atm-accent),var(--atm-accent2));box-shadow:0 18px 46px color-mix(in srgb,var(--atm-accent) 34%,transparent);color:#fff!important;text-decoration:none!important;font-size:17px;line-height:1.2;font-weight:900;cursor:pointer;transition:transform .18s ease,filter .18s ease}
 .atm-v1-primary:hover{transform:translateY(-2px);filter:brightness(1.06)}
 .atm-v1-primary:focus-visible{outline:3px solid rgba(255,255,255,.84);outline-offset:4px}
@@ -4508,7 +4521,7 @@ html,body{overflow-x:hidden}
   .atm-v1-shell{width:min(100% - 28px,1180px)}
   .atm-v1-hero{min-height:100svh;align-items:end;padding:clamp(165px,26svh,235px) 0 max(18px,env(safe-area-inset-bottom));background:var(--atm-hero-bg)}
   .atm-v1-hero-visual{inset:0;height:100%}
-  .atm-v1-hero-visual img{object-position:68% 12%;filter:saturate(1.08) contrast(1.1) brightness(.82)}
+  .atm-v1-hero-visual img{object-position:50% 50%;filter:saturate(1.08) contrast(1.1) brightness(.82)}
   .atm-v1-hero-visual:after{background:linear-gradient(180deg,rgba(7,17,31,.02) 0%,rgba(7,17,31,.16) 34%,rgba(7,17,31,.9) 61%,var(--atm-hero-bg) 82%)}
   .atm-v1-hero-copy{max-width:100%;min-width:0}
   .atm-v1-kicker{margin-bottom:9px;font-size:11px}
@@ -4516,9 +4529,16 @@ html,body{overflow-x:hidden}
   .atm-v1-hero h1.atm-v1-title-medium{font-size:clamp(28px,7.35vw,36px)}
   .atm-v1-hero h1.atm-v1-title-long{font-size:clamp(25px,6.6vw,32px)}
   .atm-v1-lead{max-width:100%;color:#d5deeb;font-size:14px;line-height:1.4;margin:13px 0 0;overflow-wrap:anywhere}
-  .atm-v1-mobile-cta{display:block}
-  .atm-v1-desktop-cta{display:none}
   .atm-v1-primary{width:100%;min-height:58px;margin-top:3px;padding:15px 18px}
+  .atm-v1-start-story{padding:58px 0}
+  .atm-v1-story-grid{grid-template-columns:1fr;gap:30px}
+  .atm-v1-story-intro{position:static}
+  .atm-v1-story-intro h2{font-size:clamp(32px,9vw,46px)}
+  .atm-v1-story-body{gap:18px}
+  .atm-v1-story-points{grid-template-columns:1fr;gap:9px}
+  .atm-v1-story-points li{min-height:58px;padding:13px 15px;font-size:15px}
+  .atm-v1-story-copy{font-size:16px;line-height:1.55}
+  .atm-v1-story-question{padding:20px;font-size:21px}
   .atm-v1-quiz-band{min-height:100svh;padding:16px 0 max(16px,env(safe-area-inset-bottom))}
   .atm-v1-quiz{width:100%;max-width:none}
   .atm-v1-quiz[data-atmospace-quiz-active="true"]{display:flex;min-height:calc(100svh - 32px);flex-direction:column;justify-content:center}
@@ -4538,7 +4558,7 @@ html,body{overflow-x:hidden}
   .atm-v1-question h3{font-size:27px}
 }
 @media(max-width:800px) and (max-height:700px){.atm-v1-quiz[data-atmospace-quiz-active="true"]{min-height:calc(100svh - 20px)}.atm-v1-quiz[data-atmospace-quiz-active="true"] .atm-v1-counter{margin:7px 0 10px}.atm-v1-quiz[data-atmospace-quiz-active="true"] .atm-v1-question h3{margin-bottom:11px;font-size:20px}.atm-v1-quiz[data-atmospace-quiz-active="true"] .atm-v1-options button{min-height:58px;padding:8px 9px;font-size:12px}}
-@media(max-width:420px){.atm-v1-shell{width:calc(100% - 22px)}.atm-v1-hero{padding-top:clamp(145px,23svh,195px);padding-bottom:max(16px,env(safe-area-inset-bottom))}.atm-v1-hero h1{font-size:29px}.atm-v1-hero h1.atm-v1-title-medium{font-size:27px}.atm-v1-hero h1.atm-v1-title-long{font-size:24px}.atm-v1-primary{width:100%;padding-inline:16px}.atm-v1-options button{min-height:66px;padding:15px}.atm-v1-editorial,.atm-v1-roadmap,.atm-v1-final-story,.atm-v1-registration{padding:58px 0}}
+@media(max-width:420px){.atm-v1-shell{width:calc(100% - 22px)}.atm-v1-hero{padding-top:clamp(145px,23svh,195px);padding-bottom:max(16px,env(safe-area-inset-bottom))}.atm-v1-hero h1{font-size:29px}.atm-v1-hero h1.atm-v1-title-medium{font-size:27px}.atm-v1-hero h1.atm-v1-title-long{font-size:24px}.atm-v1-primary{width:100%;padding-inline:16px}.atm-v1-options button{min-height:66px;padding:15px}.atm-v1-start-story,.atm-v1-editorial,.atm-v1-roadmap,.atm-v1-final-story,.atm-v1-registration{padding:58px 0}}
 </style>
 <div id="fh-preland-root" class="${designClass}">
   <main>
@@ -4546,21 +4566,26 @@ html,body{overflow-x:hidden}
       <div class="atm-v1-hero-visual" aria-hidden="true"><img src="${esc(heroImage)}" alt="" loading="eager" decoding="async" fetchpriority="high"></div>
       <div class="atm-v1-shell">
         <div class="atm-v1-hero-copy">
-          <p class="atm-v1-kicker">Короткий мини-тест</p>
           <h1 id="atm-v1-title" class="${heroTitleClass}">${esc(titleText)}</h1>
-          <p class="atm-v1-lead" data-atmospace-format1-description>${esc(heroLead)}</p>
-          <div class="atm-v1-mobile-cta" data-atmospace-first-fold-cta>
-            ${renderAtmospaceQuizButton('atm-v1-primary', 'Пройти мини-тест')}
-            <p class="atm-v1-first-fold-note">4 вопроса · около минуты · без телефона</p>
-          </div>
-          <div class="atm-v1-start-story">
-            <p>Ты уже не первый год пытаешься перейти на новый уровень:</p>
-            <ul class="atm-v1-points"><li>увеличить доход</li><li>найти своё дело</li><li>изменить привычки</li><li>и жить так, как хочешь именно ты.</li></ul>
+          ${heroLead ? `<p class="atm-v1-lead" data-atmospace-format1-description>${esc(heroLead)}</p>` : ''}
+          <div class="atm-v1-hero-action" data-atmospace-first-fold-cta>${renderAtmospaceQuizButton('atm-v1-primary', 'Пройти мини-тест')}</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="atm-v1-start-story" data-atmospace-format1-story aria-labelledby="atm-v1-story-title">
+      <div class="atm-v1-shell atm-v1-story-grid">
+        <div class="atm-v1-story-intro">
+          <h2 id="atm-v1-story-title">Ты уже не первый год пытаешься перейти на новый уровень:</h2>
+        </div>
+        <div class="atm-v1-story-body">
+          <ul class="atm-v1-story-points"><li>увеличить доход</li><li>найти своё дело</li><li>изменить привычки</li><li>и жить так, как хочешь именно ты.</li></ul>
+          <div class="atm-v1-story-copy">
             <p>Но что бы ты ни делал - результата <strong>НЕТ</strong>.</p>
             <p>Новая попытка как удар по вере в себя.</p>
-            <div class="atm-v1-question-lead">Сколько ты ещё так сможешь, пока окончательно не выгоришь?<br><br>Почему у других получается, а у тебя нет?<br>Готов увидеть <strong>НАСТОЯЩУЮ</strong> причину твоих проблем?</div>
           </div>
-          <div class="atm-v1-desktop-cta" data-atmospace-first-fold-cta>${renderAtmospaceQuizButton('atm-v1-primary', 'Пройти мини-тест')}</div>
+          <div class="atm-v1-story-question">Сколько ты ещё так сможешь, пока окончательно не выгоришь?<span>Почему у других получается, а у тебя нет?<br>Готов увидеть <strong>НАСТОЯЩУЮ</strong> причину твоих проблем?</span></div>
+          <div class="atm-v1-story-action" data-atmospace-story-cta>${renderAtmospaceQuizButton('atm-v1-primary', 'Пройти мини-тест')}</div>
         </div>
       </div>
     </section>
@@ -5659,7 +5684,9 @@ function renderPrelandingHtml({ tpl, style, palette, photo, overrides, projectDa
     badge: content.badge || landingLogic.badge,
     title,
     titleHtml: content.titleHtml || title,
-    description: overrides?.description || content.description || '',
+    description: isCoreMethod && Object.prototype.hasOwnProperty.call(overrides || {}, 'description')
+      ? String(overrides.description || '')
+      : (overrides?.description || content.description || ''),
     pills: content.pills || [],
     painTitle: content.painTitle || landingLogic.label,
     painItems: content.painItems || [],
@@ -6785,7 +6812,7 @@ export default function Constructor() {
       const baseContent = PRELANDING_CONTENT[selectedTemplateId] || PRELANDING_CONTENT[1];
       const coreDesign = currentPrelandingDesignRoute || CORE_METHOD_DESIGN_ROUTES[(selectedTemplateId - 1 + CORE_METHOD_DESIGN_ROUTES.length) % CORE_METHOD_DESIGN_ROUTES.length];
       const title = enteredHeadline || stripHtml(baseContent.titleHtml || baseContent.title || 'Откройте короткий разбор и первый шаг');
-      const textLead = enteredText || stripHtml(baseContent.trustTitle || 'Короткий мини-тест поможет увидеть настоящую причину повторяющегося сценария.');
+      const textLead = enteredText;
       const imageSeed = `manual-core-${selectedTemplateId}-${coreDesign?.id || style}-${coreDesign?.palette || palette}-${title}-${textLead}`;
       return renderPrelandingHtml({
         tpl: selectedTemplateId,
@@ -7088,17 +7115,17 @@ export default function Constructor() {
                   dark={dark}
                 />
                 <TextArea
-                  label="Текст / подзаголовок предлендинга"
-                  hint="коротко: какой сценарий разбирает лендинг"
+                  label="Текст / подзаголовок (необязательно)"
+                  hint="оставьте пустым — под заголовком ничего не будет"
                   value={creativeMethod}
                   onChange={setCreativeMethod}
                   rows={2}
-                  placeholder="Например: Разберитесь, почему деньги заканчиваются раньше срока и что каждый месяц возвращает вас к нулю."
+                  placeholder="Можно оставить пустым и собрать лендинг только по заголовку."
                   dark={dark}
                 />
               </div>
               <p className={`mt-3 text-xs font-bold ${dark ? 'text-red-100' : 'text-red-900'}`}>
-                Формат 1 меняет только ваш заголовок, описание и визуальные сцены; стартовая, квиз и оффер остаются неизменными. Формат 6 собирает смысловой профиль без возврата старых форматов.
+                Формат 1: первый экран содержит изображение, заголовок и кнопку; описание появится только если вы его ввели. Фиксированная стартовая история, квиз и оффер не переписываются. Формат 6 собирает смысловой профиль без возврата старых форматов.
               </p>
             </div>
 
