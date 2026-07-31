@@ -104,6 +104,7 @@ const ATMOSPACE_GENERATE_PATH = '/api/landing-runtime/generate';
 const ATMOSPACE_INIT_PATH = '/api/landing-runtime/init';
 const ATMOSPACE_CLICK_PATH = '/api/landing-runtime/click';
 const ATMOSPACE_RUNTIME_VERSION = 'sergey-constructor-quiz-v1';
+const ATMOSPACE_MODERNISTO_START_RUNTIME_PROFILE = 'modernisto-start-external-v1';
 const PURCHASE_URL_MISSING_MESSAGE = 'База не вернула purchase_url_990. Генерация остановлена. Проверьте серверную логику автосоздания ссылки покупки 990.';
 const DEFAULT_CLIENT_GOALS = {
   goal_bot_start: 'bot_start',
@@ -155,6 +156,14 @@ function validateAtmospaceGenerateInput(payload) {
     errors.push({ field: 'serverOnlyAdGoalCredential', code: 'credential_masked' });
   }
   return errors;
+}
+
+function validateAtmospaceRuntimeProfile(value) {
+  const runtimeProfile = cleanText(value, 120);
+  return {
+    ok: !runtimeProfile || runtimeProfile === ATMOSPACE_MODERNISTO_START_RUNTIME_PROFILE,
+    value: runtimeProfile
+  };
 }
 
 function maskAtmospaceLogValue(value) {
@@ -216,6 +225,42 @@ function publicAtmospaceGenerateResult(data) {
   };
 }
 
+function publicAtmospaceModernistoStartResult(data, binding = {}) {
+  const publicLandingKey = cleanText(data?.publicLandingKey, 500);
+  const counterId = cleanText(binding.counterId, 80);
+  const hasUpstreamCounterId = data?.counterId !== undefined || data?.counter_id !== undefined;
+  const upstreamCounterId = cleanText(data?.counterId ?? data?.counter_id, 80);
+  if (!publicLandingKey || !/^\d{5,20}$/.test(counterId)) return null;
+  if (hasUpstreamCounterId && upstreamCounterId !== counterId) return null;
+
+  return {
+    publicLandingKey,
+    counterId,
+    landingName: cleanText(data?.landingName || binding.landingName, 180),
+    status: cleanText(data?.status || 'generated', 80)
+  };
+}
+
+function sendAtmospaceModernistoStartGenerateResult(res, data, binding, requestId) {
+  const artifact = publicAtmospaceModernistoStartResult(data, binding);
+  if (!artifact) {
+    console.error('[atmospace.generate] external_runtime_contract_failed', { requestId });
+    return sendJson(res, 502, {
+      ok: false,
+      error: 'atmospace_external_runtime_contract_failed',
+      message: 'Сервер не подтвердил техническую привязку лендинга. Повторите генерацию.',
+      requestId
+    });
+  }
+
+  console.info('[atmospace.generate] success', {
+    requestId,
+    publicLandingKey: maskAtmospaceLogValue(artifact.publicLandingKey),
+    runtimeProfile: ATMOSPACE_MODERNISTO_START_RUNTIME_PROFILE
+  });
+  return sendJson(res, 200, { ok: true, requestId, data: artifact });
+}
+
 function safeScriptJson(value) {
   return JSON.stringify(value)
     .replace(/</g, '\\u003c')
@@ -257,7 +302,7 @@ function hasLegacyAtmospaceRuntime(source) {
     && /!links\.telegram\s*\|\|\s*!links\.max/.test(htmlSource);
 }
 
-+function extractAtmospaceRuntimeBlocks(source) {
+function extractAtmospaceRuntimeBlocks(source) {
   const blocks = [];
   const pattern = /<script\b[^>]*\bdata-atmospace-runtime=(["'])[^"']+\1[^>]*>[\s\S]*?<\/script\s*>/gi;
   let match;
@@ -1832,8 +1877,12 @@ async function handleAtmospaceLandingGenerate(req, res) {
     });
   }
 
+  const runtimeProfileValidation = validateAtmospaceRuntimeProfile(input.runtimeProfile);
   const payload = cleanAtmospaceGenerateInput(input);
   const validationErrors = validateAtmospaceGenerateInput(payload);
+  if (!runtimeProfileValidation.ok) {
+    validationErrors.push({ field: 'runtimeProfile', code: 'runtime_profile_invalid' });
+  }
   if (validationErrors.length) {
     const primaryError = validationErrors[0]?.code || 'validation_failed';
     console.warn('[atmospace.generate] validation_failed', { requestId, validationErrors });
@@ -1851,7 +1900,8 @@ async function handleAtmospaceLandingGenerate(req, res) {
     landingCode: maskAtmospaceLogValue(payload.landingCode),
     counterId: payload.counterId,
     landingNameLength: payload.landingName.length,
-    hasProtectedCredential: Boolean(payload.serverOnlyAdGoalCredential)
+    hasProtectedCredential: Boolean(payload.serverOnlyAdGoalCredential),
+    runtimeProfile: runtimeProfileValidation.value || 'inline-runtime-default'
   });
 
   let upstream;
@@ -1878,7 +1928,8 @@ async function handleAtmospaceLandingGenerate(req, res) {
   }
 
   const upstreamData = result?.data || {};
-  if (!upstream.ok || !result?.ok || !upstreamData.publicLandingKey || !upstreamData.embedCode) {
+  const modernistoStartRequested = runtimeProfileValidation.value === ATMOSPACE_MODERNISTO_START_RUNTIME_PROFILE;
+  if (!upstream.ok || !result?.ok || !upstreamData.publicLandingKey || (!modernistoStartRequested && !upstreamData.embedCode)) {
     const upstreamError = result?.error || upstreamData.error || 'atmospace_generate_failed';
     console.warn('[atmospace.generate] upstream_rejected', {
       requestId,
@@ -1893,6 +1944,10 @@ async function handleAtmospaceLandingGenerate(req, res) {
       status: upstream.status,
       requestId
     });
+  }
+
+  if (modernistoStartRequested) {
+    return sendAtmospaceModernistoStartGenerateResult(res, upstreamData, payload, requestId);
   }
 
   const runtimeEmbedCode = ensureAtmospaceRuntimeEmbed(

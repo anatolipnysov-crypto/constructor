@@ -3,649 +3,366 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
-const source = fs.readFileSync(path.join(root, 'src', 'App.jsx'), 'utf8');
-const bannerStudio = fs.readFileSync(path.join(root, 'src', 'components', 'AIBannerStudio.jsx'), 'utf8');
-const aiServerSource = fs.readFileSync(path.join(root, 'ai-server.js'), 'utf8');
-const workerSource = fs.readFileSync(path.join(root, 'cloudflare-api-worker.js'), 'utf8');
+const appSource = fs.readFileSync(path.join(root, 'src', 'App.jsx'), 'utf8');
+const formatOneDataSource = fs.readFileSync(path.join(root, 'src', 'data', 'modernistoFormatOne.js'), 'utf8');
+const formatOneTemplateSource = fs.readFileSync(path.join(root, 'src', 'data', 'modernistoFormatOneTemplate.js'), 'utf8');
 
 function sliceBetween(text, startSnippet, endSnippet) {
   const start = text.indexOf(startSnippet);
   const end = text.indexOf(endSnippet, start + startSnippet.length);
-  assert(start !== -1, `Source must include ${startSnippet}`);
-  assert(end !== -1, `Source must include ${endSnippet} after ${startSnippet}`);
+  assert.notEqual(start, -1, `Source must include ${startSnippet}`);
+  assert.notEqual(end, -1, `Source must include ${endSnippet} after ${startSnippet}`);
   return text.slice(start, end);
 }
 
-const modeSelector = sliceBetween(source, 'const MANUAL_PRELANDING_MODES = [', '];');
+function sliceFunction(text, functionName) {
+  const marker = `function ${functionName}`;
+  const start = text.indexOf(marker);
+  assert.notEqual(start, -1, `Source must include ${marker}`);
+  const nextFunction = text.indexOf('\nfunction ', start + marker.length);
+  return text.slice(start, nextFunction === -1 ? text.length : nextFunction);
+}
+
+function count(text, pattern) {
+  return (String(text).match(pattern) || []).length;
+}
+
+function readSingleQuotedExport(source, exportName) {
+  const match = source.match(new RegExp(`export const ${exportName} = '([^']*)';`));
+  assert(match, `Data module must export ${exportName}`);
+  return match[1];
+}
+
+function readJsonStringExport(source, exportName) {
+  const prefix = `export const ${exportName} = `;
+  assert(source.startsWith(prefix), `Template module must begin with ${prefix}`);
+  const literal = source.slice(prefix.length).trim().replace(/;$/, '');
+  return JSON.parse(literal);
+}
+
+// Public constructor surface: legacy formats must stay removed.
+const modeSelector = sliceBetween(appSource, 'const MANUAL_PRELANDING_MODES = [', '];');
 const modeIds = [...modeSelector.matchAll(/\bid:\s*'([^']+)'/g)].map((match) => match[1]);
-assert(
-  JSON.stringify(modeIds) === JSON.stringify([
-    'templateStage',
-    'barrierProfileQuiz'
-  ]),
-  'The selector must expose exactly Formats 1 and 6.'
-);
+assert.deepEqual(modeIds, ['templateStage', 'barrierProfileQuiz'], 'The selector must expose exactly Formats 1 and 6.');
+assert(modeSelector.includes("title: 'Формат 1 / Точный modernisto.ru/start'"));
+assert(modeSelector.includes("title: 'Формат 6 / Смысловой профиль барьера'"));
+assert(!modeSelector.includes("id: 'personalRouteQuiz'"), 'Removed modes must not return to the selector.');
+[
+  /Формат [2-5]\s*(?:\/|:)/,
+  /один из шести форматов/,
+  /Доступны шесть форматов предлендинга/
+].forEach((pattern) => assert(!pattern.test(appSource), `Stale constructor surface must not match ${pattern}`));
+
+// Format 1 assets are fixed to the approved live /start implementation.
+const quizUrl = readSingleQuotedExport(formatOneDataSource, 'MODERNISTO_FORMAT_ONE_QUIZ_URL');
+const apiBaseUrl = readSingleQuotedExport(formatOneDataSource, 'MODERNISTO_FORMAT_ONE_API_BASE_URL');
+const attributionUrl = readSingleQuotedExport(formatOneDataSource, 'MODERNISTO_FORMAT_ONE_ATTRIBUTION_URL');
+const heroDataUri = readSingleQuotedExport(formatOneDataSource, 'MODERNISTO_FORMAT_ONE_HERO_DATA_URI');
+const formatOneTemplate = readJsonStringExport(formatOneTemplateSource, 'MODERNISTO_FORMAT_ONE_TEMPLATE');
+
+assert.equal(quizUrl, 'https://app.atmospace.pro/quiz/index.html');
+assert.equal(apiBaseUrl, 'https://api.atmospace.pro');
+assert.equal(attributionUrl, 'https://app.atmospace.pro/acquisition/modernisto-attribution.js');
+assert.match(heroDataUri, /^data:image\/avif;base64,[A-Za-z0-9+/=]+$/, 'The approved Andrey portrait must be one embedded AVIF.');
+assert(heroDataUri.length > 20_000, 'The approved portrait must not be replaced with a placeholder.');
 
 [
-  "title: 'Формат 1 / Мини-тест + разбор'",
-  "title: 'Формат 6 / Смысловой профиль барьера'"
-].forEach((snippet) => {
-  assert(modeSelector.includes(snippet), `Mode selector must include ${snippet}`);
-});
-
-assert(!modeSelector.includes("id: 'personalRouteQuiz'"), 'Removed legacy modes must not appear in the selector.');
-assert(source.includes('один из двух форматов'), 'Constructor copy must describe the two-format surface.');
-assert(source.includes('Доступны два формата предлендинга: 1 и 6.'), 'Mode selector must describe Formats 1 and 6.');
-assert(source.includes('label="Текст / подзаголовок (необязательно)"'), 'Constructor UI must mark the Format 1 description as optional.');
-assert(source.includes('оставьте пустым — под заголовком ничего не будет'), 'Constructor UI must explain the headline-only generation path.');
-[
-  'один из шести форматов',
-  'Доступны шесть форматов предлендинга',
-  'один из четырёх форматов'
-].forEach((snippet) => {
-  assert(!source.includes(snippet), `Stale format copy must not remain: ${snippet}`);
-});
-
-const fixedQuiz = sliceBetween(source, 'const ATMOSPACE_MINI_QUIZ = Object.freeze([', ']);');
-assert((fixedQuiz.match(/title:/g) || []).length === 4, 'Format 1 must contain exactly four fixed questions.');
-[
-  'Сколько лет ты уже говоришь себе: «Ща,-ща, ещё немного — и всё изменится»?',
-  'Меньше 1 года',
-  '1-3 года',
-  '3-5 лет',
-  'Больше 5 лет',
-  'Если завтра тебя не станет, что самое неприятное про себя слышать?',
-  'Мда, он так много хотел, но так ничего и не сделал.',
-  'Обещал-обещал семье другое будущее, но так и не вывез.',
-  'Он не оставил семье ничего кроме долгов.',
-  'Он так и не стал тем, кем всегда хотел быть.',
-  'Представь прошло 5 лет. Ничего не изменилось. Что тяжелее всего признать?',
-  'Я так и не смог ничего добиться, просто сдался и смирился.',
-  'Я всё также работаю на других и обслуживаю чужую жизнь за зарплату.',
-  'Ребёнок вырос, но видит во мне НЕ авторитета, а уставшего пузатого скуфа, обиженного на жизнь.',
-  'Я вижу как другие живут так как хотел я, а у меня больше нет сил на новые попытки. Осталась только боль и обида, которую я каждый вечер заливаю пивом.',
-  'Каким мужчиной ты себя видишь прямо сейчас?',
-  'Всё норм, я не сдался, я знаю что смогу. Я действую.',
-  'Ходячая папка с планами, которые не реализовались и хрен знает реализуются ли.',
-  'Во мне есть силы, есть потенциал, но из-за кучи провалов я стал терять веру в себя.',
-  'Остались только обещания себе и семье, которые я так и не выполнил.'
-].forEach((copy) => {
-  assert(fixedQuiz.includes(copy), `Fixed quiz must contain the approved copy: ${copy}`);
-});
-const fixedQuizOptionGroups = [...fixedQuiz.matchAll(/options:\s*\[([\s\S]*?)\]/g)];
-assert.equal(fixedQuizOptionGroups.length, 4, 'Every fixed question must expose one answer group.');
-fixedQuizOptionGroups.forEach((match, questionIndex) => {
-  const options = [...match[1].matchAll(/'([^']+)'/g)].map((optionMatch) => optionMatch[1]);
-  assert.equal(options.length, 4, `Question ${questionIndex + 1} must contain exactly four answers.`);
-});
-
-const fixedOfferRenderer = sliceBetween(
-  source,
-  'function renderCoreMethodFixedOffer',
-  'function renderCoreMethodInlinePrelanding'
-);
-
-const formatOneRenderer = sliceBetween(
-  source,
-  'function renderCoreMethodInlinePrelanding',
-  'function staticLandingSlug'
-);
-const formatOneHeroMarkup = sliceBetween(
-  formatOneRenderer,
-  '<section class="atm-v1-hero"',
-  '</section>'
-);
-const formatOneStoryMarkup = sliceBetween(
-  formatOneRenderer,
-  '<section class="atm-v1-start-story"',
-  '</section>'
-);
-const formatOneMobileCss = sliceBetween(
-  formatOneRenderer,
-  '@media(max-width:800px){',
-  '@media(max-width:800px) and (max-height:700px)'
-);
-const formatOneShortMobileCss = sliceBetween(
-  formatOneRenderer,
-  '@media(max-width:800px) and (max-height:700px)',
-  '@media(max-width:420px)'
-);
-const formatOneNarrowCss = sliceBetween(
-  formatOneRenderer,
-  '@media(max-width:420px)',
-  '</style>'
-);
-[
-  'renderCoreMethodMiniQuiz()',
-  'renderAtmospaceQuizButton',
-  "renderAtmospaceQuizButton('atm-v1-primary', 'Пройти мини-тест')",
-  'data-atmospace-first-fold',
-  'data-atmospace-first-fold-cta',
-  'data-atmospace-format1-story',
-  'data-atmospace-story-cta',
-  'data-atmospace-format1-stage="start"',
-  '--atm-hero-bg:#07111f',
-  'background:var(--atm-hero-bg)',
-  'color:#fff',
-  'renderCoreMethodFixedOffer',
-  'buildAtmospacePrelandingTrackingScript'
-].forEach((snippet) => {
-  assert(formatOneRenderer.includes(snippet), `Format 1 must include ${snippet}`);
-});
-assert(!source.includes('renderCoreMethodCompactOffer'), 'Format 1 must not keep the rejected AI-written compact offer renderer.');
-assert(
-  formatOneRenderer.includes("const heroLead = stripHtml(content?.description || '');"),
-  'Format 1 must preserve an empty description instead of inventing fallback copy.'
-);
-assert.match(
-  formatOneHeroMarkup,
-  /\$\{heroLead\s*\?\s*`<p class="atm-v1-lead" data-atmospace-format1-description>\$\{esc\(heroLead\)\}<\/p>`\s*:\s*''\}/,
-  'Format 1 must omit the description element entirely when the operator enters no text.'
-);
-assert(!formatOneRenderer.includes('content?.description || \'Короткий'), 'Format 1 must not restore fallback text below the headline.');
-assert(!formatOneHeroMarkup.includes('atm-v1-kicker'), 'Format 1 hero must not render a kicker above the headline.');
-assert(!formatOneHeroMarkup.includes('Короткий мини-тест'), 'Format 1 hero must not render the rejected kicker copy.');
-assert(!formatOneHeroMarkup.includes('atm-v1-start-story'), 'Fixed story copy must not crowd the first viewport.');
-assert(!formatOneHeroMarkup.includes('Ты уже не первый год'), 'Fixed story copy must start below the hero.');
-assert.equal(
-  (formatOneHeroMarkup.match(/data-atmospace-first-fold-cta/g) || []).length,
-  1,
-  'Format 1 hero must contain one CTA without separate mobile and desktop duplicates.'
-);
-assert(formatOneHeroMarkup.includes('atm-v1-hero-action'), 'Format 1 hero must expose one responsive action slot.');
-assert(!formatOneHeroMarkup.includes('atm-v1-mobile-cta'), 'Format 1 hero must not keep the duplicated mobile CTA wrapper.');
-assert(!formatOneHeroMarkup.includes('atm-v1-desktop-cta'), 'Format 1 hero must not keep the duplicated desktop CTA wrapper.');
-assert(!formatOneHeroMarkup.includes('atm-v1-first-fold-note'), 'Format 1 hero must not add explanatory copy below its CTA.');
-assert(
-  formatOneHeroMarkup.includes('<div class="atm-v1-shell atm-v1-hero-content">'),
-  'Format 1 hero must expose a separate content row below the bounded mobile media.'
-);
-[
+  'id="atmosfera-30-landing"',
+  'data-atmospace-format="1"',
+  'id="a30l-title"',
+  'АТМОСФЕРА',
   'Ты уже не первый год пытаешься перейти на новый уровень:',
   'увеличить доход',
   'найти своё дело',
-  'Но что бы ты ни делал - результата <strong>НЕТ</strong>.',
-  'Сколько ты ещё так сможешь, пока окончательно не выгоришь?',
-  'Готов увидеть <strong>НАСТОЯЩУЮ</strong> причину твоих проблем?'
+  'изменить привычки',
+  'и жить так, как хочешь именно ты.',
+  'Но что бы ты ни делал - результата <strong>НЕТ.</strong>',
+  'Новая попытка как удар по вере в себя.',
+  'Сколько ты ещё так сможешь, пока окончательно не выгорешь?',
+  'Почему у других получается, а у тебя нет?',
+  'Готов увидеть <strong>НАСТОЯЩУЮ</strong> причину твоих проблем?',
+  'data-a30l-action="quiz"',
+  `href="${quizUrl}"`,
+  'Пройти мини-тест',
+  'alt="Андрей Золотарёв"',
+  'Андрей Золотарёв | А Т М О С Ф Е Р А',
+  '--a30l-acid:#229ed9',
+  '@media (width<=860px)',
+  '@media (width<=560px)'
 ].forEach((snippet) => {
-  assert(formatOneStoryMarkup.includes(snippet), `Format 1 story section must preserve: ${snippet}`);
+  assert(formatOneTemplate.includes(snippet), `Fixed Format 1 template must preserve ${snippet}`);
 });
 [
-  'atm-v1-story-grid',
-  'atm-v1-story-intro',
-  'atm-v1-story-points',
-  'atm-v1-story-question',
-  'atm-v1-story-action',
-  'data-atmospace-story-cta'
-].forEach((snippet) => {
-  assert(formatOneStoryMarkup.includes(snippet), `Format 1 story section must include ${snippet}`);
-});
-assert(
-  formatOneRenderer.indexOf('data-atmospace-format1-story') > formatOneRenderer.indexOf('data-atmospace-format1-stage="start"')
-    && formatOneRenderer.indexOf('data-atmospace-format1-story') < formatOneRenderer.indexOf('${renderCoreMethodMiniQuiz()}'),
-  'The fixed story section must render after the clean hero and before the quiz.'
-);
-assert.match(
-  formatOneRenderer,
-  /\.atm-v1-story-grid\{[^}]*display:grid[^}]*grid-template-columns:/,
-  'Desktop story copy must use a structured grid instead of one continuous text column.'
-);
-assert.match(
-  formatOneRenderer,
-  /@media\(max-width:800px\)[\s\S]*?\.atm-v1-story-grid\{[^}]*grid-template-columns:1fr/,
-  'The story grid must collapse to one column on mobile.'
-);
-assert(
-  formatOneRenderer.includes('@media(max-width:800px)')
-    && formatOneRenderer.includes('.atm-v1-hero{min-height:100svh'),
-  'The mobile first viewport must remain a full-height hero containing only image, headline, optional description and CTA.'
-);
-assert.deepEqual(
-  [...formatOneRenderer.matchAll(/content\?\.([A-Za-z0-9_]+)/g)].map((match) => match[1]).sort(),
-  ['description', 'title', 'titleHtml'],
-  'Only headline and description may enter visible Format 1 copy.'
-);
-[
-  'Итак, почему ты не можешь реализовать лучший вариант своей жизни...',
-  'Ты не беспомощный. Не тупой.',
-  'И каждый день тебя долбит одна из этих мыслей:',
-  'И ты можешь сделать ещё 100+ попыток, но так и НЕ пробьёшь свой уровень.',
-  'Главная причина по которой мы желаем ОДНО, а получаем ДРУГОЕ - рассинхрон психики.',
-  'РАССИНХРОН происходит именно в бессознательной части психики.',
-  'ВСЁ ЭТО - работа ТВОИХ бессознательных программ.',
-  'Их можно ПЕРЕПИСАТЬ НА НУЖНЫЕ.',
-  'Подключайся к АТМОСФЕРЕ.',
-  'Смена программ - переформатирование',
-  'Затем займёмся базовым доходом',
-  'Атмосфера - это не курс, не тренинг. Это живые люди.',
-  'Любая цель реализуется максимум за 1 год.',
-  'Форма регистрации',
-  'data-atmospace-registration-section',
-  'data-atmospace-runtime-message'
-].forEach((snippet) => {
-  assert(fixedOfferRenderer.includes(snippet), `Format 1 fixed offer must preserve: ${snippet}`);
-});
-assert(!fixedOfferRenderer.includes('content?.'), 'The fixed offer must not read generated campaign copy.');
-[
-  'Что станет яснее после разбора',
-  'Исходная точка',
-  'Главный вопрос',
-  'Первый тест',
-  'Откройте разбор своей ситуации'
-].forEach((snippet) => {
-  assert(!fixedOfferRenderer.includes(snippet), `Rejected generated offer copy must not return: ${snippet}`);
-});
-assert.deepEqual(
-  [...source.matchAll(/data-atmospace-format1-stage="([^"]+)"/g)].map((match) => match[1]),
-  ['quiz', 'offer', 'start'],
-  'Format 1 must expose exactly the start, quiz and offer stages.'
-);
-assert(!formatOneRenderer.includes('.atm-v1-hero{position:relative;min-height:min(900px,100svh)'), 'Format 1 must not regress to the pale split hero.');
-
-const imageSpecBuilder = sliceBetween(
-  source,
-  'function buildPrelandingImageSpecs',
-  'function prelandingThemeForStyle'
-);
-[
-  'High-contrast premium masculine editorial photography',
-  'Never force a generic man in a blue shirt beside a laptop into a headline that is better explained without a person.',
-  'Never use pale pastel haze or a washed-out white page look',
-  "persona: isCoreMethod ? 'man'",
-  'Masculine visual language comes from decisive composition',
-  'A person is optional and must never be the automatic default',
-  "persona: 'mixed'",
-  "visualMode: isCoreMethod ? 'metaphor' : 'generatedPerson'",
-  'const visualSeedInput = [',
-  'const semanticRotation = hashText(visualSeedInput);',
-  'Role-specific visual fingerprints:',
-  'const semanticHeroScene = routeScenes[0]',
-  'For a human hero use this casting fingerprint: ${heroFingerprint.prompt}',
-  'Show exactly one adult man with this casting fingerprint: ${valueFingerprint.prompt}',
-  'Show exactly one different adult man with this casting fingerprint: ${ctaFingerprint.prompt}',
-  'Choose the strongest semantic representation: a concrete object, visual metaphor, place or environment; use a human only when the headline meaning genuinely requires one.',
-  'If any human is visible, show exactly one adult man; never show a woman, female character, couple, family or group.',
-  'The value and CTA scenes use two different adult men; neither may repeat a face, age band, hair, clothes, build, pose or camera treatment from the hero or from each other.',
-  'variationKey: `${variantSeed}|hero-semantic|${heroFingerprint.id}`',
-  'variationKey: `${variantSeed}|value|${valueFingerprint.id}`',
-  'variationKey: `${variantSeed}|cta|${ctaFingerprint.id}`'
-].forEach((snippet) => {
-  assert(imageSpecBuilder.includes(snippet), `Format 1 image contract must include ${snippet}`);
+  '__ATMOSPACE_TITLE_CLASS__',
+  '__ATMOSPACE_HEADLINE_HTML__',
+  '__ATMOSPACE_HERO_DATA_URI__'
+].forEach((placeholder) => {
+  assert.equal(count(formatOneTemplate, new RegExp(placeholder, 'g')), 1, `Template must contain ${placeholder} exactly once.`);
 });
 [
-  "const suppliedSubtitle = stripHtml(text || '');",
-  'const subtitle = isCoreMethod',
-  '? suppliedSubtitle',
-  'Landing subtitle / meaning: not provided. Derive all visual semantics only from the exact landing headline; do not borrow or invent supporting copy.',
-  'Show one clear semantic focal point only: it may be the headline-specific object, metaphor, environment or one adult man.',
-  'RESPONSIVE DUAL-CROP CONTRACT: create one 3:2 landscape source that remains readable on desktop and in a tall-phone cover crop.',
-  'Keep the complete indispensable subject inside the middle-right safe column x=54-80%, y=12-58%, with its focal center at x=68-72%, y=32-42%.',
-  'Treat x=82-100% and y=62-100% as expendable background; no face, body edge, hand, key object or decisive action may live there.',
-  "For a human hero, keep the man's entire face, head, torso and essential gesture inside the safe column; never park him against the far-right edge.",
-  'For an object/metaphor hero, keep the complete object and every meaning-bearing part inside the safe column; do not use a tiny distant focal point.'
-].forEach((snippet) => {
-  assert(imageSpecBuilder.includes(snippet), `Format 1 image generation without a description must include ${snippet}`);
-});
-assert(
-  !imageSpecBuilder.includes('If the semantic scene names a woman, couple or group, adapt it to this one different adult man.'),
-  'Format 1 hero must no longer coerce every semantic scene into a stock portrait.'
-);
-assert(!imageSpecBuilder.includes('Date.now()'), 'Image specs must not use wall-clock randomness as a fake visual seed.');
-assert(!imageSpecBuilder.includes('Math.random()'), 'Image specs must be reproducible from semantic and rotation inputs.');
-assert.equal(
-  (source.match(/id: '(?:shaved-charcoal-35mm|curly-navy-50mm|silver-olive-wide|fair-rust-documentary|buzz-black-overhead|auburn-denim-profile)'/g) || []).length,
-  6,
-  'Format 1 must rotate through six explicit casting and camera fingerprints.'
-);
-
-[
-  '.atm-v1-hero-visual{position:absolute;z-index:0;inset:0 0 0 26%',
-  'object-position:56% 50%',
-].forEach((snippet) => {
-  assert(formatOneRenderer.includes(snippet), `Format 1 hero framing must include ${snippet}`);
-});
-[
-  '.atm-v1-hero{min-height:100svh;display:grid;',
-  'grid-template-rows:clamp(280px,52svh,460px) minmax(min-content,1fr)',
-  'align-items:stretch;padding:0;background:var(--atm-hero-bg)',
-  '.atm-v1-hero-visual{position:relative;grid-row:1;inset:auto;height:auto;min-height:0}',
-  '.atm-v1-hero-visual img{object-position:78% 42%;transform:none;',
-  '.atm-v1-hero-content{grid-row:2;display:grid;align-items:center;padding:22px 0 max(24px,env(safe-area-inset-bottom))}',
-  'display:grid;gap:18px;',
-  '.atm-v1-hero h1,.atm-v1-lead,.atm-v1-hero-action,.atm-v1-hero .atm-v1-primary{margin:0}',
-  'linear-gradient(180deg,rgba(7,17,31,0) 60%,var(--atm-hero-bg) 100%)'
-].forEach((snippet) => {
-  assert(formatOneMobileCss.includes(snippet), `Format 1 bounded mobile hero must include ${snippet}`);
-});
-[
-  '.atm-v1-hero{grid-template-rows:clamp(250px,46svh,310px) minmax(min-content,1fr)}',
-  '.atm-v1-hero-content{padding:18px 0 max(20px,env(safe-area-inset-bottom))}',
-  '.atm-v1-hero-copy{gap:14px}'
-].forEach((snippet) => {
-  assert(formatOneShortMobileCss.includes(snippet), `Format 1 short-phone composition must include ${snippet}`);
-});
-assert(
-  !formatOneMobileCss.includes('.atm-v1-hero-visual{inset:0;height:100%}'),
-  'Mobile media must not return to an unbounded full-height layer behind all hero copy.'
-);
-assert(
-  !formatOneNarrowCss.includes('padding-top:clamp(145px,23svh,195px)'),
-  'The narrow-phone override must not undo the split hero grid with legacy top padding.'
-);
-
-const formatOneQuizRenderer = sliceBetween(
-  source,
-  'function renderCoreMethodMiniQuiz',
-  'function renderAtmospaceSharedInlineQuiz'
-);
-assert(
-  formatOneQuizRenderer.includes('data-atmospace-question-count="4"'),
-  'Format 1 quiz renderer must declare exactly four questions.'
-);
-[
-  'data-atmospace-option="${optionIndex}"',
-  'data-atmospace-format1-stage="quiz"',
-  'Мини-тест',
-  'Здесь нет правильных ответов.',
-  'Их никто не сохраняет и не оценивает - кроме тебя.',
-  'Просто будь честен с самим собой.'
-].forEach((snippet) => {
-  assert(formatOneQuizRenderer.includes(snippet), `Format 1 fixed quiz must include ${snippet}`);
-});
-assert(!formatOneQuizRenderer.includes('data-atmospace-inline-result'), 'Format 1 must not add a fourth personalized-result stage.');
-
-const trackingRuntime = sliceBetween(
-  source,
-  'function buildAtmospacePrelandingTrackingScript',
-  'function stripHtml'
-);
-[
-  'function renderPersonalResult()',
-  'var profiles = [',
-  'var durationLabels =',
-  'data-atmospace-result-title',
-  'data-atmospace-result-copy'
-].forEach((snippet) => {
-  assert(!trackingRuntime.includes(snippet), `Format 1 runtime must not generate unapproved result copy: ${snippet}`);
-});
-assert.match(
-  trackingRuntime,
-  /markQuizCompleted\(\);\s*revealOffer\(\);\s*var offer = document\.querySelector\('\[data-atmospace-offer\]'\);\s*if \(offer\) offer\.scrollIntoView/,
-  'The fourth answer must open and scroll directly to the fixed offer.'
-);
-assert(!trackingRuntime.includes('localStorage'), 'Format 1 answers must not be persisted in localStorage.');
-assert(!trackingRuntime.includes('sessionStorage'), 'Format 1 answers must not be persisted in sessionStorage.');
-assert.doesNotMatch(
-  trackingRuntime,
-  /payload\.(?:answer|answer_index|option|option_index)|(?:answer|answer_index|option|option_index)\s*:/i,
-  'Format 1 answer content and selected option index must not enter Atmospace payloads.'
-);
-
-const insightRenderer = sliceBetween(
-  source,
-  'function renderStaticInsightPrelanding',
-  'function renderBarrierProfileQuizPrelanding'
-);
-[
-  'data-atmospace-registration-section',
-  'data-atmospace-first-fold',
-  'data-atmospace-first-fold-cta',
-  "renderAtmospaceRegistrationButton('fh-si-cta')",
-  'https://modernisto.ru/politics',
-  'https://modernisto.ru/approval',
-  'buildAtmospacePrelandingTrackingScript'
-].forEach((snippet) => {
-  assert(insightRenderer.includes(snippet), `Format 6 must include ${snippet}`);
-});
-assert(!insightRenderer.includes('data-atmospace-inline-quiz'), 'Format 6 must not emit inline quiz markup.');
-assert(!insightRenderer.includes('data-atmospace-embedded-quiz'), 'Format 6 must not emit embedded quiz markup.');
-assert(insightRenderer.includes('grid-template-rows:auto minmax(190px,30svh)'), 'Format 6 mobile copy and CTA must render before media.');
-assert(insightRenderer.includes('.fh-si-media{order:0'), 'Format 6 mobile media must stay after the first-fold CTA.');
-assert(!insightRenderer.includes('.fh-si-media{order:-1'), 'Format 6 must not place mobile media before its CTA.');
-assert(formatOneRenderer.includes('atm-v1-hero-action'), 'Format 1 must expose one responsive CTA immediately after the headline or optional description.');
-assert(!formatOneRenderer.includes('4 вопроса · около минуты · без телефона'), 'Format 1 hero must not restore removed explanatory microcopy.');
-[
-  '.atm-v1-quiz[data-atmospace-quiz-active="true"] .atm-v1-quiz-intro{display:none}',
-  '.atm-v1-quiz-band{min-height:100svh',
-  '.atm-v1-quiz[data-atmospace-quiz-active="true"] .atm-v1-options{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}',
-  '.atm-v1-quiz[data-atmospace-quiz-active="true"] .atm-v1-back{display:none}'
-].forEach((snippet) => {
-  assert(formatOneRenderer.includes(snippet), `Format 1 mobile quiz must include ${snippet}`);
-});
-assert(
-  trackingRuntime.includes("root.setAttribute('data-atmospace-quiz-active', 'true');"),
-  'Starting the quiz must activate the compact viewport layout.'
-);
-assert.match(
-  trackingRuntime,
-  /root\.__atmospaceStart\s*=\s*function[\s\S]{0,240}showQuestion\(0\)/,
-  'The CTA must open question one immediately.'
-);
-assert.match(
-  trackingRuntime,
-  /if \(index \+ 1 < panels\.length\) \{\s*showQuestion\(index \+ 1\);/,
-  'Selecting an answer must advance directly to the next question.'
-);
-
-[
-  ['local image API', aiServerSource],
-  ['Cloudflare Worker', workerSource]
-].forEach(([name, backendSource]) => {
-  const imageHandler = sliceBetween(
-    backendSource,
-    name === 'local image API' ? 'async function handleGenerateImage(req, res)' : 'async function handleGenerateImage(env, request)',
-    name === 'local image API' ? 'async function handlePublishImage' : 'export default'
-  );
-  assert(
-    imageHandler.includes("const variationKey = String(input.variationKey || '')"),
-    `${name} must consume the visual variation key.`
-  );
-  assert(imageHandler.includes('const variationLine = variationKey'), `${name} must turn the key into a prompt contract.`);
-  assert.equal(
-    (imageHandler.match(/\$\{variationLine\}/g) || []).length,
-    2,
-    `${name} must pass the variation contract to both image prompt modes.`
-  );
-});
-
-const dispatch = sliceBetween(source, 'function renderPrelandingHtml', 'function countMatches');
-[
-  'renderCoreMethodInlinePrelanding({',
-  'renderBarrierProfileQuizPrelanding({'
-].forEach((snippet) => {
-  assert(dispatch.includes(snippet), `Main renderer must dispatch to ${snippet}`);
-});
-[
-  'renderHeroSceneBlocksPrelanding({',
-  'renderNatureEditorialPrelanding({',
-  'renderMinimalComparePrelanding({',
-  'renderDirectionQuizPrelanding({',
-  'renderPersonalRouteQuizPrelanding({'
-].forEach((snippet) => {
-  assert(!dispatch.includes(snippet), `Main renderer must not dispatch to removed mode: ${snippet}`);
-});
-assert(
-  dispatch.includes("const isCoreMethod = overrides?.prelandingMode === 'templateStage';"),
-  'Normalized Format 1 must remain reachable as the core mini-quiz renderer.'
-);
-
-const generatedPrelandingFlow = sliceBetween(
-  source,
-  'const prelandingHtml = useMemo',
-  'const prelandingHtmlConfig = useMemo'
-);
-assert.equal(
-  (generatedPrelandingFlow.match(/return renderPrelandingHtml\(\{/g) || []).length,
-  2,
-  'Generated HTML must have exactly two explicit format routes.'
-);
-assert(generatedPrelandingFlow.includes("prelandingMode: 'coreMethod'"), 'Format 1 must call the core mini-quiz renderer.');
-assert(generatedPrelandingFlow.includes("prelandingMode: 'barrierProfileQuiz'"), 'Format 6 must call the barrier renderer.');
-assert(!generatedPrelandingFlow.includes('if (prelandingSync?.fromBanner)'), 'Banner handoff must not bypass the selected format.');
-assert(!generatedPrelandingFlow.includes('overrides: prelandingSync'), 'Generated HTML must not fall through to a legacy renderer override.');
-const generatedFormatOneRoute = sliceBetween(
-  generatedPrelandingFlow,
-  "if (normalizedManualPrelandingMode === 'templateStage') {",
-  'const insightPreset ='
-);
-assert(generatedFormatOneRoute.includes('const textLead = enteredText;'), 'Format 1 must preserve an intentionally empty description.');
-assert(generatedFormatOneRoute.includes('description: textLead'), 'Format 1 must pass only the entered description through an explicit slot.');
-assert(!generatedFormatOneRoute.includes('baseContent.trustTitle'), 'Format 1 must not substitute preset copy for an empty description.');
-assert(!generatedFormatOneRoute.includes('Короткий мини-тест поможет'), 'Format 1 must not restore the rejected description fallback.');
-[
-  'resolveClientPrelandingLogic(',
-  'cards:',
-  'valueTitle:',
-  'valueItems:',
-  'actionTitle:',
-  'actionSubtitle:',
-  'ctaLead:',
-  'painItems:',
-  'trustSmall:'
-].forEach((snippet) => {
-  assert(!generatedFormatOneRoute.includes(snippet), `Format 1 visible copy must not be generated from ${snippet}`);
-});
-
-assert(
-  source.includes("В формате без мини-теста найдена видимая квиз-разметка. Используйте прямую регистрацию Atmospace."),
-  'The validator must block visible quiz markup in Format 6.'
-);
-assert.match(
-  source,
-  /quizRequired:\s*normalizedManualPrelandingMode\s*===\s*['"]templateStage['"]/,
-  'Final HTML validation must require the full quiz contract for Format 1.'
-);
-assert.doesNotMatch(
-  source,
-  /const htmlDeclaresEmbeddedQuiz\s*=/,
-  'Validation must not infer the expected format from already-generated HTML.'
-);
-assert(
-  !source.includes('Не удалось подготовить продолжение. Проверьте подключение и попробуйте ещё раз.'),
-  'HTML validation must verify runtime structure instead of requiring an obsolete UI error sentence.'
-);
-
-[
-  'window.ATMOSPACE_LANDING_CONFIG',
-  'sergey-constructor-quiz-v1',
-  'https://api.atmospace.pro',
-  '/api/landing-runtime/init',
-  '/api/landing-runtime/click',
+  'data-atmospace-inline-quiz',
+  'data-atmospace-embedded-quiz',
   'data-atmospace-registration-link',
-  'links.registration',
-  'landing_view',
-  'registration_started',
-  'public_landing_key',
-  'counter_id',
-  'advertising_click_ids',
-  'yclid',
-  'utm_source'
+  'data-atmospace-registration-section',
+  'data-atmospace-format1-stage',
+  'window.ATMOSPACE_LANDING_CONFIG',
+  'Форма регистрации',
+  '__ATMOSPACE_DESCRIPTION__'
 ].forEach((snippet) => {
-  assert(source.includes(snippet), `Atmospace runtime contract must include ${snippet}`);
+  assert(!formatOneTemplate.includes(snippet), `Fixed Format 1 template must not include ${snippet}`);
 });
 
+// The active renderer changes only the headline and attaches exactly one official attribution runtime.
+const headlineRenderer = sliceFunction(appSource, 'renderModernistoHeadline');
+const formatOneRenderer = sliceFunction(appSource, 'renderModernistoStartPrelanding');
+assert(headlineRenderer.includes('stripHtml('), 'Headline must be reduced to safe text before insertion.');
+assert(headlineRenderer.includes('esc('), 'Headline must be HTML escaped.');
+assert(formatOneRenderer.includes("titleText.length > 95 ? 'a30l-title-long' : titleText.length > 70 ? 'a30l-title-medium' : ''"), 'Long advertising headlines must select the scoped responsive classes.');
 [
-  'window.FH_CONFIG',
-  'data-atmospace-messenger',
-  'messenger_button_clicked',
-  'r.bothelp.io',
-  'supabase.co/functions/v1',
-  'registration_click',
-  'registration_success',
-  'payment_success'
-].forEach((snippet) => {
-  assert(!dispatch.includes(snippet), `Active dispatcher must not contain the legacy contract: ${snippet}`);
-});
-
-[
-  'const generationProgress = new Map(specs.map',
-  'const specsToGenerate = specs.filter',
-  'const settledResults = await Promise.allSettled(specsToGenerate.map(async (spec) =>',
-  "const failedResult = settledResults.find((result) => result.status === 'rejected')",
-  'Одновременно генерирую ${states.length} AI-картинки.',
-  'const PRELANDING_IMAGE_ATTEMPTS = 3;',
-  'const resumableAiState = prelandingAiImages?.key === buildKey && !prelandingAiImagesReady',
-  'готовые кадры сохранены, генерирую только недостающие',
-  'конструктор продолжит только с недостающих'
-].forEach((snippet) => {
-  assert(source.includes(snippet), `Resumable image generation must include ${snippet}`);
-});
-assert(!source.includes('for (let index = 0; index < specs.length; index += 1)'), 'Premium images must not be generated sequentially.');
-
-[
-  "from './data/campaignSemantics'",
-  'buildCampaignLandingLogic({ title, text: method, mode })',
-  'normalizeManualPrelandingMode(manualPrelandingMode)',
-  'const normalizedManualPrelandingMode = normalizeManualPrelandingMode(manualPrelandingMode)',
-].forEach((snippet) => {
-  assert(source.includes(snippet), `Semantic landing flow must include ${snippet}`);
-});
-assert(
-  source.includes("const isCoreMethod = normalizedMode === 'templateStage';"),
-  'Format 1 image generation must use the normalized mode and its masculine high-contrast prompt.'
+  "const titleSizingCss = titleClass ?",
+  'id="a30l-dynamic-title-sizing"',
+  '#atmosfera-30-landing .a30l-intro h1.a30l-title-medium',
+  '#atmosfera-30-landing .a30l-intro h1.a30l-title-long',
+  '@media (max-width:560px)',
+  "</style>` : ''",
+  '${template}${titleSizingCss}'
+].forEach((snippet) => assert(formatOneRenderer.includes(snippet), `Responsive dynamic headline sizing must include ${snippet}`));
+assert.match(formatOneRenderer, /\.replace\('__ATMOSPACE_TITLE_CLASS__',\s*\(\)\s*=>\s*titleClass\)/, 'Title-class replacement must use a callback.');
+assert.match(formatOneRenderer, /\.replace\('__ATMOSPACE_HEADLINE_HTML__',\s*\(\)\s*=>\s*renderModernistoHeadline\(titleText\)\)/, 'Headline replacement must use a callback so $ replacement tokens stay literal.');
+assert.match(formatOneRenderer, /\.replace\('__ATMOSPACE_HERO_DATA_URI__',\s*\(\)\s*=>\s*MODERNISTO_FORMAT_ONE_HERO_DATA_URI\)/, 'Hero replacement must use a callback.');
+assert.deepEqual(
+  [...new Set([...formatOneRenderer.matchAll(/content\?\.([A-Za-z0-9_]+)/g)].map((match) => match[1]))].sort(),
+  ['title', 'titleHtml'],
+  'Format 1 renderer may read only the advertising headline.'
 );
-assert(
-  source.includes('Один код нельзя использовать как две независимые вариации.'),
-  'Constructor must warn operators to separate Atmospace codes for Format 1/6 A/B attribution.'
-);
-
 [
-  "from '../data/campaignSemantics'",
-  'semanticSceneLine: visualRoute.semanticSceneLine',
-  'semanticCompositionLine: visualRoute.semanticCompositionLine'
-].forEach((snippet) => {
-  assert(bannerStudio.includes(snippet), `Banner semantic flow must include ${snippet}`);
-});
-assert(bannerStudio.includes("mode: 'templateStage'"), 'Banner handoff must use Format 1 semantics.');
-assert(!bannerStudio.includes("mode: 'heroBlocks'"), 'Banner handoff must not reactivate the removed heroBlocks mode.');
-assert(!bannerStudio.includes('lockTemplateCopy: true'), 'Banner handoff must not lock stale template copy.');
+  'MODERNISTO_FORMAT_ONE_TEMPLATE',
+  ".replace('__ATMOSPACE_TITLE_CLASS__'",
+  ".replace('__ATMOSPACE_HEADLINE_HTML__'",
+  ".replace('__ATMOSPACE_HERO_DATA_URI__'",
+  'MODERNISTO_FORMAT_ONE_HERO_DATA_URI',
+  'MODERNISTO_FORMAT_ONE_ATTRIBUTION_URL',
+  'MODERNISTO_FORMAT_ONE_QUIZ_URL',
+  'MODERNISTO_FORMAT_ONE_API_BASE_URL',
+  'data-public-landing-key=',
+  'data-counter-id=',
+  'data-quiz-url=',
+  'data-api-base-url='
+].forEach((snippet) => assert(formatOneRenderer.includes(snippet), `Format 1 renderer must include ${snippet}`));
 
+const attributionTag = sliceBetween(formatOneRenderer, '<script', '</script>');
+assert.equal(count(formatOneRenderer, /<script\b/g), 1, 'Format 1 must attach exactly one script.');
+assert.deepEqual(
+  [...attributionTag.matchAll(/\b(data-[a-z0-9-]+)=/g)].map((match) => match[1]),
+  ['data-public-landing-key', 'data-counter-id', 'data-quiz-url', 'data-api-base-url'],
+  'The official attribution tag must contain exactly the four live runtime attributes.'
+);
+[
+  'buildAtmospaceHeadConfig',
+  'window.ATMOSPACE_LANDING_CONFIG',
+  'data-landing-name',
+  'data-landing-code',
+  'description',
+  'creativeMethod',
+  'sceneImage',
+  'valueImage',
+  'ctaImage',
+  'renderCoreMethodMiniQuiz',
+  'renderCoreMethodFixedOffer',
+  'buildAtmospacePrelandingTrackingScript',
+  'data-atmospace-registration-link'
+].forEach((snippet) => assert(!formatOneRenderer.includes(snippet), `Format 1 renderer must not include ${snippet}`));
+
+const renderFormatOneForRegression = new Function(
+  'stripHtml',
+  'esc',
+  'buildAtmospaceLandingConfig',
+  'MODERNISTO_FORMAT_ONE_TEMPLATE',
+  'MODERNISTO_FORMAT_ONE_HERO_DATA_URI',
+  'MODERNISTO_FORMAT_ONE_ATTRIBUTION_URL',
+  'MODERNISTO_FORMAT_ONE_QUIZ_URL',
+  'MODERNISTO_FORMAT_ONE_API_BASE_URL',
+  `${headlineRenderer}\n${formatOneRenderer}\nreturn renderModernistoStartPrelanding;`
+)(
+  (value) => String(value || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim(),
+  (value) => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;'),
+  () => ({ publicLandingKey: 'public-test-key', counterId: '12345678' }),
+  formatOneTemplate,
+  heroDataUri,
+  attributionUrl,
+  quizUrl,
+  apiBaseUrl
+);
+const replacementTokenHeadline = "Цена $& $' $$ `${campaign}` <b>сейчас</b>";
+const replacementTokenHtml = renderFormatOneForRegression({ content: { title: replacementTokenHeadline }, projectData: {}, landingMeta: {} });
+assert(replacementTokenHtml.includes("Цена $&amp; $' $$ `${campaign}` сейчас"), 'Headline replacement must preserve JavaScript replacement tokens literally after HTML escaping.');
+assert(!replacementTokenHtml.includes('<b>сейчас</b>'), 'Headline HTML must be stripped before insertion.');
+assert(!replacementTokenHtml.includes('a30l-dynamic-title-sizing'), 'A short headline must leave the approved template without supplemental sizing CSS.');
+assert.equal(count(replacementTokenHtml, new RegExp(attributionUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')), 1, 'Generated Format 1 HTML must contain one official attribution runtime.');
+
+// Format 1 must leave the common dispatcher before templates, palettes and image selection are evaluated.
+const dispatch = sliceBetween(appSource, 'function renderPrelandingHtml', 'function countMatches');
+const fixedDispatchIndex = dispatch.indexOf('return renderModernistoStartPrelanding({');
+assert.notEqual(fixedDispatchIndex, -1, 'Main renderer must dispatch Format 1 to renderModernistoStartPrelanding.');
+assert(dispatch.indexOf('const isCoreMethod') < fixedDispatchIndex, 'Format 1 dispatch must be guarded by the normalized mode.');
+[
+  'const paletteKey',
+  'prelandingThemeForStyle(',
+  'pickDistinctPrelandingImage(',
+  'resolveClientPrelandingLogic('
+].forEach((lateWork) => {
+  assert(fixedDispatchIndex < dispatch.indexOf(lateWork), `Format 1 must return before ${lateWork}`);
+});
+const fixedDispatch = sliceBetween(dispatch, 'if (isCoreMethod) {', '\n  const paletteKey');
+assert.deepEqual(
+  [...fixedDispatch.matchAll(/^\s{6}([a-zA-Z]+),?$/gm)].map((match) => match[1]),
+  ['content', 'projectData', 'landingMeta'],
+  'Fixed renderer dispatch must receive content and technical metadata only.'
+);
+assert(!dispatch.includes('renderCoreMethodInlinePrelanding({'), 'Legacy inline Format 1 must be unreachable from the active dispatcher.');
+assert(dispatch.includes('renderBarrierProfileQuizPrelanding({'), 'Format 6 must remain reachable.');
+
+// Generation readiness: Format 1 validates server data only and never enters the image pipeline.
+assert(appSource.includes("const isFixedFormatOne = normalizedManualPrelandingMode === 'templateStage';"));
+const generationReadiness = sliceBetween(appSource, 'const isSingleImagePrelandingMode', 'useEffect(() => {');
+[
+  'const prelandingAiImagesReady = isFixedFormatOne',
+  'fixedTemplateReady',
+  'const prelandingTemplateReady = isFixedFormatOne',
+  "(!isFixedFormatOne || String(creativeHeadline || '').trim())",
+  '(isFixedFormatOne || (style && palette))'
+].forEach((snippet) => assert(generationReadiness.includes(snippet), `Format readiness must include ${snippet}`));
+
+const generationHandler = sliceBetween(appSource, 'const handleGeneratePrelandingAiImages = async () => {', '\n  const resetAll =');
+const fixedGenerationBranch = sliceBetween(generationHandler, 'if (isFixedFormatOne) {', '\n    const resumableAiState');
+[
+  'ATMOSPACE_GENERATE_ENDPOINT',
+  'runtimeProfile: ATMOSPACE_MODERNISTO_START_RUNTIME_PROFILE',
+  'normalizeAtmospaceGenerateResult',
+  'saveAtmospaceLandingArtifact',
+  'fixedTemplateReady: true',
+  'consumePrelandingQuota()',
+  'return;'
+].forEach((snippet) => assert(fixedGenerationBranch.includes(snippet), `Format 1 technical generation must include ${snippet}`));
+[
+  'buildPrelandingImageSpecs',
+  'ATMOSPACE_IMAGE_ENDPOINT',
+  'sceneImage:',
+  'valueImage:',
+  'ctaImage:'
+].forEach((snippet) => assert(!fixedGenerationBranch.includes(snippet), `Format 1 must bypass ${snippet}`));
+assert(generationHandler.indexOf('if (isFixedFormatOne) {') < generationHandler.indexOf('buildPrelandingImageSpecs({'), 'Format 1 must return before AI image specs are built.');
+
+// The generated Format 1 route passes only the entered headline and technical metadata.
+const generatedPrelandingFlow = sliceBetween(appSource, 'const prelandingHtml = useMemo', 'const prelandingHtmlConfig = useMemo');
+assert.equal(count(generatedPrelandingFlow, /return renderPrelandingHtml\(\{/g), 2, 'Generated HTML must keep exactly the two explicit format routes.');
+const generatedFormatOneRoute = sliceBetween(generatedPrelandingFlow, 'if (isFixedFormatOne) {', '\n    if (!(prelandingTemplateReady');
+[
+  "prelandingMode: 'templateStage'",
+  'title: enteredHeadline',
+  'projectData: prelandingRuntimeProjectData',
+  'landingMeta: effectivePrelandingVariantMeta'
+].forEach((snippet) => assert(generatedFormatOneRoute.includes(snippet), `Format 1 route must include ${snippet}`));
+[
+  'enteredText',
+  'creativeMethod',
+  'description:',
+  'templateId:',
+  'style:',
+  'palette:',
+  'photo,',
+  'sceneImage',
+  'valueImage',
+  'ctaImage',
+  'themeStyle',
+  'designRoute'
+].forEach((snippet) => assert(!generatedFormatOneRoute.includes(snippet), `Format 1 route must not include ${snippet}`));
+
+// Validator has a dedicated exact-/start branch. Format 6 keeps the original inline runtime validator.
+const modernistoValidator = sliceFunction(appSource, 'validateModernistoStartTildaHtml');
+const sharedValidator = sliceFunction(appSource, 'validateAtmospaceTildaHtml');
+[
+  'id="atmosfera-30-landing"',
+  'data-atmospace-format="1"',
+  'data-a30l-action="quiz"',
+  'MODERNISTO_FORMAT_ONE_QUIZ_URL',
+  'MODERNISTO_FORMAT_ONE_ATTRIBUTION_URL',
+  'MODERNISTO_FORMAT_ONE_API_BASE_URL',
+  'MODERNISTO_FORMAT_ONE_HERO_DATA_URI',
+  'data-public-landing-key=',
+  'data-counter-id=',
+  "['publicLandingKey', 'код рекламного лендинга']",
+  "['counterId', 'номер рекламного счётчика']",
+  'embeddedImages.length !== 1',
+  'window\\.ATMOSPACE_LANDING_CONFIG',
+  'partner_code',
+  '\\bgcao\\b',
+  '\\bgcpc\\b',
+  'landingCode',
+  'landing_variant_code',
+  'data-landing-code'
+].forEach((snippet) => assert(modernistoValidator.includes(snippet), `Modernisto validator must include ${snippet}`));
+assert(sharedValidator.includes('if (options.modernistoStartRequired === true)'));
+assert(sharedValidator.includes('return validateModernistoStartTildaHtml(source, config);'));
+assert(sharedValidator.indexOf('return validateModernistoStartTildaHtml(source, config);') < sharedValidator.indexOf("const quizRequired = options.quizRequired === true;"), 'Format 1 must bypass the inline-runtime validator.');
+
+const validationCall = sliceBetween(appSource, 'const prelandingHtmlValidation = useMemo', 'const prelandingValidationErrors');
+assert(validationCall.includes('modernistoStartRequired: isFixedFormatOne'), 'Final validation must select the dedicated Format 1 contract.');
+assert(!validationCall.includes('quizRequired:'), 'Format 1 must no longer be validated as an embedded quiz.');
+
+// Format 6 remains a one-image landing with direct protected registration.
+const imageSpecBuilder = sliceFunction(appSource, 'buildPrelandingImageSpecs');
+const barrierImageBranch = sliceBetween(imageSpecBuilder, 'if (isBarrierProfile) {', '\n  const semanticHeroScene');
+assert.equal(count(barrierImageBranch, /slot:\s*'hero'/g), 1, 'Format 6 must generate one hero image.');
+assert(!/slot:\s*'(?:value|cta)'/.test(barrierImageBranch), 'Format 6 must not generate value or CTA images.');
+
+const formatSixRenderer = sliceFunction(appSource, 'renderStaticInsightPrelanding');
+[
+  'data-atmospace-registration-section',
+  "renderAtmospaceRegistrationButton('fh-si-cta')",
+  'buildAtmospacePrelandingTrackingScript',
+  'https://modernisto.ru/politics',
+  'https://modernisto.ru/approval'
+].forEach((snippet) => assert(formatSixRenderer.includes(snippet), `Format 6 must include ${snippet}`));
+assert(!formatSixRenderer.includes('data-atmospace-inline-quiz'), 'Format 6 must not emit an inline quiz.');
+const registrationButtonRenderer = sliceFunction(appSource, 'renderAtmospaceRegistrationButton');
+assert(registrationButtonRenderer.includes('data-atmospace-registration-link'), 'Format 6 registration CTA must remain bound to the protected runtime.');
+const generatedFormatSixRoute = generatedPrelandingFlow.slice(generatedPrelandingFlow.indexOf('const insightPreset ='));
+[
+  "prelandingMode: 'barrierProfileQuiz'",
+  'sceneImage: currentPrelandingAiImages.sceneImage',
+  "valueImage: ''",
+  "ctaImage: ''"
+].forEach((snippet) => assert(generatedFormatSixRoute.includes(snippet), `Format 6 route must include ${snippet}`));
+
+// Build output must expose the new fixed contract, not the removed Format 1 inline funnel.
 const distAssetsDir = path.join(root, 'dist', 'assets');
 const bundle = fs.existsSync(distAssetsDir)
   ? fs.readdirSync(distAssetsDir)
     .filter((file) => /^index-.*\.js$/.test(file))
     .sort((a, b) => fs.statSync(path.join(distAssetsDir, b)).mtimeMs - fs.statSync(path.join(distAssetsDir, a)).mtimeMs)[0]
   : null;
-
 assert(bundle, 'Built JS bundle not found. Run npm run build first.');
 const built = fs.readFileSync(path.join(distAssetsDir, bundle), 'utf8');
 [
-  'Формат 1 / Мини-тест + разбор',
+  'Формат 1 / Точный modernisto.ru/start',
   'Формат 6 / Смысловой профиль барьера',
   'Готовый HTML для Tilda',
-  'window.ATMOSPACE_LANDING_CONFIG',
-  'https://api.atmospace.pro',
-  '/api/landing-runtime/init',
-  '/api/landing-runtime/click',
-  'data-atmospace-registration-link',
-  'data-atmospace-question-count="4"',
-  'data-atmospace-format1-stage="start"',
-  'data-atmospace-format1-stage="quiz"',
-  'data-atmospace-format1-stage="offer"',
-  'data-atmospace-format1-story',
-  'data-atmospace-story-cta',
+  'atmosfera-30-landing',
+  'data-atmospace-format="1"',
+  'data-a30l-action="quiz"',
   'Ты уже не первый год пытаешься перейти на новый уровень:',
-  'И ты можешь сделать ещё 100+ попыток, но так и НЕ пробьёшь свой уровень.',
-  'Проверка пройдена. HTML готов к копированию.'
-].forEach((snippet) => {
-  assert(built.includes(snippet), `Built bundle must contain ${snippet}`);
-});
-
+  'Андрей Золотарёв',
+  'data:image/avif;base64,',
+  attributionUrl,
+  quizUrl,
+  'window.ATMOSPACE_LANDING_CONFIG',
+  'data-atmospace-registration-link'
+].forEach((snippet) => assert(built.includes(snippet), `Built bundle must contain ${snippet}`));
 [
   /Формат [2-5]\s*(?:\/|:)/,
   /один из шести форматов/,
-  /Доступны шесть форматов предлендинга/,
-  /data-atmospace-messenger/,
-  /messenger_button_clicked/,
-  /r\.bothelp\.io/,
-  /supabase\.co\/functions\/v1/,
-  /registration_click/,
-  /registration_success/,
-  /payment_success/,
-  /Короткий мини-тест/,
-  /4 вопроса · около минуты · без телефона/
-].forEach((pattern) => {
-  assert(!pattern.test(built), `Built bundle must not match ${pattern}`);
-});
+  /Доступны шесть форматов предлендинга/
+].forEach((pattern) => assert(!pattern.test(built), `Built bundle must not match ${pattern}`));
 
-console.log('Atmospace prelanding two-format contract passed');
+console.log('Atmospace prelanding Formats 1/6 contract passed');

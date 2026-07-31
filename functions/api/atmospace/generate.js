@@ -7,6 +7,7 @@ const GENERATE_PATH = '/api/landing-runtime/generate'
 const HEALTH_PATH = '/health'
 const MAX_REQUEST_BYTES = 64 * 1024
 const REQUEST_TIMEOUT_MS = 30_000
+const MODERNISTO_START_RUNTIME_PROFILE = 'modernisto-start-external-v1'
 
 const PUBLIC_MESSAGES = Object.freeze({
   invalid_request: 'Проверьте заполненные данные и попробуйте ещё раз.',
@@ -121,9 +122,20 @@ function normalizeGenerateRequest(body) {
   const landingName = normalizeText(body?.landingName, 512)
   const landingCode = normalizeText(body?.landingCode, 512)
   const counterId = normalizeText(body?.counterId, 128)
-  const adGoalCredential = normalizeText(body?.adGoalCredential, 4096)
+  const adGoalCredential = normalizeText(
+    body?.serverOnlyAdGoalCredential ?? body?.adGoalCredential,
+    4096,
+  )
+  const runtimeProfile = normalizeText(body?.runtimeProfile, 128) ?? ''
 
-  if (!landingName || !landingCode || !counterId || !adGoalCredential) {
+  if (
+    !landingName
+    || !landingCode
+    || !counterId
+    || !adGoalCredential
+    || (runtimeProfile && runtimeProfile !== MODERNISTO_START_RUNTIME_PROFILE)
+    || (runtimeProfile === MODERNISTO_START_RUNTIME_PROFILE && !/^\d{5,20}$/.test(counterId))
+  ) {
     return { ok: false }
   }
 
@@ -131,6 +143,8 @@ function normalizeGenerateRequest(body) {
     ok: true,
     credential: adGoalCredential,
     counterId,
+    landingName,
+    runtimeProfile,
     payload: {
       landing_name: landingName,
       landing_code: landingCode,
@@ -155,6 +169,36 @@ function normalizeSafeGenerateResponse(payload) {
       publicLandingKey,
       embedCode,
       landingName,
+    },
+  }
+}
+
+function normalizeModernistoStartGenerateResponse(payload, binding) {
+  const publicLandingKey = normalizeText(payload?.data?.publicLandingKey, 1024)
+  const upstreamCounterValue = payload?.data?.counterId ?? payload?.data?.counter_id
+  const hasUpstreamCounterId = payload?.data?.counterId !== undefined
+    || payload?.data?.counter_id !== undefined
+  const upstreamCounterId = upstreamCounterValue === undefined || upstreamCounterValue === null
+    ? null
+    : normalizeText(String(upstreamCounterValue), 128)
+  const status = normalizeText(payload?.data?.status, 128) ?? 'generated'
+
+  if (
+    payload?.ok !== true
+    || !publicLandingKey
+    || !/^\d{5,20}$/.test(binding.counterId)
+    || (hasUpstreamCounterId && upstreamCounterId !== binding.counterId)
+  ) {
+    return null
+  }
+
+  return {
+    ok: true,
+    data: {
+      publicLandingKey,
+      counterId: binding.counterId,
+      landingName: normalizeText(payload?.data?.landingName, 512) ?? binding.landingName,
+      status,
     },
   }
 }
@@ -257,6 +301,30 @@ export function createGenerateHandler({
         signal: controller.signal,
       })
       const upstreamPayload = await upstreamResponse.json().catch(() => null)
+
+      if (normalizedRequest.runtimeProfile === MODERNISTO_START_RUNTIME_PROFILE) {
+        if (!upstreamResponse.ok) {
+          return safeUpstreamFailure(upstreamPayload, upstreamResponse.status)
+        }
+
+        const safeExternalResponse = normalizeModernistoStartGenerateResponse(
+          upstreamPayload,
+          normalizedRequest,
+        )
+        if (!safeExternalResponse) {
+          const error = 'atmospace_external_runtime_contract_failed'
+          return json({
+            ok: false,
+            stage: 'atmospace',
+            reason: error,
+            error,
+            message: PUBLIC_MESSAGES.service_unavailable,
+          }, 502)
+        }
+
+        return json(safeExternalResponse)
+      }
+
       const safeResponse = normalizeSafeGenerateResponse(upstreamPayload)
 
       if (!upstreamResponse.ok || !safeResponse) {

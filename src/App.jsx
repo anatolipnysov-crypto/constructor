@@ -2,6 +2,13 @@ import { useState, useMemo, useEffect } from 'react';
 import { Copy, Check, Wand2, AlertCircle, ChevronDown, RotateCcw, Eye, Sun, Moon, Sparkles, Lightbulb, ShieldCheck } from 'lucide-react';
 import AIBannerStudio from './components/AIBannerStudio';
 import { buildCampaignLandingLogic, resolveCampaignSemanticProfile } from './data/campaignSemantics';
+import {
+  MODERNISTO_FORMAT_ONE_API_BASE_URL,
+  MODERNISTO_FORMAT_ONE_ATTRIBUTION_URL,
+  MODERNISTO_FORMAT_ONE_HERO_DATA_URI,
+  MODERNISTO_FORMAT_ONE_QUIZ_URL
+} from './data/modernistoFormatOne';
+import { MODERNISTO_FORMAT_ONE_TEMPLATE } from './data/modernistoFormatOneTemplate';
 import { getAtmospaceGenerateErrorMessage, validateAtmospaceLandingInput } from './utils/atmospaceLandingInput';
 
 /* ================== УТИЛИТЫ ================== */
@@ -91,8 +98,9 @@ const ATMOSPACE_PUBLIC_API_BASE_URL = 'https://api.atmospace.pro';
 const ATMOSPACE_INIT_ENDPOINT = `${ATMOSPACE_PUBLIC_API_BASE_URL}/api/landing-runtime/init`;
 const ATMOSPACE_CLICK_ENDPOINT = `${ATMOSPACE_PUBLIC_API_BASE_URL}/api/landing-runtime/click`;
 const ATMOSPACE_GENERATED_RUNTIME_VERSION = 'sergey-constructor-quiz-v1';
-const DEFAULT_CLIENT_LIMITS = { banners: 12, prelandings: 4 };
-const TILDA_PRELAND_BUILD_VERSION = '20260601-modernisto-control-v2';
+const ATMOSPACE_MODERNISTO_START_RUNTIME_PROFILE = 'modernisto-start-external-v1';
+const DEFAULT_CLIENT_LIMITS = { banners: 12, prelandings: 5 };
+const TILDA_PRELAND_BUILD_VERSION = '20260801-modernisto-start-v1';
 const CONSTRUCTOR_ACCESS_MODE = 'owner_only';
 const OWNER_LOGIN = 'admin';
 const OWNER_PASSWORD = 'admin';
@@ -410,56 +418,6 @@ function makeClientId(number, displayName) {
 }
 
 /* ================== ТЕКСТЫ ПРЕДЛЕНДИНГА ================== */
-const CLIENT_PRELANDING_CORE_TEXT = `Каркас предлендинга строится вокруг заголовка и текста клиента.
-
-Это не брендовый лендинг и не страница с готовой легендой. Конструктор берёт смысл объявления, выбирает один из двух форматов и собирает короткую посадочную страницу с мини-тестом или прямой защищённой регистрацией Atmospace.
-
-Узнаете сценарий
-1. Человек видит знакомую боль или желание
-2. Сразу понимает, зачем смотреть разбор
-3. Получает 2-3 сильных мини-оффера без лишней теории
-4. Проходит четыре вопроса и открывает защищённую регистрацию
-
-Главная задача: не добавить отсебятину, а усилить введённый заголовок, описание и выбранную структуру.`;
-
-const TPL = [
-  {
-    id: 1,
-    t: 'Жёсткий разрыв',
-    a: 'Боль и разворот',
-    c: 'from-red-500 to-orange-500',
-    h: 'Старый подход больше не работает? Посмотрите другой маршрут',
-    p: ['Боль', 'Причина', 'Первый шаг'],
-    txt: CLIENT_PRELANDING_CORE_TEXT
-  },
-  {
-    id: 2,
-    t: 'Снятие возражений',
-    a: 'Доверительный вход',
-    c: 'from-blue-500 to-cyan-500',
-    h: 'Сначала короткий разбор — потом понятный первый шаг',
-    p: ['Сценарий', 'Три ответа', 'CTA'],
-    txt: `Формат для аудитории, которой важно сначала разобраться.
-
-Лендинг показывает не обещание чуда, а спокойную логику: что человек увидит, почему это отличается от старого подхода и что станет понятно после четырёх вопросов.
-
-Страница должна работать как мост между объявлением и регистрацией: без бренда, без лишних деталей, без фантазий поверх заголовка клиента.`
-  },
-  {
-    id: 3,
-    t: 'Доверие и ясность',
-    a: 'Чистый маршрут',
-    c: 'from-emerald-500 to-green-500',
-    h: 'Покажите человеку понятный путь без перегруза',
-    p: ['Контекст', 'Разбор', 'Решение'],
-    txt: `Формат для чистой, спокойной подачи.
-
-Он не спорит с человеком и не давит. Он показывает: вот проблема, вот короткий разбор, вот что станет понятнее, вот кнопка перехода.
-
-Вся конкретика берётся из заголовка, описания и выбранного сценария.`
-  }
-];
-
 const PRELANDING_CONTENT = {
   1: {
     badge: 'Короткий практический разбор',
@@ -871,7 +829,7 @@ function buildAtmospaceLandingConfig({ projectData, ...fallback } = {}) {
   const publicLandingKey = String(fallback.publicLandingKey || '').trim();
   const counterId = String(fallback.counterId || fallback.metrikaCounterId || projectData?.metrikaId || '').trim();
   const landingName = String(fallback.landingName || projectData?.clientDisplayName || projectData?.clientName || 'Лендинг').trim();
-  const landingCode = String(fallback.landingCode || projectData?.partnerCode || '').trim();
+  const landingCode = String(fallback.landingCode || '').trim();
   return {
     runtimeVersion: ATMOSPACE_GENERATED_RUNTIME_VERSION,
     baseUrl: ATMOSPACE_PUBLIC_API_BASE_URL,
@@ -2758,8 +2716,8 @@ const CORE_PRELANDING_VARIANTS = {
 const MANUAL_PRELANDING_MODES = [
   {
     id: 'templateStage',
-    title: 'Формат 1 / Мини-тест + разбор',
-    desc: 'Полноэкранная смысловая hero-сцена, четыре вопроса мини-теста и защищённая регистрация Atmospace.',
+    title: 'Формат 1 / Точный modernisto.ru/start',
+    desc: 'Фиксированный шаблон с лицом Андрея: меняется только рекламный заголовок, кнопка ведёт в размещённый квиз Atmospace.',
   },
   {
     id: 'barrierProfileQuiz',
@@ -4418,6 +4376,38 @@ function renderCoreMethodFixedOffer({ description, valueImage, ctaImage }) {
   </div>`;
 }
 
+function renderModernistoHeadline(titleText = '') {
+  const safeTitle = stripHtml(titleText || 'Как реализовать себя, когда тебе 30+ и куча провалов.');
+  const marker = '30+';
+  const markerIndex = safeTitle.indexOf(marker);
+  if (markerIndex < 0) return esc(safeTitle);
+  return `${esc(safeTitle.slice(0, markerIndex))}<span class="a30l-nowrap">${marker}</span>${esc(safeTitle.slice(markerIndex + marker.length))}`;
+}
+
+function renderModernistoStartPrelanding({ content, projectData, landingMeta }) {
+  const titleText = stripHtml(content?.title || content?.titleHtml || 'Как реализовать себя, когда тебе 30+ и куча провалов.');
+  const titleClass = titleText.length > 95 ? 'a30l-title-long' : titleText.length > 70 ? 'a30l-title-medium' : '';
+  const config = buildAtmospaceLandingConfig({ projectData, ...(landingMeta || {}) });
+  const template = MODERNISTO_FORMAT_ONE_TEMPLATE
+    .replace('__ATMOSPACE_TITLE_CLASS__', () => titleClass)
+    .replace('__ATMOSPACE_HEADLINE_HTML__', () => renderModernistoHeadline(titleText))
+    .replace('__ATMOSPACE_HERO_DATA_URI__', () => MODERNISTO_FORMAT_ONE_HERO_DATA_URI);
+  const titleSizingCss = titleClass ? `<style id="a30l-dynamic-title-sizing">
+#atmosfera-30-landing .a30l-intro h1.a30l-title-medium{font-size:clamp(42px,4.2vw,68px);line-height:.98;overflow-wrap:anywhere}
+#atmosfera-30-landing .a30l-intro h1.a30l-title-long{font-size:clamp(35px,3.55vw,57px);line-height:1;overflow-wrap:anywhere}
+@media (max-width:560px){#atmosfera-30-landing .a30l-intro h1.a30l-title-medium{font-size:clamp(33px,9.3vw,43px)}#atmosfera-30-landing .a30l-intro h1.a30l-title-long{font-size:clamp(29px,8.1vw,38px);line-height:1.03}}
+</style>` : '';
+
+  return `${template}${titleSizingCss}
+<script
+  src="${esc(MODERNISTO_FORMAT_ONE_ATTRIBUTION_URL)}"
+  data-public-landing-key="${esc(config.publicLandingKey)}"
+  data-counter-id="${esc(config.counterId)}"
+  data-quiz-url="${esc(MODERNISTO_FORMAT_ONE_QUIZ_URL)}"
+  data-api-base-url="${esc(MODERNISTO_FORMAT_ONE_API_BASE_URL)}"
+></script>`;
+}
+
 function renderCoreMethodInlinePrelanding({ templateId, content, projectData, landingMeta, sceneImage, valueImage, ctaImage }) {
   const safeTemplateId = [1, 2, 3].includes(Number(templateId)) ? Number(templateId) : 1;
   const titleText = stripHtml(content?.titleHtml || content?.title || 'Как реализовать себя, когда тебе 30+ и куча провалов');
@@ -5611,6 +5601,13 @@ function renderPrelandingHtml({ tpl, style, palette, photo, overrides, projectDa
     overrides
   );
   if (!content) return '';
+  if (isCoreMethod) {
+    return renderModernistoStartPrelanding({
+      content,
+      projectData,
+      landingMeta
+    });
+  }
 
   const paletteKey = PALETTES.some(x => x[0] === palette) ? palette : 'blue-trust';
   const paletteData = PALETTES.find(x => x[0] === paletteKey) || PALETTES[0];
@@ -5725,17 +5722,6 @@ function renderPrelandingHtml({ tpl, style, palette, photo, overrides, projectDa
     quizLabel: 'Пройти мини-тест',
     registrationLabel: 'Продолжить регистрацию'
   };
-  if (isCoreMethod) {
-    return renderCoreMethodInlinePrelanding({
-      templateId,
-      content: prelandConfig,
-      projectData,
-      landingMeta,
-      sceneImage,
-      valueImage,
-      ctaImage
-    });
-  }
   return renderBarrierProfileQuizPrelanding({
     content: prelandConfig,
     projectData,
@@ -5755,8 +5741,110 @@ function countMatches(text, pattern) {
   return (String(text || '').match(pattern) || []).length;
 }
 
+function validateModernistoStartTildaHtml(source = '', config = {}) {
+  const errors = [];
+  const warnings = [];
+  const requiredMarkers = [
+    'id="atmosfera-30-landing"',
+    'data-atmospace-format="1"',
+    'data-a30l-action="quiz"',
+    'Ты уже не первый год пытаешься перейти на новый уровень:',
+    'Но что бы ты ни делал - результата',
+    'Новая попытка как удар по вере в себя.',
+    'Почему у других получается, а у тебя нет?',
+    'Готов увидеть',
+    'Пройти мини-тест',
+    `href="${MODERNISTO_FORMAT_ONE_QUIZ_URL}"`,
+    `src="${MODERNISTO_FORMAT_ONE_ATTRIBUTION_URL}"`,
+    `data-quiz-url="${MODERNISTO_FORMAT_ONE_QUIZ_URL}"`,
+    `data-api-base-url="${MODERNISTO_FORMAT_ONE_API_BASE_URL}"`,
+    'data-public-landing-key=',
+    'data-counter-id=',
+    'data:image/avif;base64,',
+    'alt="Андрей Золотарёв"'
+  ];
+
+  if (!source.trim()) errors.push('HTML ещё не собран.');
+  if (/<!doctype|<html[\s>]|<head[\s>]|<body[\s>]/i.test(source)) {
+    errors.push('HTML для Tilda не должен быть полноценным документом с html/head/body.');
+  }
+  requiredMarkers.forEach((requiredMarker) => {
+    if (!source.includes(requiredMarker)) {
+      errors.push('Формат 1 не совпадает с утверждённым шаблоном modernisto.ru/start. Перегенерируйте HTML.');
+    }
+  });
+
+  if (countMatches(source, /id=["']atmosfera-30-landing["']/g) !== 1) {
+    errors.push('В формате 1 должен быть ровно один стартовый экран Atmospace.');
+  }
+  if (countMatches(source, /data-a30l-action=["']quiz["']/g) !== 1) {
+    errors.push('В формате 1 должна быть ровно одна кнопка перехода в утверждённый квиз.');
+  }
+  const embeddedImages = source.match(/data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=]+/gi) || [];
+  if (embeddedImages.length !== 1 || embeddedImages[0] !== MODERNISTO_FORMAT_ONE_HERO_DATA_URI) {
+    errors.push('В формате 1 должен быть ровно один утверждённый AVIF-портрет Андрея.');
+  }
+  if (countMatches(source, new RegExp(MODERNISTO_FORMAT_ONE_ATTRIBUTION_URL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) !== 1) {
+    errors.push('В формате 1 должен быть ровно один официальный runtime атрибуции Atmospace.');
+  }
+  if (!/<h1[^>]*id=["']a30l-title["'][^>]*>\s*\S[\s\S]*?<\/h1>/i.test(source)) {
+    errors.push('Не заполнен рекламный заголовок формата 1.');
+  }
+
+  [
+    ['publicLandingKey', 'код рекламного лендинга'],
+    ['counterId', 'номер рекламного счётчика']
+  ].forEach(([key, label]) => {
+    const value = String(config[key] || '').trim();
+    if (!value) errors.push(`Не заполнено поле: ${label}.`);
+    else {
+      const attributeName = key === 'publicLandingKey' ? 'data-public-landing-key' : 'data-counter-id';
+      if (!source.includes(`${attributeName}="${esc(value)}"`)) {
+        errors.push(`В HTML не найдено текущее значение поля: ${label}.`);
+      }
+    }
+  });
+
+  if (config.runtimeVersion && config.runtimeVersion !== ATMOSPACE_GENERATED_RUNTIME_VERSION) {
+    errors.push('Версия runtime устарела. Перегенерируйте HTML.');
+  }
+  if (config.apiBaseUrl && config.apiBaseUrl !== ATMOSPACE_PUBLIC_API_BASE_URL) {
+    errors.push('Адрес сервера Atmospace указан неверно.');
+  }
+  if (config.initEndpoint && config.initEndpoint !== ATMOSPACE_INIT_ENDPOINT) {
+    errors.push('Маршрут подготовки регистрации указан неверно.');
+  }
+  if (config.clickEndpoint && config.clickEndpoint !== ATMOSPACE_CLICK_ENDPOINT) {
+    errors.push('Маршрут событий лендинга указан неверно.');
+  }
+
+  [
+    /data-atmospace-(?:registration-link|embedded-quiz|inline-quiz|question-count)/i,
+    /data-atmospace-inline-runtime/i,
+    /window\.ATMOSPACE_LANDING_CONFIG/i,
+    /window\.FH_CONFIG|window\.FUNNEL_CONFIG/i,
+    /serverOnlyAdGoalCredential|metrikaToken|yandex_oauth_token/i,
+    /requestRegistration|window\.location\.assign\(registrationUrl\)/i,
+    /partner_code|\bgcao\b|\bgcpc\b|landingCode|landing_variant_code|data-landing-code/i,
+    /r\.bothelp\.io|web\.telegram\.org/i
+  ].forEach((forbiddenPattern) => {
+    if (forbiddenPattern.test(source)) {
+      errors.push('В формате 1 найден устаревший или встроенный сценарий вместо фиксированной цепочки /start → quiz → offer.');
+    }
+  });
+
+  return {
+    ok: errors.length === 0,
+    errors: Array.from(new Set(errors)),
+    warnings
+  };
+}
+
 function validateAtmospaceTildaHtml(html = '', config = {}, options = {}) {
   const source = String(html || '');
+  if (options.modernistoStartRequired === true) {
+    return validateModernistoStartTildaHtml(source, config);
+  }
   const errors = [];
   const warnings = [];
   const quizRequired = options.quizRequired === true;
@@ -6058,7 +6146,7 @@ function AtmospaceLandingConstructor({ dark, value, onChange }) {
           </div>
           <h2 className={`text-2xl font-black ${text}`}>Настройки для HTML</h2>
           <p className={`mt-1 max-w-3xl text-sm ${textMuted}`}>
-            Заполните четыре поля из кабинета Atmospace. Заголовок, текст и один из двух форматов выбираются ниже; готовый Tilda HTML появится в зелёном блоке.
+            Заполните четыре технических поля Atmospace. Пятое поле — рекламный заголовок — задаётся ниже; готовый Tilda HTML появится в зелёном блоке.
           </p>
         </div>
         <div className={`rounded-2xl border px-4 py-3 text-xs ${panel}`}>
@@ -6523,9 +6611,14 @@ export default function Constructor() {
   };
   const consumeBannerQuota = () => consumeQuota('banners');
   const consumePrelandingQuota = () => consumeQuota('prelandings');
+  const isFixedFormatOne = normalizedManualPrelandingMode === 'templateStage';
   const selectedPrelandingTemplateId = [1, 2, 3].includes(Number(tpl)) ? Number(tpl) : 1;
-  const prelandingImageBuildKey = useMemo(() => [
-    manualPrelandingMode,
+  const prelandingImageBuildKey = useMemo(() => (isFixedFormatOne ? [
+    normalizedManualPrelandingMode,
+    String(creativeHeadline || '').trim(),
+    landingRuntimeInputKey
+  ] : [
+    normalizedManualPrelandingMode,
     selectedPrelandingTemplateId,
     activePresetId || '',
     style || '',
@@ -6536,8 +6629,10 @@ export default function Constructor() {
     String(creativeHeadline || '').trim(),
     String(creativeMethod || '').trim(),
     landingRuntimeInputKey
-  ].join('|'), [
+  ]).join('|'), [
     manualPrelandingMode,
+    normalizedManualPrelandingMode,
+    isFixedFormatOne,
     selectedPrelandingTemplateId,
     activePresetId,
     style,
@@ -6565,20 +6660,15 @@ export default function Constructor() {
     generatorBuild: currentPrelandingVariantMeta?.generatorBuild || ''
   }), [currentPrelandingVariantMeta, landingRuntimeMeta]);
   const isSingleImagePrelandingMode = normalizedManualPrelandingMode === 'barrierProfileQuiz';
-  const prelandingAiImagesReady = isSingleImagePrelandingMode
-    ? Boolean(prelandingAiImages?.key === prelandingImageBuildKey && currentPrelandingAiImages?.sceneImage)
-    : Boolean(
-      currentPrelandingAiImages?.sceneImage
-      && currentPrelandingAiImages?.valueImage
-      && currentPrelandingAiImages?.ctaImage
-    );
-      const prelandingNeedsTemplate = normalizedManualPrelandingMode === 'templateStage';
-  const prelandingTemplateReady = !prelandingNeedsTemplate || Boolean(tpl);
+  const prelandingAiImagesReady = isFixedFormatOne
+    ? Boolean(prelandingAiImages?.key === prelandingImageBuildKey && currentPrelandingAiImages?.fixedTemplateReady)
+    : Boolean(prelandingAiImages?.key === prelandingImageBuildKey && currentPrelandingAiImages?.sceneImage);
+  const prelandingTemplateReady = isFixedFormatOne || Boolean(style && palette);
   const canGeneratePrelandingAi = Boolean(
     hasPrelandingKeys
+    && (!isFixedFormatOne || String(creativeHeadline || '').trim())
     && prelandingTemplateReady
-    && style
-    && palette
+    && (isFixedFormatOne || (style && palette))
     && !isAiPrelandingBuilding
     && !quota.prelandingBlocked
   );
@@ -6594,18 +6684,74 @@ export default function Constructor() {
       setPrelandingAiError(prelandingRuntimeMissing[0] || 'Проверьте четыре поля серверной сборки.');
       return;
     }
-    if (!(prelandingTemplateReady && style && palette)) {
-      setPrelandingAiError(prelandingNeedsTemplate
-        ? 'Сначала выберите один из 3 шаблонов, стиль и палитру предлендинга.'
-        : 'Сначала выберите стиль и палитру предлендинга.');
+    if (isFixedFormatOne && !String(creativeHeadline || '').trim()) {
+      setPrelandingAiError('Введите рекламный заголовок. В формате 1 это единственный изменяемый текст.');
+      return;
+    }
+    if (!isFixedFormatOne && !(prelandingTemplateReady && style && palette)) {
+      setPrelandingAiError('Сначала выберите стиль и палитру предлендинга.');
       return;
     }
     if (quota.prelandingBlocked) {
-      setPrelandingAiError(`Лимит AI-предлендингов для этого профиля исчерпан: ${quota.prelandingsUsed || 0}/${quota.prelandingLimit || 0}.`);
+      setPrelandingAiError(`Лимит предлендингов для этого профиля исчерпан: ${quota.prelandingsUsed || 0}/${quota.prelandingLimit || 0}.`);
       return;
     }
 
     const buildKey = prelandingImageBuildKey;
+    if (isFixedFormatOne) {
+      setIsAiPrelandingBuilding(true);
+      setIsAiPrelandingInvalidated(false);
+      setPrelandingSync(null);
+      setPrelandingAiImages(null);
+      setPrelandingAiError('');
+      setPrelandingAiStatus('Проверяю технические данные Atmospace. Изображение и весь текст /start остаются фиксированными.');
+
+      try {
+        let runtimeArtifact = activeLandingRuntimeArtifact;
+        if (!runtimeArtifact?.publicLandingKey) {
+          const runtimePayload = {
+            ...prelandingRuntimeValidation.value,
+            runtimeProfile: ATMOSPACE_MODERNISTO_START_RUNTIME_PROFILE
+          };
+          setPrelandingAiStatus('Создаю серверный лендинг Atmospace и получаю публичный ключ. Защищённый токен в HTML не попадёт.');
+          const runtimeResponse = await postJsonWithTimeout(ATMOSPACE_GENERATE_ENDPOINT, runtimePayload, {
+            timeoutMs: 45000,
+            timeoutLabel: 'Atmospace'
+          });
+          runtimeArtifact = normalizeAtmospaceGenerateResult(runtimeResponse, runtimePayload);
+          setLandingRuntimeArtifact(runtimeArtifact);
+          saveAtmospaceLandingArtifact(runtimeArtifact);
+          setLandingRuntimeData((prev) => ({
+            ...prev,
+            serverOnlyAdGoalCredential: ''
+          }));
+        }
+
+        setPrelandingAiImages({
+          key: buildKey,
+          images: { fixedTemplateReady: true },
+          designRoute: null,
+          visualRoute: null,
+          meta: {
+            generatorBuild: TILDA_PRELAND_BUILD_VERSION,
+            landingVariant: 'atmosphere-30-landing',
+            publicLandingKey: runtimeArtifact.publicLandingKey,
+            counterId: runtimeArtifact.counterId
+          },
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+        setPrelandingAiStatus('Технические данные проверены. Формат 1 собран по точному шаблону /start; HTML можно копировать.');
+        consumePrelandingQuota();
+      } catch (error) {
+        setPrelandingAiError(String(error?.message || error || 'Не удалось проверить технические данные Atmospace. Повторите генерацию.'));
+        setPrelandingAiStatus('HTML не выдан: серверная привязка не подтверждена.');
+      } finally {
+        setIsAiPrelandingBuilding(false);
+      }
+      return;
+    }
+
     const resumableAiState = prelandingAiImages?.key === buildKey && !prelandingAiImagesReady
       ? prelandingAiImages
       : null;
@@ -6815,51 +6961,33 @@ export default function Constructor() {
   };
 
   const prelandingOutputLocked = isAiPrelandingBuilding || isAiPrelandingInvalidated;
-  const canPre = Boolean(!prelandingOutputLocked && prelandingTemplateReady && style && palette && hasPrelandingKeys && activeLandingRuntimeArtifact?.publicLandingKey && prelandingAiImagesReady);
+  const canPre = Boolean(
+    !prelandingOutputLocked
+    && hasPrelandingKeys
+    && activeLandingRuntimeArtifact?.publicLandingKey
+    && prelandingAiImagesReady
+    && (isFixedFormatOne ? String(creativeHeadline || '').trim() : (prelandingTemplateReady && style && palette))
+  );
   const prelandingHtml = useMemo(() => {
     if (prelandingOutputLocked) return '';
     if (!hasPrelandingKeys) return '';
     if (!activeLandingRuntimeArtifact?.publicLandingKey) return '';
     const enteredHeadline = String(creativeHeadline || '').trim();
     const enteredText = String(creativeMethod || '').trim();
-    if (!(prelandingTemplateReady && style && palette)) return '';
     if (!prelandingAiImagesReady) return '';
-    if (normalizedManualPrelandingMode === 'templateStage') {
-      const selectedTemplateId = [1, 2, 3].includes(Number(tpl)) ? Number(tpl) : 1;
-      const baseContent = PRELANDING_CONTENT[selectedTemplateId] || PRELANDING_CONTENT[1];
-      const coreDesign = currentPrelandingDesignRoute || CORE_METHOD_DESIGN_ROUTES[(selectedTemplateId - 1 + CORE_METHOD_DESIGN_ROUTES.length) % CORE_METHOD_DESIGN_ROUTES.length];
-      const title = enteredHeadline || stripHtml(baseContent.titleHtml || baseContent.title || 'Откройте короткий разбор и первый шаг');
-      const textLead = enteredText;
-      const imageSeed = `manual-core-${selectedTemplateId}-${coreDesign?.id || style}-${coreDesign?.palette || palette}-${title}-${textLead}`;
+    if (isFixedFormatOne) {
+      if (!enteredHeadline) return '';
       return renderPrelandingHtml({
-        tpl: selectedTemplateId,
-        style: coreDesign?.themeStyle || style,
-        palette: coreDesign?.palette || palette,
-        photo,
-        layout,
-        typo: coreDesign?.typo || typo,
-        effects: coreDesign?.effects || effects,
+        tpl: 1,
         overrides: {
-          prelandingMode: 'coreMethod',
-          renderMode: 'classicText',
-          templateId: selectedTemplateId,
-          themeStyle: coreDesign?.themeStyle || CORE_PRELANDING_THEME_STYLES[selectedTemplateId] || 'darkYellow',
-          coreDesignClass: coreDesign?.coreDesignClass || '',
-          landingVariant: CORE_PRELANDING_VARIANTS[selectedTemplateId] || 'tf-v-spotlight',
-          designFamily: `core-method-${coreDesign?.id || 'default'}`,
-          variantKey: imageSeed,
-          visualSource: 'scene',
-          title,
-          titleHtml: esc(title),
-          description: textLead,
-          sceneImage: currentPrelandingAiImages.sceneImage,
-          valueImage: currentPrelandingAiImages.valueImage,
-          ctaImage: currentPrelandingAiImages.ctaImage
+          prelandingMode: 'templateStage',
+          title: enteredHeadline
         },
         projectData: prelandingRuntimeProjectData,
         landingMeta: effectivePrelandingVariantMeta
       });
     }
+    if (!(prelandingTemplateReady && style && palette)) return '';
     const insightPreset = BARRIER_PROFILE_QUIZ_PRESETS.find((preset) => preset.id === activePresetId)
       || BARRIER_PROFILE_QUIZ_PRESETS[0];
     const insightDesign = currentPrelandingDesignRoute || insightPreset;
@@ -6913,7 +7041,7 @@ export default function Constructor() {
       projectData: prelandingRuntimeProjectData,
       landingMeta: effectivePrelandingVariantMeta
     });
-  }, [tpl, style, palette, layout, typo, effects, photo, prelandingRuntimeProjectData, hasPrelandingKeys, activeLandingRuntimeArtifact?.publicLandingKey, prelandingOutputLocked, normalizedManualPrelandingMode, activePresetId, creativeHeadline, creativeMethod, prelandingAiImagesReady, currentPrelandingAiImages, currentPrelandingDesignRoute, effectivePrelandingVariantMeta, prelandingTemplateReady]);
+  }, [style, palette, photo, prelandingRuntimeProjectData, hasPrelandingKeys, activeLandingRuntimeArtifact?.publicLandingKey, prelandingOutputLocked, isFixedFormatOne, activePresetId, creativeHeadline, creativeMethod, prelandingAiImagesReady, currentPrelandingAiImages, currentPrelandingDesignRoute, effectivePrelandingVariantMeta, prelandingTemplateReady]);
   const prelandingHtmlConfig = useMemo(
     () => buildAtmospaceLandingConfig({
       projectData: prelandingRuntimeProjectData,
@@ -6923,9 +7051,9 @@ export default function Constructor() {
   );
   const prelandingHtmlValidation = useMemo(
     () => validateAtmospaceTildaHtml(prelandingHtml, prelandingHtmlConfig, {
-      quizRequired: normalizedManualPrelandingMode === 'templateStage'
+      modernistoStartRequired: isFixedFormatOne
     }),
-    [prelandingHtml, prelandingHtmlConfig, normalizedManualPrelandingMode]
+    [prelandingHtml, prelandingHtmlConfig, isFixedFormatOne]
   );
   const prelandingValidationErrors = prelandingHtmlValidation.errors.join('\n');
   const prelandingValidationWarnings = prelandingHtmlValidation.warnings.join('\n');
@@ -7085,7 +7213,7 @@ export default function Constructor() {
                 <div>
                   <h2 className={`text-xl font-black ${text}`}>Режим генерации предлендинга</h2>
                   <p className={`text-sm ${dark ? 'text-red-100' : 'text-red-900'}`}>
-                    Доступны два формата предлендинга: 1 и 6. Каждый берёт заголовок и описание клиента как основу, собирает смысловые блоки без брендов и готовит HTML для вставки в Tilda.
+                    Доступны только форматы 1 и 6. Формат 1 меняет исключительно рекламный заголовок в точной копии modernisto.ru/start. Формат 6 использует заголовок и описание для отдельного смыслового профиля.
                   </p>
                   <p className={`mt-2 text-xs font-bold ${dark ? 'text-red-100' : 'text-red-900'}`}>
                     Для честного A/B-сравнения публикуйте форматы 1 и 6 с разными названием и кодом рекламного лендинга из Atmospace. Один код нельзя использовать как две независимые вариации.
@@ -7121,16 +7249,17 @@ export default function Constructor() {
                   </button>
                 ))}
               </div>
-              <div className="mt-5 grid md:grid-cols-2 gap-3">
+              <div className={`mt-5 grid gap-3 ${isFixedFormatOne ? '' : 'md:grid-cols-2'}`}>
                 <TextArea
-                  label="Заголовок предлендинга"
-                  hint="первый экран и смысл посадочной"
+                  label={isFixedFormatOne ? 'Рекламный заголовок формата 1' : 'Заголовок предлендинга'}
+                  hint={isFixedFormatOne ? 'единственный изменяемый текст' : 'первый экран и смысл посадочной'}
                   value={creativeHeadline}
                   onChange={setCreativeHeadline}
                   rows={2}
                   placeholder="Например: Зарплата пришла — а денег снова почти нет?"
                   dark={dark}
                 />
+                {!isFixedFormatOne && (
                 <TextArea
                   label="Текст / подзаголовок (необязательно)"
                   hint="оставьте пустым — под заголовком ничего не будет"
@@ -7140,35 +7269,18 @@ export default function Constructor() {
                   placeholder="Можно оставить пустым и собрать лендинг только по заголовку."
                   dark={dark}
                 />
+                )}
               </div>
               <p className={`mt-3 text-xs font-bold ${dark ? 'text-red-100' : 'text-red-900'}`}>
-                Формат 1: первый экран содержит изображение, заголовок и кнопку; описание появится только если вы его ввели. Фиксированная стартовая история, квиз и оффер не переписываются. Формат 6 собирает смысловой профиль без возврата старых форматов.
+                Формат 1: лицо Андрея, весь текст, вёрстка, цвет, кнопка и переход в размещённый квиз зафиксированы как на /start. AI-картинки и новые смысловые экраны не создаются. Формат 6 остаётся отдельным одностраничником с одной hero-картинкой.
               </p>
             </div>
 
             {/* Шаг 1 */}
             {manualPrelandingMode === 'templateStage' && (
               <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
-                <h2 className={`text-xl font-black mb-2 ${text}`}>Формат 1: мини-тест + разбор</h2>
-                <p className={`text-sm ${textMuted} mb-4`}>Каждая карточка привязана к своему углу, дизайну, палитре, типографике и структуре. Выбрали сценарий → сгенерировали картинки и Tilda HTML.</p>
-                <div className="grid md:grid-cols-3 gap-3">
-                  {TPL.map((t) => {
-                    const linkedPreset = CORE_METHOD_PRESETS.find((preset) => preset.tpl === t.id) || CORE_METHOD_PRESETS[0];
-                    const isSelected = tpl === t.id;
-                    return (
-                    <button key={t.id} onClick={() => applyCoreMethodTemplate(t.id)} className={`text-left rounded-2xl p-4 border-2 ${isSelected ? 'border-blue-500 bg-blue-50 shadow-md' : (dark ? 'border-slate-700 hover:border-slate-500 bg-slate-800' : 'border-slate-200 hover:border-slate-300 bg-white')}`}>
-                      <div className={`inline-block bg-gradient-to-r ${t.c} text-white text-[10px] font-black uppercase px-2 py-0.5 rounded mb-2`}>{t.a}</div>
-                      <h3 className={`font-black text-sm mb-2 ${isSelected ? 'text-slate-900' : text}`}>{t.t}</h3>
-                      <div className={`mb-2 rounded-xl border px-3 py-2 text-[11px] font-bold ${isSelected ? 'border-blue-200 bg-white text-slate-700' : (dark ? 'border-slate-700 bg-slate-900 text-slate-300' : 'border-slate-100 bg-slate-50 text-slate-600')}`}>
-                        {linkedPreset.emoji} Дизайн: {linkedPreset.name}
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {t.p.map((p, i) => <span key={i} className={`text-[10px] font-bold ${isSelected ? 'bg-white border-slate-300 text-slate-900' : (dark ? 'bg-slate-700 border-slate-600 text-slate-300' : 'bg-white border-slate-200 text-slate-700')} border px-1.5 py-0.5 rounded-full`}>{p}</span>)}
-                      </div>
-                      {isSelected && <div className="mt-2 text-xs font-black text-emerald-600 flex items-center gap-1"><Check className="w-3 h-3" /> Сценарий и дизайн выбраны</div>}
-                    </button>
-                  )})}
-                </div>
+                <h2 className={`text-xl font-black mb-2 ${text}`}>Формат 1: точный шаблон /start</h2>
+                <p className={`text-sm ${textMuted}`}>Шаблон, портрет Андрея и вся цепочка /start → quiz → offer зафиксированы. Введите заголовок и технические данные — никаких вариантов дизайна или AI-генерации здесь нет.</p>
               </div>
             )}
 
@@ -7213,10 +7325,10 @@ export default function Constructor() {
               {isAiPrelandingBuilding ? (
                 <div className="bg-white/15 rounded-xl p-4 text-center">
                   <Sparkles className="w-8 h-8 mx-auto mb-2 text-yellow-200 animate-pulse" />
-                  <p className="text-sm font-bold">{prelandingAiStatus || (isSingleImagePrelandingMode
-                    ? 'OpenAI генерирует одну смысловую hero-картинку. Старый код скрыт, чтобы его не вставить повторно.'
-                    : 'OpenAI генерирует 3 разные картинки. Старый код скрыт, чтобы его не вставить повторно.')}</p>
-                  <p className="mt-2 text-xs text-white/80">{isSingleImagePrelandingMode ? 'После публикации hero-картинки HTML появится автоматически.' : 'После публикации трёх изображений HTML появится автоматически.'}</p>
+                  <p className="text-sm font-bold">{prelandingAiStatus || (isFixedFormatOne
+                    ? 'Проверяю серверную привязку Atmospace и собираю точный HTML /start.'
+                    : 'OpenAI генерирует одну смысловую hero-картинку. Старый код скрыт, чтобы его не вставить повторно.')}</p>
+                  <p className="mt-2 text-xs text-white/80">{isFixedFormatOne ? 'Портрет Андрея и фиксированный текст берутся из утверждённого шаблона без AI.' : 'После публикации hero-картинки HTML появится автоматически.'}</p>
                 </div>
               ) : isAiPrelandingInvalidated ? (
                 <div className="bg-white/15 rounded-xl p-4 text-center">
@@ -7228,29 +7340,29 @@ export default function Constructor() {
                   <AlertCircle className="w-8 h-8 mx-auto mb-2 text-yellow-200" />
                   <p className="text-sm">Заполните верхние поля сборки: {prelandingRuntimeMissing.join(', ')}.</p>
                 </div>
-              ) : !(prelandingTemplateReady && style && palette) ? (
+              ) : !isFixedFormatOne && !(prelandingTemplateReady && style && palette) ? (
                 <div className="bg-white/15 rounded-xl p-4 text-center">
                   <AlertCircle className="w-8 h-8 mx-auto mb-2 text-yellow-200" />
-                  <p className="text-sm">{prelandingNeedsTemplate ? 'Выберите один из 3 шаблонов, стиль и палитру. После этого запустите генерацию AI-картинок и HTML.' : 'Выберите стиль и палитру. После этого запустите генерацию AI-картинок и HTML.'}</p>
+                  <p className="text-sm">Выберите стиль и палитру. После этого запустите генерацию hero-картинки и HTML.</p>
                 </div>
               ) : !prelandingAiImagesReady ? (
                 <div className="bg-white/15 rounded-xl p-4 text-center">
                   <Sparkles className="w-8 h-8 mx-auto mb-2 text-yellow-200" />
-                  <p className="text-sm font-bold">{isSingleImagePrelandingMode
-                    ? 'HTML появится после публикации одной смысловой hero-картинки. Если OpenAI зависнет, конструктор сам перезапустит попытку.'
-                    : 'HTML появится после публикации трёх AI-картинок: hero, блок ценности и CTA. Если OpenAI зависнет, конструктор сам перезапустит попытку.'}</p>
+                  <p className="text-sm font-bold">{isFixedFormatOne
+                    ? 'Введите рекламный заголовок и подготовьте HTML. Меняется только заголовок; весь остальной /start остаётся точным и фиксированным.'
+                    : 'HTML появится после публикации одной смысловой hero-картинки. Если OpenAI зависнет, конструктор сам перезапустит попытку.'}</p>
                   <button
                     type="button"
                     onClick={handleGeneratePrelandingAiImages}
                     disabled={!canGeneratePrelandingAi}
                     className="mt-4 rounded-2xl bg-yellow-300 px-5 py-3 text-sm font-black text-slate-950 shadow-lg hover:bg-yellow-200 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {isSingleImagePrelandingMode
-                      ? 'Сгенерировать hero-картинку и HTML'
-                      : 'Сгенерировать AI-картинки и HTML'}
+                    {isFixedFormatOne
+                      ? 'Подготовить HTML формата 1'
+                      : 'Сгенерировать hero-картинку и HTML'}
                   </button>
                   {quota.prelandingBlocked && (
-                    <p className="mt-3 text-xs font-bold text-yellow-100">Лимит AI-предлендингов исчерпан: {quota.prelandingsUsed || 0}/{quota.prelandingLimit || 0}.</p>
+                    <p className="mt-3 text-xs font-bold text-yellow-100">Лимит предлендингов исчерпан: {quota.prelandingsUsed || 0}/{quota.prelandingLimit || 0}.</p>
                   )}
                   {prelandingAiError && (
                     <p className="mt-3 rounded-xl bg-red-500/25 p-3 text-xs font-bold text-white">{prelandingAiError}</p>

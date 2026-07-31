@@ -22,7 +22,7 @@ function handlerSource(source) {
   const start = source.indexOf('async function handleAtmospaceLandingGenerate');
   if (start === -1) return '';
   const next = source.indexOf('\nasync function ', start + 1);
-  return source.slice(start, next === -1 ? start + 5000 : next);
+  return source.slice(start, next === -1 ? source.length : next);
 }
 
 function namedFunctionSource(source, signature) {
