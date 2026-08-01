@@ -4405,7 +4405,8 @@ function renderModernistoStartPrelanding({ content, projectData, landingMeta }) 
   data-counter-id="${esc(config.counterId)}"
   data-quiz-url="${esc(MODERNISTO_FORMAT_ONE_QUIZ_URL)}"
   data-api-base-url="${esc(MODERNISTO_FORMAT_ONE_API_BASE_URL)}"
-></script>`;
+></script>
+</section>`;
 }
 
 function renderCoreMethodInlinePrelanding({ templateId, content, projectData, landingMeta, sceneImage, valueImage, ctaImage }) {
@@ -5776,6 +5777,17 @@ function validateModernistoStartTildaHtml(source = '', config = {}) {
 
   if (countMatches(source, /id=["']atmosfera-30-landing["']/g) !== 1) {
     errors.push('В формате 1 должен быть ровно один стартовый экран Atmospace.');
+  }
+  if (countMatches(source, /<\/section\s*>/gi) !== 1) {
+    errors.push('Стартовый экран формата 1 должен быть закрыт тегом </section>.');
+  }
+  const formatOneSectionCloseIndex = source.lastIndexOf('</section>');
+  const formatOneAttributionScriptIndex = source.indexOf('<script');
+  if (formatOneSectionCloseIndex >= 0 && formatOneAttributionScriptIndex >= 0 && formatOneAttributionScriptIndex > formatOneSectionCloseIndex) {
+    errors.push('Runtime атрибуции формата 1 должен находиться внутри закрытого стартового экрана.');
+  }
+  if (!/<\/script>\s*<\/section>\s*$/i.test(source)) {
+    errors.push('HTML формата 1 должен завершаться закрытыми тегами </script></section>.');
   }
   if (countMatches(source, /data-a30l-action=["']quiz["']/g) !== 1) {
     errors.push('В формате 1 должна быть ровно одна кнопка перехода в утверждённый квиз.');

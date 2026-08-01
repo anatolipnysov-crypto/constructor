@@ -199,6 +199,13 @@ assert(replacementTokenHtml.includes("Цена $&amp; $' $$ `${campaign}` сей
 assert(!replacementTokenHtml.includes('<b>сейчас</b>'), 'Headline HTML must be stripped before insertion.');
 assert(!replacementTokenHtml.includes('a30l-dynamic-title-sizing'), 'A short headline must leave the approved template without supplemental sizing CSS.');
 assert.equal(count(replacementTokenHtml, new RegExp(attributionUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')), 1, 'Generated Format 1 HTML must contain one official attribution runtime.');
+assert.equal(count(replacementTokenHtml, /<section\b[^>]*id=["']atmosfera-30-landing["']/g), 1, 'Generated Format 1 HTML must open the approved section exactly once.');
+assert.equal(count(replacementTokenHtml, /<\/section\s*>/g), 1, 'Generated Format 1 HTML must close its section exactly once.');
+assert(
+  replacementTokenHtml.indexOf('<script') < replacementTokenHtml.indexOf('</section>'),
+  'The official attribution runtime must remain inside the single approved Format 1 section.'
+);
+assert.match(replacementTokenHtml.trim(), /<\/script>\s*<\/section>$/, 'Generated Format 1 HTML must end with the balanced live-reference tag order.');
 
 // Format 1 must leave the common dispatcher before templates, palettes and image selection are evaluated.
 const dispatch = sliceBetween(appSource, 'function renderPrelandingHtml', 'function countMatches');
