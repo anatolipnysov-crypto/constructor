@@ -5,10 +5,14 @@ import { buildCampaignLandingLogic, resolveCampaignSemanticProfile } from './dat
 import {
   MODERNISTO_FORMAT_ONE_API_BASE_URL,
   MODERNISTO_FORMAT_ONE_ATTRIBUTION_URL,
-  MODERNISTO_FORMAT_ONE_HERO_DATA_URI,
   MODERNISTO_FORMAT_ONE_QUIZ_URL
 } from './data/modernistoFormatOne';
 import { MODERNISTO_FORMAT_ONE_TEMPLATE } from './data/modernistoFormatOneTemplate';
+import {
+  MODERNISTO_FORMAT_ONE_GOAL_ICON_HTML,
+  MODERNISTO_FORMAT_ONE_VISUAL_CSS,
+  MODERNISTO_FORMAT_ONE_VISUAL_VARIANTS
+} from './data/modernistoFormatOneVisuals';
 import { getAtmospaceGenerateErrorMessage, validateAtmospaceLandingInput } from './utils/atmospaceLandingInput';
 
 /* ================== УТИЛИТЫ ================== */
@@ -100,7 +104,7 @@ const ATMOSPACE_CLICK_ENDPOINT = `${ATMOSPACE_PUBLIC_API_BASE_URL}/api/landing-r
 const ATMOSPACE_GENERATED_RUNTIME_VERSION = 'sergey-constructor-quiz-v1';
 const ATMOSPACE_MODERNISTO_START_RUNTIME_PROFILE = 'modernisto-start-external-v1';
 const DEFAULT_CLIENT_LIMITS = { banners: 12, prelandings: 5 };
-const TILDA_PRELAND_BUILD_VERSION = '20260801-modernisto-start-v1';
+const TILDA_PRELAND_BUILD_VERSION = '20260802-modernisto-visuals-v2';
 const CONSTRUCTOR_ACCESS_MODE = 'owner_only';
 const OWNER_LOGIN = 'admin';
 const OWNER_PASSWORD = 'admin';
@@ -2717,7 +2721,7 @@ const MANUAL_PRELANDING_MODES = [
   {
     id: 'templateStage',
     title: 'Формат 1 / Точный modernisto.ru/start',
-    desc: 'Фиксированный шаблон с лицом Андрея: меняется только рекламный заголовок, кнопка ведёт в размещённый квиз Atmospace.',
+    desc: 'Фиксированные тексты и маршрут /start: меняется только рекламный заголовок, а один из трёх утверждённых визуалов Андрея выбирается по коду кампании.',
   },
   {
     id: 'barrierProfileQuiz',
@@ -4388,17 +4392,23 @@ function renderModernistoStartPrelanding({ content, projectData, landingMeta }) 
   const titleText = stripHtml(content?.title || content?.titleHtml || 'Как реализовать себя, когда тебе 30+ и куча провалов.');
   const titleClass = titleText.length > 95 ? 'a30l-title-long' : titleText.length > 70 ? 'a30l-title-medium' : '';
   const config = buildAtmospaceLandingConfig({ projectData, ...(landingMeta || {}) });
+  const visualVariant = pickHashed(
+    config.publicLandingKey || config.counterId || titleText,
+    MODERNISTO_FORMAT_ONE_VISUAL_VARIANTS
+  ) || MODERNISTO_FORMAT_ONE_VISUAL_VARIANTS[0];
   const template = MODERNISTO_FORMAT_ONE_TEMPLATE
+    .replace('data-atmospace-format="1"', () => `data-atmospace-format="1" data-a30l-variant="${esc(visualVariant.id)}"`)
     .replace('__ATMOSPACE_TITLE_CLASS__', () => titleClass)
     .replace('__ATMOSPACE_HEADLINE_HTML__', () => renderModernistoHeadline(titleText))
-    .replace('__ATMOSPACE_HERO_DATA_URI__', () => MODERNISTO_FORMAT_ONE_HERO_DATA_URI);
+    .replace('__ATMOSPACE_HERO_DATA_URI__', () => visualVariant.heroDataUri)
+    .replaceAll('<i aria-hidden="true">↗</i>', () => MODERNISTO_FORMAT_ONE_GOAL_ICON_HTML);
   const titleSizingCss = titleClass ? `<style id="a30l-dynamic-title-sizing">
 #atmosfera-30-landing .a30l-intro h1.a30l-title-medium{font-size:clamp(42px,4.2vw,68px);line-height:.98;overflow-wrap:anywhere}
 #atmosfera-30-landing .a30l-intro h1.a30l-title-long{font-size:clamp(35px,3.55vw,57px);line-height:1;overflow-wrap:anywhere}
 @media (max-width:560px){#atmosfera-30-landing .a30l-intro h1.a30l-title-medium{font-size:clamp(33px,9.3vw,43px)}#atmosfera-30-landing .a30l-intro h1.a30l-title-long{font-size:clamp(29px,8.1vw,38px);line-height:1.03}}
 </style>` : '';
 
-  return `${template}${titleSizingCss}
+  return `${template}${titleSizingCss}${MODERNISTO_FORMAT_ONE_VISUAL_CSS}
 <script
   src="${esc(MODERNISTO_FORMAT_ONE_ATTRIBUTION_URL)}"
   data-public-landing-key="${esc(config.publicLandingKey)}"
@@ -5748,10 +5758,19 @@ function validateModernistoStartTildaHtml(source = '', config = {}) {
   const requiredMarkers = [
     'id="atmosfera-30-landing"',
     'data-atmospace-format="1"',
+    'data-a30l-variant=',
     'data-a30l-action="quiz"',
+    'id="a30l-approved-visual-variants"',
+    'class="a30l-goal-icon"',
+    '<path d="M7 17 17 7M9 7h8v8"',
     'Ты уже не первый год пытаешься перейти на новый уровень:',
+    'увеличить доход',
+    'найти своё дело',
+    'изменить привычки',
+    'и жить так, как хочешь именно ты.',
     'Но что бы ты ни делал - результата',
     'Новая попытка как удар по вере в себя.',
+    'Сколько ты ещё так сможешь, пока окончательно не выгорешь?',
     'Почему у других получается, а у тебя нет?',
     'Готов увидеть',
     'Пройти мини-тест',
@@ -5778,6 +5797,10 @@ function validateModernistoStartTildaHtml(source = '', config = {}) {
   if (countMatches(source, /id=["']atmosfera-30-landing["']/g) !== 1) {
     errors.push('В формате 1 должен быть ровно один стартовый экран Atmospace.');
   }
+  const rootSectionOpenTag = source.match(/<section\b[^>]*\bid=["']atmosfera-30-landing["'][^>]*>/i)?.[0] || '';
+  if (countMatches(rootSectionOpenTag, /\bdata-a30l-variant\s*=/gi) !== 1) {
+    errors.push('У стартового экрана формата 1 должен быть ровно один идентификатор визуального варианта.');
+  }
   if (countMatches(source, /<\/section\s*>/gi) !== 1) {
     errors.push('Стартовый экран формата 1 должен быть закрыт тегом </section>.');
   }
@@ -5789,12 +5812,59 @@ function validateModernistoStartTildaHtml(source = '', config = {}) {
   if (!/<\/script>\s*<\/section>\s*$/i.test(source)) {
     errors.push('HTML формата 1 должен завершаться закрытыми тегами </script></section>.');
   }
+  const scriptOpenTags = source.match(/<script\b[^>]*>/gi) || [];
+  const runtimeDataAttributeNames = [...String(scriptOpenTags[0] || '').matchAll(/\b(data-[a-z0-9-]+)\s*=/gi)]
+    .map((match) => match[1].toLowerCase());
+  const requiredRuntimeDataAttributeNames = [
+    'data-public-landing-key',
+    'data-counter-id',
+    'data-quiz-url',
+    'data-api-base-url'
+  ];
+  const runtimeScriptSrc = String(scriptOpenTags[0] || '').match(/\bsrc=["']([^"']+)["']/i)?.[1] || '';
+  if (
+    scriptOpenTags.length !== 1
+    || countMatches(source, /<\/script\s*>/gi) !== 1
+    || runtimeScriptSrc !== MODERNISTO_FORMAT_ONE_ATTRIBUTION_URL
+    || JSON.stringify(runtimeDataAttributeNames) !== JSON.stringify(requiredRuntimeDataAttributeNames)
+  ) {
+    errors.push('В формате 1 должен быть ровно один официальный runtime с четырьмя утверждёнными data-атрибутами.');
+  }
   if (countMatches(source, /data-a30l-action=["']quiz["']/g) !== 1) {
     errors.push('В формате 1 должна быть ровно одна кнопка перехода в утверждённый квиз.');
   }
+  if (
+    countMatches(source, /<i class=["']a30l-goal-icon["'][^>]*>/g) !== 4
+    || countMatches(source, /<svg\b/gi) !== 4
+    || countMatches(source, /<\/svg\s*>/gi) !== 4
+    || countMatches(source, /<path d=["']M7 17 17 7M9 7h8v8["']/g) !== 4
+  ) {
+    errors.push('В формате 1 должны быть ровно четыре утверждённые SVG-стрелки списка.');
+  }
+  const visualVariantId = rootSectionOpenTag.match(/\bdata-a30l-variant=["']([^"']+)["']/i)?.[1] || '';
+  const approvedVisualVariant = MODERNISTO_FORMAT_ONE_VISUAL_VARIANTS.find((variant) => variant.id === visualVariantId);
+  const expectedVisualVariant = pickHashed(
+    String(config.publicLandingKey || config.counterId || ''),
+    MODERNISTO_FORMAT_ONE_VISUAL_VARIANTS
+  ) || MODERNISTO_FORMAT_ONE_VISUAL_VARIANTS[0];
+  if (!approvedVisualVariant) {
+    errors.push('В формате 1 не выбран утверждённый визуальный вариант Андрея.');
+  } else if (approvedVisualVariant.id !== expectedVisualVariant.id) {
+    errors.push('Визуальный вариант формата 1 не соответствует публичному коду кампании. Перегенерируйте HTML.');
+  }
   const embeddedImages = source.match(/data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=]+/gi) || [];
-  if (embeddedImages.length !== 1 || embeddedImages[0] !== MODERNISTO_FORMAT_ONE_HERO_DATA_URI) {
-    errors.push('В формате 1 должен быть ровно один утверждённый AVIF-портрет Андрея.');
+  const imageTags = source.match(/<img\b[^>]*>/gi) || [];
+  const andreyImageTags = imageTags.filter((tag) => /\balt=["']Андрей Золотарёв["']/i.test(tag));
+  const andreyImageSrc = String(andreyImageTags[0] || '').match(/\bsrc=["']([^"']+)["']/i)?.[1] || '';
+  if (
+    imageTags.length !== 1
+    || andreyImageTags.length !== 1
+    || embeddedImages.length !== 1
+    || !approvedVisualVariant
+    || embeddedImages[0] !== approvedVisualVariant.heroDataUri
+    || andreyImageSrc !== approvedVisualVariant.heroDataUri
+  ) {
+    errors.push('В формате 1 должен быть ровно один портрет Андрея из утверждённого набора.');
   }
   if (countMatches(source, new RegExp(MODERNISTO_FORMAT_ONE_ATTRIBUTION_URL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) !== 1) {
     errors.push('В формате 1 должен быть ровно один официальный runtime атрибуции Atmospace.');
@@ -6716,7 +6786,7 @@ export default function Constructor() {
       setPrelandingSync(null);
       setPrelandingAiImages(null);
       setPrelandingAiError('');
-      setPrelandingAiStatus('Проверяю технические данные Atmospace. Изображение и весь текст /start остаются фиксированными.');
+      setPrelandingAiStatus('Проверяю технические данные Atmospace. Тексты /start фиксированы; визуал Андрея автоматически закрепится за кодом кампании.');
 
       try {
         let runtimeArtifact = activeLandingRuntimeArtifact;
@@ -6746,14 +6816,14 @@ export default function Constructor() {
           visualRoute: null,
           meta: {
             generatorBuild: TILDA_PRELAND_BUILD_VERSION,
-            landingVariant: 'atmosphere-30-landing',
+            landingVariant: pickHashed(runtimeArtifact.publicLandingKey, MODERNISTO_FORMAT_ONE_VISUAL_VARIANTS)?.id || MODERNISTO_FORMAT_ONE_VISUAL_VARIANTS[0].id,
             publicLandingKey: runtimeArtifact.publicLandingKey,
             counterId: runtimeArtifact.counterId
           },
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         });
-        setPrelandingAiStatus('Технические данные проверены. Формат 1 собран по точному шаблону /start; HTML можно копировать.');
+        setPrelandingAiStatus('Технические данные проверены. Формат 1 собран: заголовок заменён, утверждённый визуал Андрея выбран по коду кампании; HTML можно копировать.');
         consumePrelandingQuota();
       } catch (error) {
         setPrelandingAiError(String(error?.message || error || 'Не удалось проверить технические данные Atmospace. Повторите генерацию.'));
@@ -7225,7 +7295,7 @@ export default function Constructor() {
                 <div>
                   <h2 className={`text-xl font-black ${text}`}>Режим генерации предлендинга</h2>
                   <p className={`text-sm ${dark ? 'text-red-100' : 'text-red-900'}`}>
-                    Доступны только форматы 1 и 6. Формат 1 меняет исключительно рекламный заголовок в точной копии modernisto.ru/start. Формат 6 использует заголовок и описание для отдельного смыслового профиля.
+                    Доступны только форматы 1 и 6. В формате 1 из текста меняется исключительно рекламный заголовок; фиксированные блоки и маршрут modernisto.ru/start сохраняются, а визуал Андрея автоматически выбирается из трёх утверждённых вариантов. Формат 6 использует заголовок и описание для отдельного смыслового профиля.
                   </p>
                   <p className={`mt-2 text-xs font-bold ${dark ? 'text-red-100' : 'text-red-900'}`}>
                     Для честного A/B-сравнения публикуйте форматы 1 и 6 с разными названием и кодом рекламного лендинга из Atmospace. Один код нельзя использовать как две независимые вариации.
@@ -7284,7 +7354,7 @@ export default function Constructor() {
                 )}
               </div>
               <p className={`mt-3 text-xs font-bold ${dark ? 'text-red-100' : 'text-red-900'}`}>
-                Формат 1: лицо Андрея, весь текст, вёрстка, цвет, кнопка и переход в размещённый квиз зафиксированы как на /start. AI-картинки и новые смысловые экраны не создаются. Формат 6 остаётся отдельным одностраничником с одной hero-картинкой.
+                Формат 1: весь текст кроме заголовка, вёрстка, кнопка и переход в размещённый квиз зафиксированы. Конструктор стабильно закрепляет за публичным кодом кампании один из трёх готовых визуалов Андрея — контрастный, более светлый или тёплый. Формат 6 остаётся отдельным одностраничником с одной hero-картинкой.
               </p>
             </div>
 
@@ -7292,7 +7362,7 @@ export default function Constructor() {
             {manualPrelandingMode === 'templateStage' && (
               <div className={`${card} rounded-3xl p-6 shadow-sm border`}>
                 <h2 className={`text-xl font-black mb-2 ${text}`}>Формат 1: точный шаблон /start</h2>
-                <p className={`text-sm ${textMuted}`}>Шаблон, портрет Андрея и вся цепочка /start → quiz → offer зафиксированы. Введите заголовок и технические данные — никаких вариантов дизайна или AI-генерации здесь нет.</p>
+                <p className={`text-sm ${textMuted}`}>Тексты и цепочка /start → quiz → offer зафиксированы. Введите заголовок и технические данные: конструктор выберет по публичному коду один из трёх готовых портретов Андрея с согласованным светом и фоном.</p>
               </div>
             )}
 
