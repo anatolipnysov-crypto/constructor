@@ -274,6 +274,8 @@ assert(replacementTokenHtml.includes("Цена $&amp; $' $$ `${campaign}` сей
 assert(!replacementTokenHtml.includes('<b>сейчас</b>'), 'Headline HTML must be stripped before insertion.');
 assert(!replacementTokenHtml.includes('a30l-dynamic-title-sizing'), 'A short headline must leave the approved template without supplemental sizing CSS.');
 assert.equal(count(replacementTokenHtml, new RegExp(attributionUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')), 1, 'Generated Format 1 HTML must contain one official attribution runtime.');
+assert.equal(count(replacementTokenHtml, /href="https:\/\/atmospace\.pro\/privacy"/g), 1, 'Generated Format 1 HTML must contain one public privacy link.');
+assert(replacementTokenHtml.includes('target="_blank" rel="noopener noreferrer">Политика конфиденциальности</a>'), 'The privacy link must open safely in a new tab.');
 assert.equal(count(replacementTokenHtml, /<section\b[^>]*id=["']atmosfera-30-landing["']/g), 1, 'Generated Format 1 HTML must open the approved section exactly once.');
 assert.equal(count(replacementTokenHtml, /<\/section\s*>/g), 1, 'Generated Format 1 HTML must close its section exactly once.');
 assert(

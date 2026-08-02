@@ -4401,14 +4401,23 @@ function renderModernistoStartPrelanding({ content, projectData, landingMeta }) 
     .replace('__ATMOSPACE_TITLE_CLASS__', () => titleClass)
     .replace('__ATMOSPACE_HEADLINE_HTML__', () => renderModernistoHeadline(titleText))
     .replace('__ATMOSPACE_HERO_DATA_URI__', () => visualVariant.heroDataUri)
-    .replaceAll('<i aria-hidden="true">↗</i>', () => MODERNISTO_FORMAT_ONE_GOAL_ICON_HTML);
+    .replaceAll('<i aria-hidden="true">↗</i>', () => MODERNISTO_FORMAT_ONE_GOAL_ICON_HTML)
+    .replace(
+      '</a></div><figure class="a30l-visual">',
+      '</a><a class="a30l-privacy" href="https://atmospace.pro/privacy" target="_blank" rel="noopener noreferrer">Политика конфиденциальности</a></div><figure class="a30l-visual">'
+    );
   const titleSizingCss = titleClass ? `<style id="a30l-dynamic-title-sizing">
 #atmosfera-30-landing .a30l-intro h1.a30l-title-medium{font-size:clamp(42px,4.2vw,68px);line-height:.98;overflow-wrap:anywhere}
 #atmosfera-30-landing .a30l-intro h1.a30l-title-long{font-size:clamp(35px,3.55vw,57px);line-height:1;overflow-wrap:anywhere}
 @media (max-width:560px){#atmosfera-30-landing .a30l-intro h1.a30l-title-medium{font-size:clamp(33px,9.3vw,43px)}#atmosfera-30-landing .a30l-intro h1.a30l-title-long{font-size:clamp(29px,8.1vw,38px);line-height:1.03}}
 </style>` : '';
+  const privacyLinkCss = `<style id="a30l-privacy-link-style">
+#atmosfera-30-landing .a30l-privacy{display:block;width:max-content;max-width:100%;margin-top:14px;color:var(--a30l-muted);font-size:12px;font-weight:650;line-height:1.4;text-decoration:underline;text-underline-offset:3px}
+#atmosfera-30-landing .a30l-privacy:hover{color:var(--a30l-text)}
+#atmosfera-30-landing .a30l-privacy:focus-visible{outline:2px solid var(--a30l-acid);outline-offset:4px}
+</style>`;
 
-  return `${template}${titleSizingCss}${MODERNISTO_FORMAT_ONE_VISUAL_CSS}
+  return `${template}${titleSizingCss}${privacyLinkCss}${MODERNISTO_FORMAT_ONE_VISUAL_CSS}
 <script
   src="${esc(MODERNISTO_FORMAT_ONE_ATTRIBUTION_URL)}"
   data-public-landing-key="${esc(config.publicLandingKey)}"
@@ -5774,6 +5783,10 @@ function validateModernistoStartTildaHtml(source = '', config = {}) {
     'Почему у других получается, а у тебя нет?',
     'Готов увидеть',
     'Пройти мини-тест',
+    'href="https://atmospace.pro/privacy"',
+    'target="_blank"',
+    'rel="noopener noreferrer"',
+    '>Политика конфиденциальности</a>',
     `href="${MODERNISTO_FORMAT_ONE_QUIZ_URL}"`,
     `src="${MODERNISTO_FORMAT_ONE_ATTRIBUTION_URL}"`,
     `data-quiz-url="${MODERNISTO_FORMAT_ONE_QUIZ_URL}"`,
@@ -5832,6 +5845,9 @@ function validateModernistoStartTildaHtml(source = '', config = {}) {
   }
   if (countMatches(source, /data-a30l-action=["']quiz["']/g) !== 1) {
     errors.push('В формате 1 должна быть ровно одна кнопка перехода в утверждённый квиз.');
+  }
+  if (countMatches(source, /<a\b[^>]*href=["']https:\/\/atmospace\.pro\/privacy["'][^>]*>Политика конфиденциальности<\/a>/gi) !== 1) {
+    errors.push('В формате 1 должна быть публичная ссылка на политику конфиденциальности.');
   }
   if (
     countMatches(source, /<i class=["']a30l-goal-icon["'][^>]*>/g) !== 4
