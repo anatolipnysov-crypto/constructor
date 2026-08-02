@@ -100,7 +100,8 @@ const formatOneVisualCss = readTemplateLiteralExport(formatOneVisualSource, 'MOD
 
 assert.equal(quizUrl, 'https://app.atmospace.pro/quiz/index.html');
 assert.equal(apiBaseUrl, 'https://api.atmospace.pro');
-assert.equal(attributionUrl, 'https://app.atmospace.pro/acquisition/modernisto-attribution.js');
+assert.equal(attributionUrl, 'https://app.atmospace.pro/acquisition/modernisto-runtime.js');
+assert(!formatOneDataSource.includes('modernisto-attribution.js'), 'Generated format 1 HTML must not return to the deprecated runtime alias.');
 assert.match(heroDataUri, /^data:image\/avif;base64,[A-Za-z0-9+/=]+$/, 'The approved Andrey portrait must be one embedded AVIF.');
 assert(heroDataUri.length > 20_000, 'The approved portrait must not be replaced with a placeholder.');
 assert.deepEqual(
