@@ -86,12 +86,12 @@ assert(!modeSelector.includes("id: 'personalRouteQuiz'"), 'Removed modes must no
 const quizUrl = readSingleQuotedExport(formatOneDataSource, 'MODERNISTO_FORMAT_ONE_QUIZ_URL');
 const apiBaseUrl = readSingleQuotedExport(formatOneDataSource, 'MODERNISTO_FORMAT_ONE_API_BASE_URL');
 const attributionUrl = readSingleQuotedExport(formatOneDataSource, 'MODERNISTO_FORMAT_ONE_ATTRIBUTION_URL');
-const heroDataUri = readSingleQuotedExport(formatOneDataSource, 'MODERNISTO_FORMAT_ONE_HERO_DATA_URI');
 const formatOneTemplate = readJsonStringExport(formatOneTemplateSource, 'MODERNISTO_FORMAT_ONE_TEMPLATE');
+const confidentHeroDataUri = avifFileToDataUri('andrey-daylight-confident-v4.avif');
 const brightHeroDataUri = avifFileToDataUri('andrey-bright-v2.avif');
 const warmHeroDataUri = avifFileToDataUri('andrey-warm-v3.avif');
 const formatOneVisualVariants = [
-  { id: 'midnight-blue', label: 'Контрастный синий', heroDataUri },
+  { id: 'midnight-blue', label: 'Яркий дневной', heroDataUri: confidentHeroDataUri },
   { id: 'daylight-blue', label: 'Светлый интерьер', heroDataUri: brightHeroDataUri },
   { id: 'warm-studio', label: 'Тёплая студия', heroDataUri: warmHeroDataUri }
 ];
@@ -102,14 +102,14 @@ assert.equal(quizUrl, 'https://app.atmospace.pro/quiz/index.html');
 assert.equal(apiBaseUrl, 'https://api.atmospace.pro');
 assert.equal(attributionUrl, 'https://app.atmospace.pro/acquisition/modernisto-runtime.js');
 assert(!formatOneDataSource.includes('modernisto-attribution.js'), 'Generated format 1 HTML must not return to the deprecated runtime alias.');
-assert.match(heroDataUri, /^data:image\/avif;base64,[A-Za-z0-9+/=]+$/, 'The approved Andrey portrait must be one embedded AVIF.');
-assert(heroDataUri.length > 20_000, 'The approved portrait must not be replaced with a placeholder.');
+assert(!formatOneDataSource.includes('MODERNISTO_FORMAT_ONE_HERO_DATA_URI'), 'The old gloomy portrait data must be removed.');
 assert.deepEqual(
   [...formatOneVisualSource.matchAll(/\bid:\s*'([^']+)'/g)].map((match) => match[1]),
   formatOneVisualVariants.map((variant) => variant.id),
   'Format 1 visual module must expose exactly the three approved variants.'
 );
-assert.equal(count(formatOneVisualSource, /\.avif\?inline/g), 2, 'The two additional AVIF portraits must be bundled inline.');
+assert.equal(count(formatOneVisualSource, /\.avif\?inline/g), 3, 'The three approved AVIF portraits must be bundled inline.');
+assert(!formatOneVisualSource.includes('MODERNISTO_FORMAT_ONE_HERO_DATA_URI'), 'The old gloomy portrait must not remain selectable.');
 assert.equal(new Set(formatOneVisualVariants.map((variant) => variant.heroDataUri)).size, 3, 'Every approved visual variant must use a distinct portrait.');
 formatOneVisualVariants.forEach((variant) => {
   assert.match(variant.heroDataUri, /^data:image\/avif;base64,[A-Za-z0-9+/=]+$/, `${variant.id} must use an embedded AVIF.`);
@@ -119,7 +119,7 @@ assert(formatOneGoalIconHtml.includes('<path d="M7 17 17 7M9 7h8v8"'), 'The appr
 assert(formatOneVisualCss.includes('id="a30l-approved-visual-variants"'), 'Approved visual CSS must remain scoped and identifiable.');
 formatOneVisualVariants.forEach(({ id }) => {
   assert(formatOneVisualSource.includes(`id: '${id}'`), `Visual module must include ${id}.`);
-  assert(formatOneVisualCss.includes(`data-a30l-variant="${id}"`) || id === 'midnight-blue', `Visual CSS must support ${id}.`);
+  assert(formatOneVisualCss.includes(`data-a30l-variant="${id}"`), `Visual CSS must support ${id}.`);
 });
 
 [
@@ -202,6 +202,8 @@ assert.deepEqual(
   'MODERNISTO_FORMAT_ONE_VISUAL_VARIANTS',
   'MODERNISTO_FORMAT_ONE_GOAL_ICON_HTML',
   'MODERNISTO_FORMAT_ONE_VISUAL_CSS',
+  'class="a30l-privacy"',
+  'Политика конфиденциальности',
   'data-a30l-variant=',
   'MODERNISTO_FORMAT_ONE_ATTRIBUTION_URL',
   'MODERNISTO_FORMAT_ONE_QUIZ_URL',
@@ -433,6 +435,7 @@ const sharedValidator = sliceFunction(appSource, 'validateAtmospaceTildaHtml');
   'MODERNISTO_FORMAT_ONE_QUIZ_URL',
   'MODERNISTO_FORMAT_ONE_ATTRIBUTION_URL',
   'MODERNISTO_FORMAT_ONE_API_BASE_URL',
+  'публичная ссылка на политику конфиденциальности',
   'MODERNISTO_FORMAT_ONE_VISUAL_VARIANTS',
   'data-a30l-variant=',
   'const rootSectionOpenTag',
@@ -637,6 +640,9 @@ const built = fs.readFileSync(path.join(distAssetsDir, bundle), 'utf8');
   'M7 17 17 7M9 7h8v8',
   attributionUrl,
   quizUrl,
+  'https://atmospace.pro/privacy',
+  'a30l-privacy-link-style',
+  'Политика конфиденциальности',
   'window.ATMOSPACE_LANDING_CONFIG',
   'data-atmospace-registration-link'
 ].forEach((snippet) => assert(built.includes(snippet), `Built bundle must contain ${snippet}`));
