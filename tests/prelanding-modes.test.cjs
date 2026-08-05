@@ -117,6 +117,8 @@ formatOneVisualVariants.forEach((variant) => {
 assert(formatOneGoalIconHtml.includes('<svg'), 'The approved goal icon must be SVG.');
 assert(formatOneGoalIconHtml.includes('<path d="M7 17 17 7M9 7h8v8"'), 'The approved SVG goal arrow path must stay fixed.');
 assert(formatOneVisualCss.includes('id="a30l-approved-visual-variants"'), 'Approved visual CSS must remain scoped and identifiable.');
+assert(!formatOneVisualCss.includes('order:-1'), 'Mobile visual CSS must not move the CTA ahead of the fixed landing copy.');
+assert(!formatOneVisualCss.includes('.a30l-copy{display:flex;flex-direction:column}'), 'Mobile visual CSS must preserve the template document flow.');
 formatOneVisualVariants.forEach(({ id }) => {
   assert(formatOneVisualSource.includes(`id: '${id}'`), `Visual module must include ${id}.`);
   assert(formatOneVisualCss.includes(`data-a30l-variant="${id}"`), `Visual CSS must support ${id}.`);
@@ -168,6 +170,10 @@ formatOneVisualVariants.forEach(({ id }) => {
   assert(!formatOneTemplate.includes(snippet), `Fixed Format 1 template must not include ${snippet}`);
 });
 assert.equal(count(formatOneTemplate, /↗/g), 4, 'The fixed template must expose four replacement points for SVG goal icons.');
+assert(
+  formatOneTemplate.indexOf('class="a30l-questions"') < formatOneTemplate.indexOf('class="a30l-cta"'),
+  'The Format 1 CTA must remain after the fixed question copy on mobile and desktop.'
+);
 
 // The active renderer changes only the headline and attaches exactly one official attribution runtime.
 const headlineRenderer = sliceFunction(appSource, 'renderModernistoHeadline');

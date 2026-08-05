@@ -50,7 +50,5 @@ export const MODERNISTO_FORMAT_ONE_VISUAL_CSS = `<style id="a30l-approved-visual
 }
 @media (width<=560px){
   #atmosfera-30-landing{width:100%;margin-left:0}
-  #atmosfera-30-landing .a30l-copy{display:flex;flex-direction:column}
-  #atmosfera-30-landing .a30l-cta{order:-1;margin:0 0 22px}
 }
 </style>`;
