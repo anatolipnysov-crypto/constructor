@@ -91,15 +91,15 @@ function validateAtmospaceBotFirstTildaHtml(html = '', config = {}, options = {}
     'payment_success'
   ].forEach(function (trustedGoal) {
     if (source.includes(trustedGoal)) {
-      errors.push('Дальние бизнес-цели не должны отправляться браузером лендинга.');
+      errors.push('На странице найдено действие, которое должно подтверждаться только после реального результата.');
     }
   });
 
   if (occurrences(canonicalRuntimeUrl) !== 1) {
-    errors.push('В HTML должен быть ровно один официальный runtime Atmospace.');
+    errors.push('На странице должно быть одно безопасное подключение Atmospace.');
   }
   if (occurrences('telegram_button_click') !== 1 || occurrences('max_button_click') !== 1) {
-    errors.push('Технические цели Telegram и MAX должны присутствовать в HTML ровно по одному разу.');
+    errors.push('События перехода в Telegram и MAX должны быть подключены ровно по одному разу.');
   }
   if (config.publicLandingKey && !source.includes(String(config.publicLandingKey))) {
     errors.push('В HTML не найден текущий код рекламного лендинга.');
@@ -119,7 +119,7 @@ function validateAtmospaceBotFirstTildaHtml(html = '', config = {}, options = {}
 
   if (modernistoStartRequired) {
     if (proxyTelegramCount !== 0 || proxyMaxCount !== 0) {
-      errors.push('В формате 1 не должно быть дублирующих proxy-кнопок мессенджеров.');
+      errors.push('В формате 1 не должно быть повторных кнопок перехода в мессенджеры.');
     }
     if (occurrences('Смотреть в Telegram') !== 1 || occurrences('Смотреть в MAX') !== 1) {
       errors.push('В формате 1 должны быть две продуктовые кнопки продолжения: Telegram и MAX.');
@@ -150,10 +150,10 @@ function validateAtmospaceBotFirstTildaHtml(html = '', config = {}, options = {}
       errors.push('В формате 6 не должно быть старых кнопок регистрации или мини-теста.');
     }
     if (/requestRegistration|window\.location\.assign\(registrationUrl\)/i.test(source)) {
-      errors.push('В формате 6 найден старый встроенный runtime регистрации.');
+      errors.push('В формате 6 найдена устаревшая логика перехода к регистрации.');
     }
     if (!source.includes('data-runtime-version=\"sergey-constructor-bot-v1\"')) {
-      errors.push('В формате 6 не найден текущий bot-first runtime profile.');
+      errors.push('В формате 6 не найдена текущая схема безопасного перехода.');
     }
   }
 
