@@ -18,6 +18,7 @@ const PUBLIC_MESSAGES = Object.freeze({
   landing_code_invalid: 'Код рекламного лендинга не найден. Создайте новый код в Atmospace и попробуйте ещё раз.',
   landing_code_expired: 'Срок действия кода рекламного лендинга закончился. Создайте новый код в Atmospace.',
   landing_code_disabled: 'Этот код рекламного лендинга больше не активен. Создайте новый код в Atmospace.',
+  landing_data_rejected: 'Atmospace не принял данные рекламного лендинга. Проверьте, что код создан в Atmospace и сейчас активен.',
 })
 
 const SAFE_UPSTREAM_REASONS = Object.freeze({
@@ -31,7 +32,13 @@ const SAFE_UPSTREAM_REASONS = Object.freeze({
   landing_expired: 'landing_code_rejected',
   landing_code_disabled: 'landing_code_rejected',
   landing_code_expired: 'landing_code_rejected',
+  landing_code_not_found: 'landing_code_rejected',
+  landing_code_inactive: 'landing_code_rejected',
+  tracking_link_not_found: 'landing_code_rejected',
+  tracking_link_inactive: 'landing_code_rejected',
   partner_unavailable: 'landing_code_rejected',
+  partner_link_not_found: 'landing_code_rejected',
+  partner_inactive: 'landing_code_rejected',
   credential_storage_not_configured: 'atmospace_not_ready',
   database_not_configured: 'atmospace_not_ready',
   database_unreachable: 'atmospace_not_ready',
@@ -56,36 +63,19 @@ function json(payload, status = 200) {
 }
 
 function safeFailure({ stage, reason, message, status }) {
-  return json({
-    ok: false,
-    stage,
-    reason,
-    message,
-  }, status)
+  return json({ ok: false, stage, reason, message }, status)
 }
 
 function normalizeText(value, maxLength) {
-  if (typeof value !== 'string') {
-    return null
-  }
-
+  if (typeof value !== 'string') return null
   const normalized = value.trim()
-  if (!normalized) {
-    return null
-  }
-
+  if (!normalized) return null
   return normalized.slice(0, maxLength)
 }
 
 function normalizeApiBaseUrl(value) {
-  const url = new URL(
-    normalizeText(value, 2048) ?? DEFAULT_ATMOSPACE_API_BASE_URL,
-  )
-
-  if (url.protocol !== 'https:') {
-    throw new TypeError('Atmospace API must use HTTPS')
-  }
-
+  const url = new URL(normalizeText(value, 2048) ?? DEFAULT_ATMOSPACE_API_BASE_URL)
+  if (url.protocol !== 'https:') throw new TypeError('Atmospace API must use HTTPS')
   url.pathname = url.pathname.replace(/\/+$/, '')
   url.search = ''
   url.hash = ''
@@ -94,10 +84,7 @@ function normalizeApiBaseUrl(value) {
 
 function isSameOriginRequest(request) {
   const origin = request.headers.get('origin')
-  if (!origin) {
-    return false
-  }
-
+  if (!origin) return false
   try {
     return new URL(origin).origin === new URL(request.url).origin
   } catch {
@@ -163,19 +150,8 @@ function normalizeSafeGenerateResponse(payload) {
   const publicLandingKey = normalizeText(payload?.data?.publicLandingKey, 1024)
   const embedCode = normalizeText(payload?.data?.embedCode, 1_000_000)
   const landingName = normalizeText(payload?.data?.landingName, 512)
-
-  if (payload?.ok !== true || !publicLandingKey || !embedCode || !landingName) {
-    return null
-  }
-
-  return {
-    ok: true,
-    data: {
-      publicLandingKey,
-      embedCode,
-      landingName,
-    },
-  }
+  if (payload?.ok !== true || !publicLandingKey || !embedCode || !landingName) return null
+  return { ok: true, data: { publicLandingKey, embedCode, landingName } }
 }
 
 function normalizeModernistoStartGenerateResponse(payload, binding) {
@@ -213,19 +189,51 @@ function safeMetrikaReason(error) {
   return SAFE_METRIKA_REASONS[code] ?? 'metrika_request_failed'
 }
 
+function safeLandingCodeMessage(upstreamCode, upstreamStatus) {
+  if (upstreamCode === 'landing_code_expired' || upstreamCode === 'landing_expired' || upstreamStatus === 410) {
+    return PUBLIC_MESSAGES.landing_code_expired
+  }
+  if (
+    upstreamCode === 'landing_code_disabled'
+    || upstreamCode === 'landing_disabled'
+    || upstreamCode === 'landing_code_inactive'
+    || upstreamCode === 'tracking_link_inactive'
+    || upstreamCode === 'partner_inactive'
+    || upstreamStatus === 409
+  ) {
+    return PUBLIC_MESSAGES.landing_code_disabled
+  }
+  if (
+    upstreamCode === 'landing_code_invalid'
+    || upstreamCode === 'landing_not_found'
+    || upstreamCode === 'landing_code_not_found'
+    || upstreamCode === 'tracking_link_not_found'
+    || upstreamCode === 'partner_link_not_found'
+    || upstreamStatus === 404
+  ) {
+    return PUBLIC_MESSAGES.landing_code_invalid
+  }
+  return null
+}
+
 function safeUpstreamFailure(payload, status) {
   const upstreamCode = normalizeText(payload?.error, 128)
-  const reason = SAFE_UPSTREAM_REASONS[upstreamCode]
+  const statusLandingMessage = safeLandingCodeMessage(upstreamCode, status)
+  const knownReason = SAFE_UPSTREAM_REASONS[upstreamCode]
+  const reason = knownReason
+    ?? (statusLandingMessage ? 'landing_code_rejected' : null)
     ?? (status >= 500 ? 'atmospace_not_ready' : 'atmospace_request_rejected')
   const serverFailure = status >= 500 || reason === 'atmospace_not_ready'
-  const productMessage = upstreamCode ? PUBLIC_MESSAGES[upstreamCode] : null
 
   return safeFailure({
     stage: 'atmospace',
     reason,
     message: serverFailure
       ? PUBLIC_MESSAGES.service_unavailable
-      : productMessage ?? PUBLIC_MESSAGES.invalid_request,
+      : statusLandingMessage
+        ?? (reason === 'landing_data_rejected'
+          ? PUBLIC_MESSAGES.landing_data_rejected
+          : PUBLIC_MESSAGES.invalid_request),
     status: serverFailure ? 503 : 400,
   })
 }
@@ -300,9 +308,7 @@ export function createGenerateHandler({
 
       const upstreamResponse = await fetchImpl(endpoint, {
         method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-        },
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify(normalizedRequest.payload),
         signal: controller.signal,
       })
@@ -332,7 +338,6 @@ export function createGenerateHandler({
       }
 
       const safeResponse = normalizeSafeGenerateResponse(upstreamPayload)
-
       if (!upstreamResponse.ok || !safeResponse) {
         return safeUpstreamFailure(upstreamPayload, upstreamResponse.status)
       }
@@ -367,7 +372,6 @@ export function createHealthHandler({ fetchImpl = globalThis.fetch } = {}) {
 
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 10_000)
-
     try {
       const response = await fetchImpl(endpoint, {
         method: 'GET',
@@ -383,14 +387,10 @@ export function createHealthHandler({ fetchImpl = globalThis.fetch } = {}) {
           status: 503,
         })
       }
-
       return json({
         ok: true,
         service: 'constructor-atmospace-bridge',
-        data: {
-          atmospace: 'ready',
-          contract: 'landing-runtime-generate-v1',
-        },
+        data: { atmospace: 'ready', contract: 'landing-runtime-generate-v1' },
       })
     } catch {
       return safeFailure({
