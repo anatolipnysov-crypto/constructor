@@ -15,6 +15,9 @@ const PUBLIC_MESSAGES = Object.freeze({
   payload_too_large: 'Слишком большой объём данных. Сократите значения и повторите.',
   metrika_unavailable: 'Не удалось подготовить цели Метрики. Проверьте номер счётчика и доступ к нему.',
   service_unavailable: 'Сервис временно недоступен. Попробуйте ещё раз.',
+  landing_code_invalid: 'Код рекламного лендинга не найден. Создайте новый код в Atmospace и попробуйте ещё раз.',
+  landing_code_expired: 'Срок действия кода рекламного лендинга закончился. Создайте новый код в Atmospace.',
+  landing_code_disabled: 'Этот код рекламного лендинга больше не активен. Создайте новый код в Atmospace.',
 })
 
 const SAFE_UPSTREAM_REASONS = Object.freeze({
@@ -26,6 +29,8 @@ const SAFE_UPSTREAM_REASONS = Object.freeze({
   landing_not_found: 'landing_code_rejected',
   landing_disabled: 'landing_code_rejected',
   landing_expired: 'landing_code_rejected',
+  landing_code_disabled: 'landing_code_rejected',
+  landing_code_expired: 'landing_code_rejected',
   partner_unavailable: 'landing_code_rejected',
   credential_storage_not_configured: 'atmospace_not_ready',
   database_not_configured: 'atmospace_not_ready',
@@ -213,13 +218,14 @@ function safeUpstreamFailure(payload, status) {
   const reason = SAFE_UPSTREAM_REASONS[upstreamCode]
     ?? (status >= 500 ? 'atmospace_not_ready' : 'atmospace_request_rejected')
   const serverFailure = status >= 500 || reason === 'atmospace_not_ready'
+  const productMessage = upstreamCode ? PUBLIC_MESSAGES[upstreamCode] : null
 
   return safeFailure({
     stage: 'atmospace',
     reason,
     message: serverFailure
       ? PUBLIC_MESSAGES.service_unavailable
-      : PUBLIC_MESSAGES.invalid_request,
+      : productMessage ?? PUBLIC_MESSAGES.invalid_request,
     status: serverFailure ? 503 : 400,
   })
 }
