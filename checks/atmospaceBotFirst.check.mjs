@@ -22,6 +22,7 @@ for (const required of [
   'sergey-constructor-bot-v1',
   'botifyModernistoFormatOneTemplate',
   'buildAtmospaceBotRuntimeScript',
+  'https://app.atmospace.pro/acquisition/landing-runtime-v1.js',
 ]) {
   assert.equal(transformedApp.includes(required), true, `Transformed App must include ${required}.`)
 }
@@ -32,7 +33,8 @@ assert.notEqual(formatOneStart, -1)
 assert.notEqual(formatOneEnd, -1)
 const formatOne = transformedApp.slice(formatOneStart, formatOneEnd)
 assert.equal(formatOne.includes('botifyModernistoFormatOneTemplate'), true)
-assert.equal(formatOne.includes('MODERNISTO_FORMAT_ONE_ATTRIBUTION_URL'), true)
+assert.equal(formatOne.includes('https://app.atmospace.pro/acquisition/landing-runtime-v1.js'), true)
+assert.equal(formatOne.includes('src="${esc(MODERNISTO_FORMAT_ONE_ATTRIBUTION_URL)}"'), false)
 
 const formatSixStart = transformedApp.indexOf('function renderStaticInsightPrelanding({')
 const formatSixEnd = transformedApp.indexOf('\nfunction renderBarrierProfileQuizPrelanding', formatSixStart)
