@@ -6,29 +6,39 @@ import {
   ensureAtmospaceMetrikaGoals,
 } from '../functions/api/atmospace/metrikaGoals.js'
 
-assert.equal(ATMOSPACE_METRIKA_GOALS.length, 15)
-assert.equal(new Set(ATMOSPACE_METRIKA_GOALS.map((goal) => goal.target)).size, 15)
-assert.equal(ATMOSPACE_METRIKA_GOALS.some((goal) => goal.target === 'landing_view'), true)
-assert.equal(ATMOSPACE_METRIKA_GOALS.some((goal) => goal.target === 'quiz_start_click'), true)
-assert.equal(ATMOSPACE_METRIKA_GOALS.some((goal) => goal.target === 'quiz_question_7_answered'), true)
-assert.equal(ATMOSPACE_METRIKA_GOALS.some((goal) => goal.target === 'offer_view'), true)
-assert.equal(ATMOSPACE_METRIKA_GOALS.some((goal) => goal.target === 'registration_started'), true)
-assert.equal(ATMOSPACE_METRIKA_GOALS.some((goal) => goal.target === 'registration_click'), false)
-assert.equal(ATMOSPACE_METRIKA_GOALS.some((goal) => goal.target === 'registration_success'), true)
-assert.equal(ATMOSPACE_METRIKA_GOALS.some((goal) => goal.target === 'notifications_connected'), true)
-assert.equal(ATMOSPACE_METRIKA_GOALS.some((goal) => goal.target === 'payment_success'), true)
+const expectedTargets = [
+  'landing_view',
+  'telegram_button_click',
+  'max_button_click',
+  'channel_subscription_verified',
+  'offer_link_clicked',
+  'registration_success',
+  'payment_success',
+]
+
+assert.deepEqual(ATMOSPACE_METRIKA_GOALS.map((goal) => goal.target), expectedTargets)
+assert.equal(new Set(ATMOSPACE_METRIKA_GOALS.map((goal) => goal.target)).size, expectedTargets.length)
+for (const retiredTarget of [
+  'quiz_start_click',
+  'quiz_completed',
+  'offer_view',
+  'registration_started',
+  'notifications_connected',
+]) {
+  assert.equal(ATMOSPACE_METRIKA_GOALS.some((goal) => goal.target === retiredTarget), false)
+}
 
 assert.deepEqual(buildMetrikaActionGoalBody({
-  target: 'quiz_completed',
-  name: 'Квиз — завершён',
+  target: 'channel_subscription_verified',
+  name: 'Канал — подписка подтверждена',
 }), {
   goal: {
-    name: 'Квиз — завершён',
+    name: 'Канал — подписка подтверждена',
     type: 'action',
     conditions: [
       {
         type: 'exact',
-        url: 'quiz_completed',
+        url: 'channel_subscription_verified',
       },
     ],
   },
@@ -76,11 +86,11 @@ const result = await ensureAtmospaceMetrikaGoals({
 })
 
 assert.equal(result.ok, true)
-assert.equal(result.totalRequired, 15)
+assert.equal(result.totalRequired, 7)
 assert.equal(result.existingCount, 2)
-assert.equal(result.createdCount, 13)
+assert.equal(result.createdCount, 5)
 assert.equal(requests.filter((item) => item.options.method === 'GET').length, 1)
-assert.equal(requests.filter((item) => item.options.method === 'POST').length, 13)
+assert.equal(requests.filter((item) => item.options.method === 'POST').length, 5)
 assert.equal(requests.every((item) => item.url.endsWith('/counter/12345678/goals')), true)
 assert.equal(requests.every((item) => item.options.headers.authorization === `OAuth ${credential}`), true)
 
@@ -91,10 +101,10 @@ const createdTargets = new Set(
 )
 assert.equal(createdTargets.has('landing_view'), false)
 assert.equal(createdTargets.has('registration_success'), false)
-assert.equal(createdTargets.has('quiz_start_click'), true)
-assert.equal(createdTargets.has('offer_view'), true)
-assert.equal(createdTargets.has('registration_started'), true)
-assert.equal(createdTargets.has('notifications_connected'), true)
+assert.equal(createdTargets.has('telegram_button_click'), true)
+assert.equal(createdTargets.has('max_button_click'), true)
+assert.equal(createdTargets.has('channel_subscription_verified'), true)
+assert.equal(createdTargets.has('offer_link_clicked'), true)
 assert.equal(createdTargets.has('payment_success'), true)
 assert.equal(JSON.stringify(result).includes(credential), false)
 
