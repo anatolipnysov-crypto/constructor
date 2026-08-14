@@ -28,7 +28,7 @@ function botifyModernistoFormatOneTemplate(html) {
 function buildAtmospaceBotRuntimeScript(input = {}) {
   const config = buildAtmospaceLandingConfig(input);
   return \`<script
-  src=\"\${esc(MODERNISTO_FORMAT_ONE_ATTRIBUTION_URL)}\"
+  src=\"https://app.atmospace.pro/acquisition/landing-runtime-v1.js\"
   data-public-landing-key=\"\${esc(config.publicLandingKey)}\"
   data-counter-id=\"\${esc(config.counterId)}\"
   data-api-base-url=\"\${esc(MODERNISTO_FORMAT_ONE_API_BASE_URL)}\"
@@ -74,7 +74,7 @@ function replaceExactlyOnce(source, needle, replacement, label) {
 }
 
 function replaceStaticInsight(source) {
-  const startMarker = 'function renderStaticInsightPrelanding({' 
+  const startMarker = 'function renderStaticInsightPrelanding({'
   const endMarker = '\nfunction renderBarrierProfileQuizPrelanding'
   const start = source.indexOf(startMarker)
   const end = source.indexOf(endMarker, start)
@@ -101,7 +101,7 @@ function replaceStaticInsight(source) {
 }
 
 function replaceFormatOne(source) {
-  const startMarker = 'function renderModernistoStartPrelanding({' 
+  const startMarker = 'function renderModernistoStartPrelanding({'
   const endMarker = '\nfunction '
   const start = source.indexOf(startMarker)
   const end = source.indexOf(endMarker, start + startMarker.length)
@@ -113,6 +113,12 @@ function replaceFormatOne(source) {
   const oldReturn = 'return `${template}${titleSizingCss}${privacyLinkCss}${MODERNISTO_FORMAT_ONE_VISUAL_CSS}\n<script'
   const newReturn = 'const botFirstTemplate = botifyModernistoFormatOneTemplate(`${template}${titleSizingCss}${privacyLinkCss}${MODERNISTO_FORMAT_ONE_VISUAL_CSS}`);\n\n  return `${botFirstTemplate}\n<script'
   block = replaceExactlyOnce(block, oldReturn, newReturn, 'Format 1 rendered template')
+  block = replaceExactlyOnce(
+    block,
+    'src="${esc(MODERNISTO_FORMAT_ONE_ATTRIBUTION_URL)}"',
+    'src="https://app.atmospace.pro/acquisition/landing-runtime-v1.js"',
+    'Format 1 runtime source',
+  )
 
   return source.slice(0, start) + block + source.slice(end)
 }
