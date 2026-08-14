@@ -60,6 +60,109 @@ function buildAtmospaceBotRuntimeScript(input = {}) {
 })();
 </script>\`;
 }
+
+function validateAtmospaceBotFirstTildaHtml(html = '', config = {}, options = {}) {
+  const source = String(html || '');
+  const errors = [];
+  const warnings = [];
+  const modernistoStartRequired = options.modernistoStartRequired === true;
+  const canonicalRuntimeUrl = 'https://app.atmospace.pro/acquisition/landing-runtime-v1.js';
+  const occurrences = (value) => value ? source.split(value).length - 1 : 0;
+
+  if (!source.trim()) errors.push('HTML ещё не собран.');
+  if (/<!doctype|<html[\s>]|<head[\s>]|<body[\s>]/i.test(source)) {
+    errors.push('HTML для Tilda не должен быть полноценным документом с html/head/body.');
+  }
+
+  [
+    /serverOnlyAdGoalCredential|metrikaToken|yandex_oauth_token/i,
+    /r\.bothelp\.io/i,
+    /https:\/\/(?:t\.me|max\.ru)\//i
+  ].forEach(function (forbiddenPattern) {
+    if (forbiddenPattern.test(source)) {
+      errors.push('В HTML найден запрещённый защищённый или прямой внешний переход.');
+    }
+  });
+
+  [
+    'channel_subscription_verified',
+    'offer_link_clicked',
+    'registration_success',
+    'payment_success'
+  ].forEach(function (trustedGoal) {
+    if (source.includes(trustedGoal)) {
+      errors.push('Дальние бизнес-цели не должны отправляться браузером лендинга.');
+    }
+  });
+
+  if (occurrences(canonicalRuntimeUrl) !== 1) {
+    errors.push('В HTML должен быть ровно один официальный runtime Atmospace.');
+  }
+  if (occurrences('telegram_button_click') !== 1 || occurrences('max_button_click') !== 1) {
+    errors.push('Технические цели Telegram и MAX должны присутствовать в HTML ровно по одному разу.');
+  }
+  if (config.publicLandingKey && !source.includes(String(config.publicLandingKey))) {
+    errors.push('В HTML не найден текущий код рекламного лендинга.');
+  }
+  if (config.counterId && !source.includes(String(config.counterId))) {
+    errors.push('В HTML не найден текущий номер счётчика.');
+  }
+
+  const primaryTelegramCount = (source.match(/data-atmospace-messenger=[\"']telegram[\"']/g) || []).length;
+  const primaryMaxCount = (source.match(/data-atmospace-messenger=[\"']max[\"']/g) || []).length;
+  const proxyTelegramCount = (source.match(/data-atmospace-messenger-proxy=[\"']telegram[\"']/g) || []).length;
+  const proxyMaxCount = (source.match(/data-atmospace-messenger-proxy=[\"']max[\"']/g) || []).length;
+
+  if (primaryTelegramCount !== 1 || primaryMaxCount !== 1) {
+    errors.push('В HTML должна быть ровно одна основная кнопка Telegram и одна основная кнопка MAX.');
+  }
+
+  if (modernistoStartRequired) {
+    if (proxyTelegramCount !== 0 || proxyMaxCount !== 0) {
+      errors.push('В формате 1 не должно быть дублирующих proxy-кнопок мессенджеров.');
+    }
+    if (occurrences('Смотреть в Telegram') !== 1 || occurrences('Смотреть в MAX') !== 1) {
+      errors.push('В формате 1 должны быть две продуктовые кнопки продолжения: Telegram и MAX.');
+    }
+
+    const messengerCtaPattern = /<div class=[\"']atmospace-messenger-actions[\"'][^>]*>\s*<a[^>]*data-atmospace-messenger=[\"']telegram[\"'][\s\S]*?<\/a>\s*<a[^>]*data-atmospace-messenger=[\"']max[\"'][\s\S]*?<\/a>\s*<\/div>/i;
+    if (!messengerCtaPattern.test(source)) {
+      errors.push('В формате 1 не найдена утверждённая пара кнопок Telegram/MAX.');
+    } else {
+      const approvedQuizCta = '<a class=\"a30l-cta\" data-a30l-action=\"quiz\" href=\"' + MODERNISTO_FORMAT_ONE_QUIZ_URL + '\"><span data-copy>Пройти мини-тест</span> <i aria-hidden=\"true\">→</i></a>';
+      const normalizedLegacySource = source
+        .replace(messengerCtaPattern, approvedQuizCta)
+        .replace(canonicalRuntimeUrl, MODERNISTO_FORMAT_ONE_ATTRIBUTION_URL);
+      const baselineValidation = validateModernistoStartTildaHtml(normalizedLegacySource, config);
+      if (!baselineValidation.ok) {
+        errors.push(...baselineValidation.errors);
+      }
+      if (Array.isArray(baselineValidation.warnings)) warnings.push(...baselineValidation.warnings);
+    }
+  } else {
+    if (proxyTelegramCount !== 1 || proxyMaxCount !== 1) {
+      errors.push('В формате 6 должны быть ровно две синхронизированные пары кнопок Telegram/MAX.');
+    }
+    if (occurrences('Смотреть в Telegram') !== 2 || occurrences('Смотреть в MAX') !== 2) {
+      errors.push('В формате 6 обе CTA-зоны должны содержать кнопки Telegram и MAX.');
+    }
+    if (/data-atmospace-registration-link|data-atmospace-quiz-link/i.test(source)) {
+      errors.push('В формате 6 не должно быть старых кнопок регистрации или мини-теста.');
+    }
+    if (/requestRegistration|window\.location\.assign\(registrationUrl\)/i.test(source)) {
+      errors.push('В формате 6 найден старый встроенный runtime регистрации.');
+    }
+    if (!source.includes('data-runtime-version=\"sergey-constructor-bot-v1\"')) {
+      errors.push('В формате 6 не найден текущий bot-first runtime profile.');
+    }
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors: Array.from(new Set(errors)),
+    warnings: Array.from(new Set(warnings))
+  };
+}
 `
   .replaceAll('\\`', '`')
   .replaceAll('\\${', '${')
@@ -123,6 +226,15 @@ function replaceFormatOne(source) {
   return source.slice(0, start) + block + source.slice(end)
 }
 
+function replaceActiveValidation(source) {
+  return replaceExactlyOnce(
+    source,
+    '() => validateAtmospaceTildaHtml(prelandingHtml, prelandingHtmlConfig, {',
+    '() => validateAtmospaceBotFirstTildaHtml(prelandingHtml, prelandingHtmlConfig, {',
+    'Active prelanding validator',
+  )
+}
+
 export function transformConstructorAppSource(input) {
   let source = String(input || '')
   source = replaceExactlyOnce(
@@ -133,5 +245,6 @@ export function transformConstructorAppSource(input) {
   )
   source = replaceFormatOne(source)
   source = replaceStaticInsight(source)
+  source = replaceActiveValidation(source)
   return source
 }
