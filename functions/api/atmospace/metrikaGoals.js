@@ -1,21 +1,13 @@
 const METRIKA_MANAGEMENT_BASE_URL = 'https://api-metrika.yandex.net/management/v1'
 
 export const ATMOSPACE_METRIKA_GOALS = Object.freeze([
-  { target: 'landing_view', name: 'Квиз — посещение' },
-  { target: 'quiz_start_click', name: 'Квиз — начало' },
-  { target: 'quiz_question_1_answered', name: 'Квиз — ответ на вопрос 1' },
-  { target: 'quiz_question_2_answered', name: 'Квиз — ответ на вопрос 2' },
-  { target: 'quiz_question_3_answered', name: 'Квиз — ответ на вопрос 3' },
-  { target: 'quiz_question_4_answered', name: 'Квиз — ответ на вопрос 4' },
-  { target: 'quiz_question_5_answered', name: 'Квиз — ответ на вопрос 5' },
-  { target: 'quiz_question_6_answered', name: 'Квиз — ответ на вопрос 6' },
-  { target: 'quiz_question_7_answered', name: 'Квиз — ответ на вопрос 7' },
-  { target: 'quiz_completed', name: 'Квиз — завершён' },
-  { target: 'offer_view', name: 'Оффер — просмотр' },
-  { target: 'registration_started', name: 'Регистрация — начало' },
-  { target: 'registration_success', name: 'Регистрация завершена' },
-  { target: 'notifications_connected', name: 'Уведомления подключены' },
-  { target: 'payment_success', name: 'Оплата подтверждена' },
+  { target: 'landing_view', name: 'Лендинг — просмотр' },
+  { target: 'telegram_button_click', name: 'Лендинг — переход в Telegram' },
+  { target: 'max_button_click', name: 'Лендинг — переход в MAX' },
+  { target: 'channel_subscription_verified', name: 'Канал — подписка подтверждена' },
+  { target: 'offer_link_clicked', name: 'Цепочка — переход на оффер' },
+  { target: 'registration_success', name: 'Проект — регистрация завершена' },
+  { target: 'payment_success', name: 'Проект — оплата подтверждена' },
 ])
 
 function normalizeText(value, maxLength) {

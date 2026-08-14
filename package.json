@@ -7,7 +7,7 @@
     "dev": "vite",
     "dev:ui": "vite",
     "dev:api": "node ai-server.js",
-    "check:atmosphere-quiz": "node checks/atmospaceGenerate.check.mjs && node checks/atmospaceLongQuiz.check.mjs && node checks/atmospacePublishedQuiz.check.mjs && node checks/atmospaceGeneratedRuntime.check.mjs && node checks/atmospaceMetrikaGoals.check.mjs && node checks/atmospaceQuizEmbed.check.mjs && node checks/atmospaceProjectData.check.mjs && node checks/protectedProjectStorage.check.mjs",
+    "check:atmosphere-quiz": "node checks/atmospaceGenerate.check.mjs && node checks/atmospaceLongQuiz.check.mjs && node checks/atmospacePublishedQuiz.check.mjs && node checks/atmospaceGeneratedRuntime.check.mjs && node checks/atmospaceBotFirst.check.mjs && node checks/atmospaceMetrikaGoals.check.mjs && node checks/atmospaceQuizEmbed.check.mjs && node checks/atmospaceProjectData.check.mjs && node checks/protectedProjectStorage.check.mjs",
     "prebuild": "npm run check:atmosphere-quiz",
     "build": "vite build",
     "lint": "eslint .",
