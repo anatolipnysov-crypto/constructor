@@ -61,6 +61,8 @@ function buildAtmospaceBotRuntimeScript(input = {}) {
 </script>\`;
 }
 `
+  .replaceAll('\\`', '`')
+  .replaceAll('\\${', '${')
 
 function replaceExactlyOnce(source, needle, replacement, label) {
   const first = source.indexOf(needle)
