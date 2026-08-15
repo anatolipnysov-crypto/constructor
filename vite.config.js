@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 import { transformConstructorAppSource } from './src/buildTransforms/atmospaceBotFirst.js'
+import { transformMessengerCtaUxSource } from './src/buildTransforms/atmospaceMessengerCtaUx.js'
 
 function atmospaceBotFirstTransform() {
   return {
@@ -11,7 +12,7 @@ function atmospaceBotFirstTransform() {
       const normalizedId = String(id || '').replaceAll('\\', '/')
       if (!normalizedId.endsWith('/src/App.jsx')) return null
       return {
-        code: transformConstructorAppSource(code),
+        code: transformMessengerCtaUxSource(transformConstructorAppSource(code)),
         map: null,
       }
     },
