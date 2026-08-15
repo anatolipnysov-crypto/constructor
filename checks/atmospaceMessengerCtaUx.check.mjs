@@ -29,6 +29,18 @@ assert.equal((helper.match(/atmospace-messenger-cta/g) || []).length, 2)
 assert.equal(helper.includes('${attributeName}=\\"telegram\\"'), true)
 assert.equal(helper.includes('${attributeName}=\\"max\\"'), true)
 
+const formatOneStart = transformedApp.indexOf('function botifyModernistoFormatOneTemplate(')
+const formatOneEnd = transformedApp.indexOf('function buildAtmospaceBotRuntimeScript', formatOneStart)
+assert.notEqual(formatOneStart, -1)
+assert.notEqual(formatOneEnd, -1)
+const formatOne = transformedApp.slice(formatOneStart, formatOneEnd)
+
+assert.equal((formatOne.match(/id="atmospace-messenger-cta-ux"/g) || []).length, 1)
+assert.equal(formatOne.includes('.atmospace-messenger-cta:hover'), true)
+assert.equal(formatOne.includes(`background:${ATMOSPACE_MESSENGER_HOVER_COLOR}!important`), true)
+assert.equal(formatOne.includes(`border-color:${ATMOSPACE_MESSENGER_HOVER_COLOR}!important`), true)
+assert.equal(formatOne.includes('color:#fff!important'), true)
+
 const runtimeStart = transformedApp.indexOf('function buildAtmospaceBotRuntimeScript(')
 const runtimeEnd = transformedApp.indexOf('function validateAtmospaceBotFirstTildaHtml', runtimeStart)
 assert.notEqual(runtimeStart, -1)
