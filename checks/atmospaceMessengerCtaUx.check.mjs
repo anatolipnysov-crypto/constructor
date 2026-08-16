@@ -11,11 +11,35 @@ import {
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const rawApp = fs.readFileSync(path.join(root, 'src', 'App.jsx'), 'utf8')
+const visualSource = fs.readFileSync(path.join(root, 'src', 'data', 'modernistoFormatOneVisuals.js'), 'utf8')
 const botFirstApp = transformConstructorAppSource(rawApp)
 const transformedApp = transformMessengerCtaUxSource(botFirstApp)
 
 assert.equal(transformMessengerCtaUxSource(botFirstApp), transformedApp, 'Messenger CTA UX transform must be deterministic.')
 assert.equal(ATMOSPACE_MESSENGER_HOVER_COLOR, '#22c55e')
+
+assert.equal(
+  transformedApp.includes("MODERNISTO_FORMAT_ONE_TEMPLATE.replace('выгорешь', 'выгоришь')"),
+  true,
+  'Format 1 generated copy must correct the burnout verb before HTML publication.',
+)
+assert.equal(
+  visualSource.includes('html,body,#allrecords{max-width:100%;overflow-x:hidden}'),
+  true,
+  'Format 1 must prevent Tilda host-page horizontal overflow.',
+)
+assert.equal(
+  visualSource.includes('#atmosfera-30-landing .a30l-visual{width:min(64vw,1080px)}'),
+  true,
+  'Wide desktop photo must sit closer to the copy.',
+)
+assert.equal(
+  visualSource.includes('@media (width>=861px) and (height<=900px)'),
+  true,
+  'Common desktop heights must use compact first-screen spacing.',
+)
+assert.equal(visualSource.includes('Made on Tilda'), false)
+assert.equal(visualSource.includes('t-tildalabel'), false)
 
 const helperStart = transformedApp.indexOf('function renderAtmospaceMessengerButtons(')
 const helperEnd = transformedApp.indexOf('function botifyModernistoFormatOneTemplate', helperStart)
