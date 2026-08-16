@@ -15,6 +15,14 @@ export function transformMessengerCtaUxSource(input) {
 
   source = replaceExpectedCount(
     source,
+    '  const template = MODERNISTO_FORMAT_ONE_TEMPLATE\n',
+    "  const template = MODERNISTO_FORMAT_ONE_TEMPLATE.replace('выгорешь', 'выгоришь')\n",
+    1,
+    'Format 1 grammar correction',
+  )
+
+  source = replaceExpectedCount(
+    source,
     '<a href=\\"#\\" ${attributeName}=\\"',
     '<a href=\\"#\\" target=\\"_blank\\" rel=\\"noopener noreferrer\\" ${attributeName}=\\"',
     2,
