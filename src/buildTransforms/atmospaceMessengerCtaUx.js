@@ -23,6 +23,14 @@ export function transformMessengerCtaUxSource(input) {
 
   source = replaceExpectedCount(
     source,
+    "    'Сколько ты ещё так сможешь, пока окончательно не выгорешь?',\n",
+    "    'Сколько ты ещё так сможешь, пока окончательно не выгоришь?',\n",
+    1,
+    'Format 1 validator grammar marker',
+  )
+
+  source = replaceExpectedCount(
+    source,
     '<a href=\\"#\\" ${attributeName}=\\"',
     '<a href=\\"#\\" target=\\"_blank\\" rel=\\"noopener noreferrer\\" ${attributeName}=\\"',
     2,
