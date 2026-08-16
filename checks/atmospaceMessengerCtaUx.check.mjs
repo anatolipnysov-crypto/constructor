@@ -24,6 +24,16 @@ assert.equal(
   'Format 1 generated copy must correct the burnout verb before HTML publication.',
 )
 assert.equal(
+  transformedApp.includes("'Сколько ты ещё так сможешь, пока окончательно не выгоришь?',"),
+  true,
+  'Format 1 validator must require the corrected burnout verb.',
+)
+assert.equal(
+  transformedApp.includes("'Сколько ты ещё так сможешь, пока окончательно не выгорешь?',"),
+  false,
+  'Format 1 validator must not keep the stale burnout verb.',
+)
+assert.equal(
   visualSource.includes('html,body,#allrecords{max-width:100%;overflow-x:hidden}'),
   true,
   'Format 1 must prevent Tilda host-page horizontal overflow.',
