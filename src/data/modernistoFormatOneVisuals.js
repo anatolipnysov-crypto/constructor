@@ -66,13 +66,4 @@ html,body,#allrecords{max-width:100%;overflow-x:hidden}
 @media (width<=560px){
   #atmosfera-30-landing{width:100%;margin-left:0}
 }
-</style>
-<script id="a30l-copy-corrections">
-(function(){
-  var root=document.getElementById('atmosfera-30-landing');
-  var pressure=root&&root.querySelector('.a30l-pressure');
-  if(pressure&&pressure.textContent.indexOf('выгорешь')!==-1){
-    pressure.textContent=pressure.textContent.replace('выгорешь','выгоришь');
-  }
-})();
-</script>`;
+</style>`;
